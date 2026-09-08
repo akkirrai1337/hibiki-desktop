@@ -1,6 +1,6 @@
 <div align="center">
 
-  <img src="./electron-builder-resources/hibiki.png" alt="hibiki icon" width="120" height="120"/>
+  <img src="./docs/hibiki-round.svg" alt="hibiki icon" width="120" height="120"/>
 
   # hibiki desktop
 
