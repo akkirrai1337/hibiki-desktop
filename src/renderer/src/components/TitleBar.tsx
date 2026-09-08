@@ -9,6 +9,7 @@ import { useUiStore } from "@/stores/uiStore";
 import { useSearchFiltersStore } from "@/stores/searchFiltersStore";
 import { activeFilterCount } from "@/lib/searchFilters";
 import { SearchFiltersPanel } from "@/components/SearchFiltersPanel";
+import { UpdateButton } from "@/components/UpdateButton";
 import { cn } from "@/lib/cn";
 import appIcon from "@/assets/app-icon.png";
 
@@ -185,7 +186,15 @@ export function TitleBar() {
           )}
         </div>
       )}
-      <WindowControls />
+      {/* One right-aligned cluster, not two independently right-aligned items. Flexbox splits the
+          free space *equally* between every auto margin in the row, so giving both this and
+          WindowControls their own `ml-auto` parked the update pill halfway across the bar, on top
+          of the centred search box. UpdateButton renders nothing at all unless there is actually
+          a newer release, in which case this collapses to just the window controls. */}
+      <div className="ml-auto flex h-full shrink-0 items-center">
+        <UpdateButton />
+        <WindowControls />
+      </div>
     </div>
   );
 }
@@ -194,7 +203,9 @@ export function TitleBar() {
 // instead of Electron's own titleBarOverlay buttons. `ml-auto` (not relying on `justify-between`
 // on the parent) so this sits flush against the right edge regardless of whether the search box
 // next to it is hidden (it's absolutely positioned and centers on the whole window either way, so
-// it never actually pushes this over via normal flex layout).
+// it never actually pushes this over via normal flex layout). UpdateButton carries an `ml-auto`
+// too: whichever of the two renders first absorbs the free space, so they stay adjacent at the
+// right whether or not there's an update to show.
 function WindowControls() {
   const [maximized, setMaximized] = useState(false);
   useEffect(() => {

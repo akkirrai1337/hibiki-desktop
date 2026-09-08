@@ -1,5 +1,6 @@
 import type {
   AnimeTitle,
+  AppUpdate,
   DailyActivity,
   DiscordPresence,
   DownloadedEpisode,
@@ -13,6 +14,7 @@ import type {
   SearchFilterCatalog,
   SearchRequest,
   SourceInfo,
+  UpdateDownloadProgress,
   WatchProgress,
   XpEvent,
 } from "@shared/types";
@@ -78,6 +80,12 @@ export interface HibikiApi {
     close(): void;
     isMaximized(): Promise<boolean>;
     onMaximizedChanged(callback: (maximized: boolean) => void): () => void;
+  };
+  updates: {
+    check(): Promise<AppUpdate | null>;
+    downloadAndInstall(update: AppUpdate): Promise<void>;
+    openRelease(url: string): Promise<void>;
+    onProgress(callback: (progress: UpdateDownloadProgress) => void): () => void;
   };
   zoom: {
     set(factor: number): void;

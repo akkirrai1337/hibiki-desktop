@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { ArrowDownToLine, Ban, Check, CheckCircle2, ChevronDown, ChevronUp, DatabaseBackup, FileText, FolderOpen, Info, Languages, MessageCircle, Moon, Palette, RotateCcw, ScrollText, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
+import { ArrowDownToLine, Ban, Check, CheckCircle2, ChevronDown, ChevronUp, DatabaseBackup, FileText, FolderOpen, Info, Languages, MessageCircle, Moon, Palette, RefreshCw, RotateCcw, ScrollText, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Switch } from "@/components/Switch";
 import { SUPPORTED_LOCALES, setLocale } from "@/lib/i18n";
@@ -523,6 +523,8 @@ export function SettingsPage() {
   const setSkipButtonTimeoutSeconds = usePlayerPrefsStore((s) => s.setSkipButtonTimeoutSeconds);
   const watchedThresholdPercent = usePlayerPrefsStore((s) => s.watchedThresholdPercent);
   const setWatchedThresholdPercent = usePlayerPrefsStore((s) => s.setWatchedThresholdPercent);
+  const autoUpdate = useUiStore((s) => s.autoUpdate);
+  const setAutoUpdate = useUiStore((s) => s.setAutoUpdate);
   const discordRpcEnabled = useUiStore((s) => s.discordRpcEnabled);
   const setDiscordRpcEnabled = useUiStore((s) => s.setDiscordRpcEnabled);
   const theme = useUiStore((s) => s.theme);
@@ -618,6 +620,15 @@ export function SettingsPage() {
               <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.catalogAutoLoad.hint")}</p>
             </div>
             <Switch checked={catalogAutoLoad} onChange={setCatalogAutoLoad} />
+          </div>
+        </SettingsRow>
+        <SettingsRow icon={<RefreshCw className="h-[18px] w-[18px]" strokeWidth={2} />}>
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-text">{t("settings.autoUpdate")}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.autoUpdateHint")}</p>
+            </div>
+            <Switch checked={autoUpdate} onChange={setAutoUpdate} />
           </div>
         </SettingsRow>
       </SettingsSection>

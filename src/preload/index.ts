@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webFrame } from "electron";
 import { IPC } from "@shared/ipc";
 import type {
   AnimeTitle,
+  AppUpdate,
   DailyActivity,
   DiscordPresence,
   DownloadedEpisode,
@@ -15,6 +16,7 @@ import type {
   SearchFilterCatalog,
   SearchRequest,
   SourceInfo,
+  UpdateDownloadProgress,
   WatchProgress,
   XpEvent,
 } from "@shared/types";
@@ -114,6 +116,17 @@ const api = {
   // Not IPC: zoom belongs to this frame, and webFrame is only reachable from a preload script -
   // the renderer can't import electron, and routing it through the main process would add a round
   // trip to something that is a local, synchronous property of the window.
+  updates: {
+    check: (): Promise<AppUpdate | null> => ipcRenderer.invoke(IPC.updatesCheck),
+    // Resolves only if the update failed: on success the app is quitting to let the installer run.
+    downloadAndInstall: (update: AppUpdate): Promise<void> => ipcRenderer.invoke(IPC.updatesDownloadAndInstall, update),
+    openRelease: (url: string): Promise<void> => ipcRenderer.invoke(IPC.updatesOpenRelease, url),
+    onProgress: (callback: (progress: UpdateDownloadProgress) => void): (() => void) => {
+      const listener = (_e: Electron.IpcRendererEvent, progress: UpdateDownloadProgress) => callback(progress);
+      ipcRenderer.on(IPC.updatesProgress, listener);
+      return () => ipcRenderer.removeListener(IPC.updatesProgress, listener);
+    },
+  },
   zoom: {
     set: (factor: number): void => { webFrame.setZoomFactor(factor); },
     get: (): number => webFrame.getZoomFactor(),

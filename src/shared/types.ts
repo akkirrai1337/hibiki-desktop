@@ -274,3 +274,20 @@ export interface DiscordPresence {
   isPlaying: boolean;
   posterUrl: string | null;
 }
+
+/** A GitHub release newer than the running build - see main/appUpdates.ts. */
+export interface AppUpdate {
+  /** Without the leading "v" of the tag. */
+  version: string;
+  releaseUrl: string;
+  downloadUrl: string;
+  fileName: string;
+  sizeBytes: number;
+  notes: string;
+  publishedAt: string | null;
+}
+
+export interface UpdateDownloadProgress {
+  receivedBytes: number;
+  totalBytes: number;
+}

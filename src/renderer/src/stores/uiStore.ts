@@ -41,6 +41,9 @@ interface UiState {
   // is the number a person would recognise, and because the ladder in lib/zoom.ts is defined in
   // those terms.
   zoomFactor: number;
+  // Off by default: downloading a hundred-plus megabytes and restarting the app is not something
+  // to start doing to someone who never asked for it. Settings is where you turn it *on*.
+  autoUpdate: boolean;
   setTheme: (theme: "light" | "dark") => void;
   setActiveSourceId: (id: string | null) => void;
   setSidebarWidth: (width: number) => void;
@@ -51,6 +54,7 @@ interface UiState {
   setBackgroundTheme: (id: string | null) => void;
   setCatalogAutoLoad: (enabled: boolean) => void;
   setZoomFactor: (factor: number) => void;
+  setAutoUpdate: (enabled: boolean) => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -66,6 +70,7 @@ export const useUiStore = create<UiState>()(
       backgroundTheme: null,
       catalogAutoLoad: true,
       zoomFactor: 1,
+      autoUpdate: false,
       setTheme: (theme) => set({ theme }),
       setActiveSourceId: (activeSourceId) => set({ activeSourceId }),
       setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
@@ -76,6 +81,7 @@ export const useUiStore = create<UiState>()(
       setBackgroundTheme: (backgroundTheme) => set({ backgroundTheme }),
       setCatalogAutoLoad: (catalogAutoLoad) => set({ catalogAutoLoad }),
       setZoomFactor: (zoomFactor) => set({ zoomFactor: normalizeZoom(zoomFactor) }),
+      setAutoUpdate: (autoUpdate) => set({ autoUpdate }),
     }),
     { name: "hibiki-ui" },
   ),

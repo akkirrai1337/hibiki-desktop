@@ -398,6 +398,22 @@
       "hide": "Hide log",
       "empty": "The log is empty.",
       "exported": "Log saved to {{path}}"
-    }
+    },
+    "autoUpdate": "Auto-update",
+    "autoUpdateHint": "Check for updates on launch and install them automatically. The app will close and start the installer."
+  },
+  "update": {
+    "button": "Update",
+    "available": "Update available",
+    "availableVersion": "Version {{version}} is available",
+    "dialogTitle": "Update available",
+    "versionLine": "Version {{version}} · {{size}}",
+    "download": "Download update",
+    "retry": "Try again",
+    "close": "Close",
+    "releaseNotes": "Release page",
+    "downloading": "Downloading… {{received}} of {{total}}",
+    "willRestart": "The app will close and start the installer.",
+    "failed": "Update failed: {{message}}"
   }
 }

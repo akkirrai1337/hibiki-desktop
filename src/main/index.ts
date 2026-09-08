@@ -18,7 +18,8 @@ import { clearDiscordPresence, setDiscordRpcEnabled, setIdleDiscordPresence, shu
 import { createBackup, restoreBackup } from "./backup";
 import { initLogger, log, logger, recentEntries, type LogEntry, type LogLevel } from "./logger";
 import { exportLog, openLogFolder } from "./logExport";
-import type { DiscordPresence } from "@shared/types";
+import { checkForUpdate, downloadUpdate, installUpdate } from "./appUpdates";
+import type { AppUpdate, DiscordPresence, UpdateDownloadProgress } from "@shared/types";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -267,6 +268,24 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle(IPC.appGetVersion, () => app.getVersion());
+  ipcMain.handle(IPC.updatesCheck, () => checkForUpdate());
+  // One handler for both halves on purpose: an installer that has been downloaded but not launched
+  // is just a large file in temp, and leaving that state reachable from the renderer invites it.
+  ipcMain.handle(IPC.updatesDownloadAndInstall, async (event, update: AppUpdate) => {
+    const installerPath = await downloadUpdate(update, (receivedBytes, totalBytes) => {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send(IPC.updatesProgress, { receivedBytes, totalBytes } satisfies UpdateDownloadProgress);
+      }
+    });
+    await installUpdate(installerPath);
+  });
+  ipcMain.handle(IPC.updatesOpenRelease, (_e, url: string) => {
+    // Only this project's own releases - shell.openExternal hands the string to the OS, so an
+    // arbitrary one from the renderer would be a way to launch anything the shell knows how to.
+    if (/^https:\/\/github\.com\/akkirrai1337\/hibiki-desktop\/releases\//.test(url)) return shell.openExternal(url);
+    logger.warn("update", `refused to open a non-release URL: ${url}`);
+    return Promise.resolve();
+  });
   ipcMain.handle(IPC.logsExport, () => exportLog());
   ipcMain.handle(IPC.logsRecent, (_e, limit?: number): LogEntry[] => recentEntries(limit ?? 300));
   ipcMain.on(IPC.logsOpenFolder, () => openLogFolder());

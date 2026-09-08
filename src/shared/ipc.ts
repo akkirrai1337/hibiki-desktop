@@ -74,6 +74,12 @@ export const IPC = {
   logsAppend: "logs:append",
   logsOpenFolder: "logs:openFolder",
   appGetVersion: "app:getVersion",
+
+  updatesCheck: "updates:check",
+  updatesDownloadAndInstall: "updates:downloadAndInstall",
+  updatesOpenRelease: "updates:openRelease",
+  // Pushed main -> renderer over the whole download, same shape as downloadsProgress above.
+  updatesProgress: "updates:progress",
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];
