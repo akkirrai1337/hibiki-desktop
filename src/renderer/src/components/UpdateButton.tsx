@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { motion } from "motion/react";
-import { ArrowDownToLine, ExternalLink, TriangleAlert, X } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { ArrowDownToLine, ExternalLink, TriangleAlert } from "lucide-react";
 import type { AppUpdate } from "@shared/types";
 import { hibiki } from "@/lib/hibiki";
 import { log } from "@/lib/log";
 import { useUiStore } from "@/stores/uiStore";
-import { cn } from "@/lib/cn";
 
 /** Bytes as something a person can weigh a download against. */
 export function formatBytes(bytes: number): string {
@@ -75,32 +74,36 @@ export function UpdateButton() {
   const downloading = progress !== null && error === null;
 
   return (
-    <>
+    // `relative` so the panel below can anchor to this button rather than to the window - it hangs
+    // out of the title bar's own height, which is fine since the bar sets no overflow.
+    <div className="relative mr-2 flex shrink-0 items-center">
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => setOpen((value) => !value)}
         aria-label={t("update.available")}
         title={t("update.availableVersion", { version: update.version })}
-        className="app-no-drag mr-2 flex h-7 shrink-0 items-center gap-1.5 rounded-lg bg-emerald-500 px-2.5 text-[12px] font-semibold text-white transition-colors hover:bg-emerald-400"
+        className="app-no-drag flex h-7 shrink-0 items-center gap-1.5 rounded-lg bg-emerald-500 px-2.5 text-[12px] font-semibold text-white transition-colors hover:bg-emerald-400"
       >
         <ArrowDownToLine className="h-3.5 w-3.5" strokeWidth={2.5} />
         {t("update.button")}
       </button>
 
-      {open && (
-        <UpdateDialog
-          update={update}
-          downloading={downloading}
-          progress={progress}
-          error={error}
-          onInstall={() => void install(update)}
-          onClose={() => setOpen(false)}
-        />
-      )}
-    </>
+      <AnimatePresence>
+        {open && (
+          <UpdatePanel
+            update={update}
+            downloading={downloading}
+            progress={progress}
+            error={error}
+            onInstall={() => void install(update)}
+            onClose={() => setOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
-function UpdateDialog({
+function UpdatePanel({
   update,
   downloading,
   progress,
@@ -119,42 +122,30 @@ function UpdateDialog({
   const percent = progress && progress.total > 0 ? Math.min(100, (progress.received / progress.total) * 100) : 0;
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.15 }}
-      className="app-no-drag fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
-      // While downloading, a click outside must not dismiss the only thing telling the user why
-      // the app is about to close itself.
-      onClick={downloading ? undefined : onClose}
-    >
+    <>
+      {/* Invisible, not dimmed: this is a panel hanging off a title-bar button, and darkening the
+          whole app behind it would announce it far more loudly than it deserves. It still needs to
+          catch the click that closes it, the same way the app's other dropdowns do. While a
+          download is running it catches nothing - dismissing the only thing explaining why the app
+          is about to close itself would read as a crash. */}
+      {!downloading && <div className="fixed inset-0 z-40" onClick={onClose} />}
       <motion.div
-        initial={{ opacity: 0, y: 6 }}
+        initial={{ opacity: 0, y: -4 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ type: "spring", stiffness: 420, damping: 32 }}
+        exit={{ opacity: 0, y: -4 }}
+        transition={{ type: "spring", stiffness: 500, damping: 45 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-sm rounded-2xl border border-border bg-surface p-5 shadow-2xl"
+        className="app-no-drag absolute right-0 top-9 z-50 w-[300px] rounded-2xl border border-border bg-surface p-4 shadow-2xl"
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-base font-bold text-text">{t("update.dialogTitle")}</p>
-            <p className="mt-0.5 select-text text-xs text-muted">
-              {t("update.versionLine", { version: update.version, size: formatBytes(update.sizeBytes) })}
-            </p>
-          </div>
-          {!downloading && (
-            <button
-              onClick={onClose}
-              aria-label={t("common.cancel")}
-              className="-mr-1 -mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-text/[.06] hover:text-text"
-            >
-              <X className="h-4 w-4" strokeWidth={2} />
-            </button>
-          )}
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-text">{t("update.dialogTitle")}</p>
+          <p className="mt-0.5 select-text text-xs text-muted">
+            {t("update.versionLine", { version: update.version, size: formatBytes(update.sizeBytes) })}
+          </p>
         </div>
 
         {downloading ? (
-          <div className="mt-4">
+          <div className="mt-3">
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-text/[.08]">
               <div className="h-full rounded-full bg-emerald-500 transition-[width] duration-200" style={{ width: `${percent}%` }} />
             </div>
@@ -174,31 +165,31 @@ function UpdateDialog({
                 {t("update.failed", { message: error })}
               </p>
             )}
-            <div className="mt-4 flex items-center gap-2">
+            <div className="mt-3 flex items-center gap-1.5">
               <button
                 onClick={onInstall}
-                className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-400"
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-2.5 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-emerald-400"
               >
                 <ArrowDownToLine className="h-3.5 w-3.5" strokeWidth={2.5} />
                 {error ? t("update.retry") : t("update.download")}
               </button>
               <button
                 onClick={onClose}
-                className="rounded-lg px-3 py-1.5 text-sm font-semibold text-muted transition-colors hover:bg-text/[.06]"
+                className="rounded-lg px-2.5 py-1.5 text-[13px] font-semibold text-muted transition-colors hover:bg-text/[.06]"
               >
                 {t("update.close")}
               </button>
-              <button
-                onClick={() => void hibiki.updates.openRelease(update.releaseUrl)}
-                className={cn("ml-auto flex items-center gap-1 text-xs text-muted transition-colors hover:text-text")}
-              >
-                {t("update.releaseNotes")}
-                <ExternalLink className="h-3 w-3" strokeWidth={2} />
-              </button>
             </div>
+            <button
+              onClick={() => void hibiki.updates.openRelease(update.releaseUrl)}
+              className="mt-2.5 flex items-center gap-1 text-xs text-muted transition-colors hover:text-text"
+            >
+              {t("update.releaseNotes")}
+              <ExternalLink className="h-3 w-3" strokeWidth={2} />
+            </button>
           </>
         )}
       </motion.div>
-    </motion.div>
+    </>
   );
 }
