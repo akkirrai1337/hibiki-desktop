@@ -1,0 +1,69 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1788353670005,
+      "tag": "0000_rich_stark_industries",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1788361172321,
+      "tag": "0001_rich_frank_castle",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788378235152,
+      "tag": "0002_low_scorpion",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1788545780061,
+      "tag": "0003_colossal_the_initiative",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1788606025109,
+      "tag": "0004_melodic_nitro",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1788609928313,
+      "tag": "0005_tearful_red_ghost",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788774282356,
+      "tag": "0006_heavy_the_anarchist",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1788775563894,
+      "tag": "0007_funny_joseph",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788790221466,
+      "tag": "0008_amusing_meltdown",
+      "breakpoints": true
+    }
+  ]
+}

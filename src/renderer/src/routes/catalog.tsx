@@ -1,0 +1,293 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useTranslation } from "react-i18next";
+import { AnimatePresence, motion } from "motion/react";
+import { ArrowUpDown, Check, Radio } from "lucide-react";
+import { hibiki } from "@/lib/hibiki";
+import { AnimeCard } from "@/components/AnimeCard";
+import { ErrorBanner } from "@/components/ErrorBanner";
+import { useUiStore } from "@/stores/uiStore";
+import { usePopoverTheme } from "@/lib/usePopoverTheme";
+import type { AnimeTitle, SourceInfo } from "@shared/types";
+
+// Only three ways to browse make sense to expose: by relevance, alphabetically, or the source's
+// dedicated "latest releases" feed. The manifest can declare finer-grained sorts (rating, votes,
+// views, comments...) but those overlap in meaning and most sources don't even implement them
+// consistently, so surfacing all of them was more noise than signal.
+type SortMode = "popularity" | "alphabetical" | "recent";
+const SORT_MODES: SortMode[] = ["popularity", "alphabetical", "recent"];
+
+// Kept in the URL (like /search's `q`) rather than component state - so it survives leaving for
+// a title and coming back, instead of quietly resetting to "popularity" on remount.
+function parseCatalogSearch(search: Record<string, unknown>): { sort: SortMode } {
+  return { sort: SORT_MODES.includes(search.sort as SortMode) ? (search.sort as SortMode) : "popularity" };
+}
+
+export const Route = createFileRoute("/catalog")({
+  validateSearch: parseCatalogSearch,
+  // Rendered persistently from __root.tsx instead - see index.tsx for why.
+  component: () => null,
+});
+
+// Three rows at the widest six-column layout. Smaller batches spread image decoding and DOM work
+// over time instead of producing a visible frame spike whenever 30 posters arrive together.
+const PAGE_SIZE = 18;
+const RECENT_LIMIT = 30;
+
+const SORT_LABEL_KEYS: Record<SortMode, string> = {
+  popularity: "catalogPage.sort.popularity",
+  alphabetical: "catalogPage.sort.alphabetical",
+  recent: "catalogPage.sort.recent",
+};
+
+function availableSortModes(source: SourceInfo): SortMode[] {
+  const modes: SortMode[] = ["popularity"];
+  if (source.supportedSorts.includes("TITLE")) modes.push("alphabetical");
+  if (source.capabilities.includes("LATEST_RELEASES")) modes.push("recent");
+  return modes;
+}
+
+// A plain `Route.useSearch()` throws once this stays mounted while some other route is active (it
+// requires an active match for this exact route) - reading straight off the location instead keeps
+// working no matter which route is actually current.
+export function CatalogBrowsePage() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const search = useRouterState({ select: (s) => s.location.search as Record<string, unknown> });
+  const { sort: requestedMode } = parseCatalogSearch(search);
+  const sources = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });
+  const activeSourceId = useUiStore((s) => s.activeSourceId);
+  const source = sources.data?.find((s) => s.id === activeSourceId) ?? sources.data?.[0];
+  const setRequestedMode = (next: SortMode) => navigate({ to: "/catalog", search: { sort: next }, replace: true });
+
+  const modes = useMemo(() => (source ? availableSortModes(source) : []), [source]);
+  const mode = modes.includes(requestedMode) ? requestedMode : "popularity";
+
+  const browse = useInfiniteQuery({
+    queryKey: ["catalog", source?.id, mode === "alphabetical" ? "TITLE" : "RELEVANCE"],
+    enabled: !!source && mode !== "recent",
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      hibiki.sources.search(source!.id, { offset: pageParam, limit: PAGE_SIZE, sort: mode === "alphabetical" ? "TITLE" : "RELEVANCE" }),
+    getNextPageParam: (lastPage, allPages) => (
+      lastPage.length < PAGE_SIZE ? undefined : allPages.reduce((offset, page) => offset + page.length, 0)
+    ),
+  });
+  // The "recent" feed is a completely different endpoint (latest releases), not a search sort —
+  // it has no offset param, so there's no "load more" for it.
+  const recent = useQuery({
+    queryKey: ["catalog-recent", source?.id],
+    enabled: !!source && mode === "recent",
+    queryFn: () => hibiki.sources.latest(source!.id, RECENT_LIMIT),
+  });
+
+  const items = mode === "recent" ? (recent.data ?? []) : (browse.data?.pages.flat() ?? []);
+  const isLoading = mode === "recent" ? recent.isLoading : browse.isLoading;
+  const isError = mode === "recent" ? recent.isError : browse.isError;
+  const error = mode === "recent" ? recent.error : browse.error;
+
+  const catalogAutoLoad = useUiStore((s) => s.catalogAutoLoad);
+  const { fetchNextPage, hasNextPage, isFetchingNextPage } = browse;
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  // Fires fetchNextPage itself once the sentinel below the grid scrolls into view, instead of
+  // waiting for a click on the manual button - see the Settings toggle this is gated behind.
+  // rootMargin gives it a head start (starts loading a bit before the sentinel is actually on
+  // screen) so the next page is usually already there by the time scrolling reaches the bottom.
+  useEffect(() => {
+    if (!catalogAutoLoad || mode === "recent") return;
+    const el = loadMoreRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) fetchNextPage(); },
+      { rootMargin: "300px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [catalogAutoLoad, mode, hasNextPage, isFetchingNextPage, fetchNextPage, items.length]);
+
+  return (
+    <div className="min-h-full bg-app-bg px-8 py-8 pb-16">
+      {sources.isLoading && <GridSkeleton />}
+      {sources.isError && <ErrorBanner message={(sources.error as Error).message} />}
+      {sources.data?.length === 0 && <EmptySources />}
+      {source && (
+        <>
+          {modes.length > 1 && (
+            <div className="mb-6 flex justify-end">
+              <SortMenu mode={mode} modes={modes} onChange={setRequestedMode} />
+            </div>
+          )}
+
+          {isLoading ? (
+            <GridSkeleton />
+          ) : items.length === 0 ? (
+            <EmptyState text={t("catalogPage.empty")} />
+          ) : (
+            <>
+              <VirtualGrid items={items} />
+              {mode !== "recent" && hasNextPage && (
+                <div ref={loadMoreRef} className="mt-8 flex justify-center">
+                  {catalogAutoLoad ? (
+                    isFetchingNextPage && <div className="h-7 w-7 animate-spin rounded-full border-2 border-border border-t-accent" />
+                  ) : (
+                    <button
+                      onClick={() => fetchNextPage()}
+                      disabled={isFetchingNextPage}
+                      className="rounded-xl border border-border px-5 py-2.5 text-sm font-semibold text-text/80 transition-colors hover:bg-text/[.06] disabled:opacity-50"
+                    >
+                      {t("catalogPage.loadMore")}
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+          {isError && <ErrorBanner message={(error as Error).message} className="mt-6" />}
+        </>
+      )}
+    </div>
+  );
+}
+
+function SortMenu({ mode, modes, onChange }: { mode: SortMode; modes: SortMode[]; onChange: (mode: SortMode) => void }) {
+  const popoverTheme = usePopoverTheme();
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2 rounded-lg bg-text/[.06] px-3.5 py-2 text-sm font-semibold text-text/80 transition-colors hover:bg-text/[.1]"
+      >
+        <ArrowUpDown className="h-4 w-4" strokeWidth={2} />
+        {t(SORT_LABEL_KEYS[mode])}
+      </button>
+      <AnimatePresence>
+        {open && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            {/* No `scale` - see LibraryButton in anime.$sourceId.$animeId.tsx for why: scaling a
+                block of small bold text makes Chromium re-rasterize it at a slightly different
+                subpixel size every frame, reading as the text shimmering while the menu settles. */}
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ type: "spring", stiffness: 500, damping: 45 }}
+              // Paint the selected theme independently of the content behind the popup.
+              className="absolute right-0 top-11 z-50 w-52 overflow-hidden rounded-xl border border-border bg-app-popover shadow-2xl"
+              style={popoverTheme}
+            >
+              {modes.map((option) => (
+                <button
+                  key={option}
+                  onClick={() => { onChange(option); setOpen(false); }}
+                  className="flex w-full items-center justify-between px-3.5 py-2.5 text-left text-sm text-text transition-colors hover:bg-text/[.06]"
+                >
+                  {t(SORT_LABEL_KEYS[option])}
+                  {option === mode && <Check className="h-4 w-4 text-accent-text" strokeWidth={2.5} />}
+                </button>
+              ))}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// Matches the anime detail page's own related-titles grid: 5 columns until the window is wide
+// enough (xl, 1280px+ - roughly "maximized on a normal display") to comfortably fit a 6th without
+// the cards getting cramped.
+function Grid({ children }: { children: React.ReactNode }) { return <div className="grid grid-cols-5 gap-x-4 gap-y-6 xl:grid-cols-6">{children}</div>; }
+
+const GRID_COLUMNS_DEFAULT = 5;
+const GRID_COLUMNS_XL = 6;
+const GRID_XL_QUERY = "(min-width: 1280px)";
+const GRID_GAP_Y = 24; // px, matches Grid's own `gap-y-6`
+
+/** Same column-count rule as the plain `Grid` above (grid-cols-5, xl:grid-cols-6) - kept in sync
+ * manually since VirtualGrid needs the count as a number (to group items into rows) rather than
+ * just a CSS class. */
+function useGridColumnCount(): number {
+  const [columns, setColumns] = useState(() => (typeof window !== "undefined" && window.matchMedia(GRID_XL_QUERY).matches ? GRID_COLUMNS_XL : GRID_COLUMNS_DEFAULT));
+  useEffect(() => {
+    const mql = window.matchMedia(GRID_XL_QUERY);
+    const onChange = () => setColumns(mql.matches ? GRID_COLUMNS_XL : GRID_COLUMNS_DEFAULT);
+    onChange();
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+  return columns;
+}
+
+// Row-virtualized version of Grid, for the actual (potentially hundreds-of-cards-deep, once
+// enough pages have loaded) catalog list - `content-visibility: auto` on each AnimeCard (see that
+// component) already skips paint/layout for off-screen cards, but every one of them still exists
+// as a real, permanently-mounted DOM subtree the whole time. Scrolling fast enough crosses many
+// cards' visibility threshold within the same frame or two, forcing content-visibility's "catch
+// up" layout+paint cost for all of them practically at once - a stutter content-visibility alone
+// can reduce but not eliminate, since the DOM nodes (and the browser's per-element bookkeeping for
+// each) are all still there regardless of whether any given one is currently painted. Rendering
+// only the rows actually near the viewport (plus a small overscan) keeps the real DOM node count
+// bounded no matter how many pages have been paged through.
+function VirtualGrid({ items }: { items: AnimeTitle[] }) {
+  const columns = useGridColumnCount();
+  const rows = useMemo(() => {
+    const out: AnimeTitle[][] = [];
+    for (let i = 0; i < items.length; i += columns) out.push(items.slice(i, i + columns));
+    return out;
+  }, [items, columns]);
+
+  // The virtualizer needs the actual scrolling element, but this page doesn't own one itself -
+  // it's rendered straight inside __root.tsx's own per-page `overflow-y-auto` wrapper (see that
+  // file), which is also what remembers scroll position across a page revisit by simply never
+  // unmounting. Reaching up to `parentElement` piggybacks on that existing scroll container
+  // instead of introducing a second, nested one (which would need its own scroll-position story).
+  const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null);
+  const containerRef = useCallback((node: HTMLDivElement | null) => setScrollElement(node?.parentElement ?? null), []);
+
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollElement,
+    // A rough guess (poster + two-line title + meta row, at a typical card width) - corrected per
+    // row against its real rendered height via `measureElement` below, so this only matters for
+    // the very first estimate before anything's actually been measured.
+    estimateSize: () => 380,
+    overscan: 4,
+    gap: GRID_GAP_Y,
+  });
+
+  // `containerRef` has to be attached in both branches below (it's what resolves `scrollElement`
+  // in the first place, via the callback ref above) - a version that only attached it once
+  // `scrollElement` was already known would never get the chance to become known at all.
+  return (
+    <div ref={containerRef} style={scrollElement ? { position: "relative", height: rowVirtualizer.getTotalSize(), width: "100%" } : undefined}>
+      {!scrollElement ? (
+        // Before the ref callback above has resolved the scroll container (only ever the very
+        // first render) - the real grid, unvirtualized, so there's an actual mounted node for that
+        // callback to fire against; the resulting state update switches to the virtualized branch
+        // immediately after, and this one never shows again.
+        <Grid>{items.map((item) => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</Grid>
+      ) : (
+        rowVirtualizer.getVirtualItems().map((virtualRow) => (
+          <div
+            key={virtualRow.key}
+            ref={rowVirtualizer.measureElement}
+            data-index={virtualRow.index}
+            style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${virtualRow.start}px)` }}
+          >
+            <div className="grid gap-x-4" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
+              {rows[virtualRow.index].map((item) => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+function GridSkeleton() { return <Grid>{Array.from({ length: 15 }).map((_, i) => <div key={i}><div className="aspect-[2/3] animate-pulse rounded-xl bg-text/[.06]" /><div className="mt-2.5 h-3.5 w-4/5 animate-pulse rounded bg-text/[.06]" /><div className="mt-1.5 h-3 w-2/5 animate-pulse rounded bg-text/[.05]" /></div>)}</Grid>; }
+function EmptyState({ text }: { text: string }) { return <div className="py-16 text-center text-sm text-muted">{text}</div>; }
+function EmptySources() { const { t } = useTranslation(); return <div className="flex min-h-[calc(100vh-76px)] items-center justify-center"><div className="max-w-sm text-center"><div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-text/[.06]"><Radio className="h-6 w-6 text-muted" strokeWidth={1.75} /></div><h1 className="text-xl font-bold text-text">{t("catalog.emptySourcesTitle")}</h1><p className="mt-3 text-sm leading-6 text-muted">{t("catalog.emptySourcesText")}</p><Link to="/sources" className="mt-6 inline-block rounded-xl bg-accent px-4 py-2.5 text-sm font-bold text-accent-fg">{t("catalog.openSources")}</Link></div></div>; }

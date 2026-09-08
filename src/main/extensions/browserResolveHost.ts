@@ -1,0 +1,347 @@
+// Host side of the "BROWSER" runtime player-resolver contract (see hibiki-sources/README.md's
+// Player resolvers section) - the desktop equivalent of Android's BrowserPlayerWebViewExtractor.
+// A resolver like extractors/alloha.js can't get a stream with plain HTTP (the page's own JS picks
+// a quality/CDN URL client-side, sometimes only after being told to switch quality); instead it
+// exposes Provider.browserScript(linkJson), a plain-JS payload meant to run *inside* the loaded
+// embed page and report findings back through a `HibikiResolver.*` bridge - mirrors Android's
+// WebView + @JavascriptInterface bridge one-to-one, just backed by a hidden BrowserWindow instead.
+import { BrowserWindow } from "electron";
+import type { PlayerLink } from "@shared/types";
+
+// Anything that can run JS in a given browsing context and give back its completion value - a
+// plain WebContents (no wrapper iframe was used) or an Electron WebFrameMain for a specific
+// subframe (see performBrowserResolve's iframe path). Electron's WebFrameMain.executeJavaScript
+// runs from the privileged browser process, so - unlike page-level JS - it isn't blocked by the
+// same-origin policy that stops the *parent* page from reaching into a cross-origin iframe.
+interface ScriptTarget {
+  executeJavaScript(code: string): Promise<unknown>;
+}
+
+const PROBE_DELAY_MS = 500;
+const MAX_PROBES = 24;
+const TIMEOUT_MS = 25_000;
+const SETTLE_MS = 1_000;
+
+// Same net a bare <video src> or hls.js request would resolve to - not sniffing content-type,
+// because captures come from a network-request hook (see below) that only sees the URL, same as
+// Android's shouldInterceptRequest-based capture.
+const MEDIA_URL_PATTERN = /\.(m3u8|mpd|mp4)(\?|#|$)/i;
+
+// Not every matching request is real content - a JS video-player library (Plyr, Video.js, ...)
+// commonly has its <video> element point at a tiny placeholder/poster asset on its own CDN before
+// the page ever loads whatever it's actually meant to play, and that placeholder request matches
+// MEDIA_URL_PATTERN just as well as a real stream would (seen live: cdn.plyr.io/static/blank.mp4
+// captured as a "candidate" for an Alloha resolve, ahead of the two real streams it also found).
+const PLACEHOLDER_URL_PATTERN = /cdn\.plyr\.io\/static\/blank\.mp4/i;
+
+type CaptureKind = "master" | "video" | "audio" | "stream" | "network";
+
+interface Capture {
+  url: string;
+  kind: CaptureKind;
+  quality: string | null;
+}
+
+export interface ResolvedStream {
+  url: string;
+  type: string; // "HLS" | "MP4" | "DASH" - matches the Node-resolver contract (see execute.ts)
+  quality: string | null;
+  headers: Record<string, string>;
+  segments: [];
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function buildLoadOptions(headers?: Record<string, string> | null): Electron.LoadURLOptions | undefined {
+  if (!headers || Object.keys(headers).length === 0) return undefined;
+  const options: Electron.LoadURLOptions = {};
+  const extra: string[] = [];
+  for (const [key, value] of Object.entries(headers)) {
+    // Chromium computes Referer itself from its own referrer-policy engine for a top-level
+    // navigation and does not honor one supplied through the generic extraHeaders string -
+    // loadURL has a dedicated httpReferrer option for exactly this (seen live: a plain Node
+    // fetch() with this same Referer got Alloha's real player page, but loadURL with it folded
+    // into extraHeaders still got the "content not found" anti-hotlink response).
+    if (key.toLowerCase() === "referer" || key.toLowerCase() === "referrer") options.httpReferrer = value;
+    else extra.push(`${key}: ${value}`);
+  }
+  if (extra.length > 0) options.extraHeaders = extra.join("\n");
+  return options;
+}
+
+// Defines window.HibikiResolver (the JS-side half of the bridge) plus a fallback video-element
+// watcher for pages that never call the bridge themselves but do end up setting a real <video>
+// src - mirrors Android's fixed VIDEO_ELEMENT_PROBE snippet appended to every probe.
+const BRIDGE_SCRIPT = `
+  window.__hibikiDone = false;
+  window.__hibikiCaptures = window.__hibikiCaptures || [];
+  window.__hibikiLastQuality = null;
+  window.HibikiResolver = {
+    quality: function (label) { window.__hibikiLastQuality = label == null ? null : String(label); },
+    master: function (url) { window.__hibikiCaptures.push({ kind: "master", url: String(url), quality: window.__hibikiLastQuality }); },
+    video: function (url) { window.__hibikiCaptures.push({ kind: "video", url: String(url), quality: window.__hibikiLastQuality }); },
+    audio: function (url) { window.__hibikiCaptures.push({ kind: "audio", url: String(url), quality: window.__hibikiLastQuality }); },
+    stream: function (url) { window.__hibikiCaptures.push({ kind: "stream", url: String(url), quality: window.__hibikiLastQuality }); },
+    subtitle: function () {},
+    done: function () { window.__hibikiDone = true; },
+  };
+  if (!window.__hibikiVideoWatcherInstalled) {
+    window.__hibikiVideoWatcherInstalled = true;
+    (function watchVideoElement() {
+      var seen = null;
+      function check() {
+        var v = document.querySelector("video");
+        if (v && v.currentSrc && v.currentSrc !== seen && /\\.m3u8(\\?|#|$)/i.test(v.currentSrc)) {
+          seen = v.currentSrc;
+          window.HibikiResolver.stream(v.currentSrc);
+        }
+      }
+      document.addEventListener("loadedmetadata", check, true);
+      document.addEventListener("canplay", check, true);
+      document.addEventListener("playing", check, true);
+      setInterval(check, 1000);
+    })();
+  }
+`;
+
+interface PageState {
+  done: boolean;
+  captures: Capture[];
+  lastQuality: string | null;
+}
+
+async function readPageState(target: ScriptTarget): Promise<PageState> {
+  try {
+    return (await target.executeJavaScript(
+      `({ done: window.__hibikiDone === true, captures: window.__hibikiCaptures || [], lastQuality: window.__hibikiLastQuality || null })`,
+    )) as PageState;
+  } catch {
+    return { done: false, captures: [], lastQuality: null };
+  }
+}
+
+/** Waits for the iframe injected by performBrowserResolve to finish its own navigation, then
+ * returns the WebFrameMain for it - or null if none showed up in time, so the caller can fall
+ * back to treating the top frame as the target instead of hanging forever. */
+function waitForChildFrame(win: BrowserWindow, timeoutMs: number): Promise<Electron.WebFrameMain | null> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (frame: Electron.WebFrameMain | null) => {
+      if (settled) return;
+      settled = true;
+      win.webContents.removeListener("did-frame-finish-load", onFrameLoad);
+      resolve(frame);
+    };
+    const onFrameLoad = (_event: unknown, isMainFrame: boolean, frameProcessId: number, frameRoutingId: number) => {
+      if (isMainFrame) return;
+      const frame = win.webContents.mainFrame.framesInSubtree.find(
+        (f) => f.processId === frameProcessId && f.routingId === frameRoutingId,
+      );
+      if (frame) finish(frame);
+    };
+    win.webContents.on("did-frame-finish-load", onFrameLoad);
+    setTimeout(() => finish(null), timeoutMs);
+  });
+}
+
+function streamTypeForUrl(url: string): string {
+  const clean = url.split("?")[0].split("#")[0].toLowerCase();
+  if (clean.endsWith(".m3u8")) return "HLS";
+  if (clean.endsWith(".mpd")) return "DASH";
+  return "MP4";
+}
+
+/**
+ * Runs a BROWSER-runtime resolver's `browserScript` payload against the given EMBED link's page
+ * in a hidden BrowserWindow, capturing whatever stream URL(s) it (or a plain <video> element, or
+ * the page's own network requests) surface, and returns them in the same shape a plain
+ * Provider.resolve() call would - so callers (see runtime.ts) don't need to distinguish the two.
+ */
+export async function performBrowserResolve(link: PlayerLink, script: string): Promise<ResolvedStream[]> {
+  const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, images: false } });
+  const ses = win.webContents.session;
+  const networkCaptures: Capture[] = [];
+  let currentQuality: string | null = null;
+
+  // Electron allows only one onBeforeRequest handler per session, and this hidden window shares
+  // the app's default session (same as browserFetchHost.ts's pooled windows) rather than an
+  // isolated partition - safe here because nothing else in this app registers onBeforeRequest
+  // (only onBeforeSendHeaders/onHeadersReceived, see playerHeaders.ts, a different hook), and
+  // because resolveEmbedLinks (runtime.ts) only ever runs one resolve at a time.
+  ses.webRequest.onBeforeRequest((details, callback) => {
+    if (MEDIA_URL_PATTERN.test(details.url) && !PLACEHOLDER_URL_PATTERN.test(details.url)) {
+      networkCaptures.push({ url: details.url, kind: "network", quality: currentQuality });
+    }
+    callback({});
+  });
+
+  try {
+    // A real <iframe src> embed and a direct top-level loadURL() are NOT equivalent from the
+    // target server's point of view, even with an identical Referer header: Chromium computes
+    // the Sec-Fetch-Site/Sec-Fetch-Dest request headers from the actual navigation's initiator,
+    // not from anything supplied via extraHeaders/httpReferrer - a direct loadURL() always
+    // reports Sec-Fetch-Site: none, Sec-Fetch-Dest: document (indistinguishable from someone
+    // typing the URL into an address bar), whereas a real embed reports cross-site/iframe. Seen
+    // live: some resolvers' target pages (Alloha) actively reject the "none" case as suspicious.
+    // So the link is embedded inside a real iframe on the resolver's declared referring page
+    // instead of navigated to directly - which conveniently also matches what browserScript
+    // payloads like alloha.js already expect (they look for `document.querySelector("iframe")`
+    // themselves before falling back to searching the top window).
+    const refererUrl = link.headers?.Referer ?? link.headers?.referer ?? null;
+    let target: ScriptTarget = win.webContents;
+    if (refererUrl) {
+      try {
+        await win.loadURL(refererUrl);
+      } catch {
+        // Some referring pages are themselves slow/heavy SPAs that never fully settle - as long
+        // as *some* document loaded at that origin, embedding the real link below still works.
+      }
+    }
+    if (refererUrl && win.webContents.getURL() !== "" && win.webContents.getURL() !== "about:blank") {
+      const frameLoaded = waitForChildFrame(win, 8_000);
+      await win.webContents.executeJavaScript(`
+        (function () {
+          var iframe = document.createElement("iframe");
+          iframe.src = ${JSON.stringify(link.url)};
+          iframe.referrerPolicy = "unsafe-url";
+          iframe.style.cssText = "position:fixed;inset:0;width:100%;height:100%;border:0;";
+          iframe.setAttribute("allow", "autoplay");
+          document.body.innerHTML = "";
+          document.body.appendChild(iframe);
+        })();
+      `);
+      const childFrame = await frameLoaded;
+      // Falling back to the top frame (rather than throwing) matches the plain-loadURL behavior
+      // this replaces when there's no usable Referer to embed against - some resolver still gets
+      // a chance to work even without the real cross-site-embed context.
+      if (childFrame) target = childFrame;
+      else await win.loadURL(link.url, buildLoadOptions(link.headers));
+    } else {
+      await win.loadURL(link.url, buildLoadOptions(link.headers));
+    }
+
+    let started = false;
+    let done = false;
+    let lastCount = 0;
+    let lastChangeAt = Date.now();
+    const deadline = Date.now() + TIMEOUT_MS;
+
+    for (let probe = 0; probe < MAX_PROBES && !done && Date.now() < deadline; probe++) {
+      if (!started) {
+        // The script is expected to drive its own state machine forward (see alloha.js's
+        // switchNext() timer chain) once it finds what it's looking for - re-injecting it after
+        // that would just race a second concurrent run, so only retry while it's telling us it
+        // isn't ready yet (alloha.js returns the literal string "no-player" for that case).
+        // executeJavaScript's return value is the *completion value* of the executed code, same
+        // as pasting it into a console - since the script is already its own invoked IIFE
+        // ("(function(){...})();"), it must run as a bare expression statement here, not be
+        // wrapped in another function, or its "no-player" return gets swallowed into that
+        // wrapper's own (undefined) return instead of surfacing to us.
+        let result: unknown;
+        try {
+          result = await target.executeJavaScript(`${BRIDGE_SCRIPT}\n${script}`);
+        } catch {
+          result = "no-player";
+        }
+        started = result !== "no-player";
+      }
+
+      await sleep(PROBE_DELAY_MS);
+      const state = await readPageState(target);
+      currentQuality = state.lastQuality; // tags network captures made before the *next* tick
+      done = state.done;
+
+      const totalCount = state.captures.length + networkCaptures.length;
+      if (totalCount !== lastCount) {
+        lastCount = totalCount;
+        lastChangeAt = Date.now();
+      } else if (totalCount > 0 && Date.now() - lastChangeAt > SETTLE_MS) {
+        break;
+      }
+
+      if (done) {
+        return await buildResult(state.captures, networkCaptures, link, win, target);
+      }
+    }
+
+    const finalState = await readPageState(target);
+    return await buildResult(finalState.captures, networkCaptures, link, win, target);
+  } finally {
+    if (!win.isDestroyed()) {
+      win.webContents.session.webRequest.onBeforeRequest(null);
+      win.destroy();
+    }
+  }
+}
+
+const CAPTURE_KIND_RANK: Record<CaptureKind, number> = { master: 0, video: 1, audio: 2, stream: 3, network: 4 };
+
+// Validates a captured URL from *inside* the same browsing context that captured it (the resolve
+// window/frame itself), not via this process's own fetch(). Node's fetch (undici) and Chromium's
+// network stack are genuinely different TLS/HTTP clients (different ClientHello, ALPN, connection
+// reuse, ...) - a CDN that fingerprints the request (seen live: vkvideo.cloud, via Alloha) can
+// happily serve the real player (which also runs inside Chromium, via hls.js/dash.js's own
+// fetch/XHR) while rejecting a validation check made from Node, producing a false negative that
+// throws away a URL that would actually have played fine. Running the check through the same
+// engine the eventual player uses removes that mismatch.
+async function validateInBrowser(target: ScriptTarget, url: string): Promise<boolean> {
+  try {
+    const result = (await target.executeJavaScript(`
+      fetch(${JSON.stringify(url)}, { method: "GET", headers: { Range: "bytes=0-0" } })
+        .then(function (r) { return { ok: r.ok, status: r.status }; })
+        .catch(function () { return { ok: false, status: 0 }; })
+    `)) as { ok: boolean; status: number };
+    return result.ok || result.status === 206;
+  } catch {
+    return false;
+  }
+}
+
+async function buildResult(
+  pageCaptures: Capture[],
+  networkCaptures: Capture[],
+  link: PlayerLink,
+  win: BrowserWindow,
+  target: ScriptTarget,
+): Promise<ResolvedStream[]> {
+  const seen = new Set<string>();
+  const combined = [...pageCaptures, ...networkCaptures]
+    .filter((c) => !PLACEHOLDER_URL_PATTERN.test(c.url))
+    .filter((c) => (seen.has(c.url) ? false : (seen.add(c.url), true)))
+    .sort((a, b) => CAPTURE_KIND_RANK[a.kind] - CAPTURE_KIND_RANK[b.kind]);
+  if (combined.length === 0) throw new Error("Browser resolver found no playable stream");
+
+  // Refreshed after capture, not before - a Cloudflare-style clearance cookie set while the page
+  // ran (exactly what challenge() exists for elsewhere in this app) needs to be in the header set
+  // handed back for the *next* request (the actual stream fetch), not the embed page's own load.
+  const cookies = await win.webContents.session.cookies.get({ url: link.url });
+  const headers: Record<string, string> = { ...(link.headers ?? {}), Referer: link.url };
+  // Browser-runtime streams were requested by the third-party embed page itself. Some CDNs
+  // validate Origin as well as Referer (Alloha's vkvideo.cloud endpoint returns 403 to hls.js
+  // without it even though the exact same signed URL works inside alloha.yani.tv), so preserve
+  // that request identity when the stream moves into Hibiki's renderer.
+  try {
+    headers.Origin = new URL(link.url).origin;
+  } catch {
+    // The URL was already usable enough to load in the browser resolver; leave malformed edge
+    // cases to the existing validation/fallback path rather than failing a successful capture.
+  }
+  if (cookies.length > 0) headers.Cookie = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+
+  // A captured URL that's already known-dead is worse to hand back than not resolving at all: the
+  // player would just spin (or, now, burn its retry budget) on something that was never going to
+  // work, instead of falling through to the next resolver or the EMBED iframe fallback this
+  // replaces. Validating each candidate before it's trusted - from inside the browser context that
+  // captured it, see validateInBrowser - catches that; only survivors are returned, and if none
+  // survive this throws like an outright resolve failure would, so the caller's existing fallback
+  // chain (see runtime.ts) still applies.
+  const resolved: ResolvedStream[] = [];
+  for (const c of combined) {
+    if (!(await validateInBrowser(target, c.url))) continue;
+    resolved.push({ url: c.url, type: streamTypeForUrl(c.url), quality: c.quality, headers, segments: [] });
+  }
+  if (resolved.length > 0) return resolved;
+  throw new Error("Browser resolver's captured stream(s) are not reachable");
+}

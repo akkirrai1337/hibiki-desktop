@@ -1,0 +1,29 @@
+# Dependencies and generated application builds
+node_modules/
+dist/
+dist-electron/
+release/
+# Staging directory the Windows release workflow copies the renamed installer into.
+dist-release/
+
+# Local configuration, secrets, and personal agent notes
+.env
+.env.*
+!.env.example
+*.local
+AGENTS.md
+
+# Tooling output
+playwright-report/
+test-results/
+coverage/
+*.tsbuildinfo
+
+tests
+.tanstack
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

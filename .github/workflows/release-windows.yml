@@ -1,0 +1,199 @@
+# Builds the Windows NSIS installer and publishes it as a GitHub Release. Windows is this app's
+# primary platform (see the README): better-sqlite3 is a native module compiled for the host, so
+# the installer has to be produced on a Windows runner rather than cross-compiled.
+#
+# Deliberately workflow_dispatch-only, and deliberately the only workflow here that publishes
+# anything - build-macos.yml just uploads its .dmg as an artifact. Cutting a release is a decision,
+# not something a push should do on its own.
+name: Windows release
+
+on:
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: Create a prerelease
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build the installer and create a GitHub Release
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout repository
+        # fetch-depth: 0 for the tags and history the version/changelog step below reads.
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # `npm ci` (not `install`) so the lockfile decides the tree - a build meant for distribution
+      # shouldn't silently pick up a newer transitive dependency than the one tested locally.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Determine release version
+        id: release
+        shell: bash
+        env:
+          IS_PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          set -euo pipefail
+
+          # Read through node rather than by grepping package.json - it's the same value
+          # electron-builder stamps into the installer and app.getVersion() reports at runtime,
+          # so there's no chance of the two disagreeing.
+          BASE_VERSION=$(node -p "require('./package.json').version")
+          if [ -z "${BASE_VERSION:-}" ] || [ "$BASE_VERSION" = "undefined" ]; then
+            echo "Could not read version from package.json"
+            exit 1
+          fi
+
+          if [[ ! "$BASE_VERSION" =~ ^[0-9][0-9A-Za-z.+-]*$ ]]; then
+            echo "Invalid version: $BASE_VERSION"
+            echo "Set a valid version in package.json before running the workflow."
+            exit 1
+          fi
+
+          TARGET_VERSION="$BASE_VERSION"
+
+          if [ "$IS_PRERELEASE" = true ]; then
+            # Two prereleases from the same commit would be two different downloads of byte-identical
+            # software, which makes "which build were you on?" unanswerable in a bug report.
+            EXISTING_PRERELEASE_FOR_COMMIT=$(
+              git tag --points-at HEAD --list "v${TARGET_VERSION}-prerelease.*" |
+                head -n 1 ||
+                true
+            )
+            if [ -n "${EXISTING_PRERELEASE_FOR_COMMIT:-}" ]; then
+              echo "Commit HEAD has already been published as ${EXISTING_PRERELEASE_FOR_COMMIT}."
+              echo "Refusing to create another prerelease from the same commit."
+              exit 1
+            fi
+
+            LAST_PRERELEASE_NUMBER=$(
+              git tag --list "v${TARGET_VERSION}-prerelease.*" |
+                sed -nE "s/^v${TARGET_VERSION//./\\.}-prerelease\\.([0-9]+)$/\\1/p" |
+                sort -nr |
+                head -n 1 ||
+                true
+            )
+            if [ -n "${LAST_PRERELEASE_NUMBER:-}" ]; then
+              PRERELEASE_NUMBER=$((LAST_PRERELEASE_NUMBER + 1))
+            else
+              PRERELEASE_NUMBER=1
+            fi
+            RELEASE_VERSION="${TARGET_VERSION}-prerelease.${PRERELEASE_NUMBER}"
+          else
+            RELEASE_VERSION="$TARGET_VERSION"
+          fi
+
+          TAG="v${RELEASE_VERSION}"
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "Release tag ${TAG} already exists. Bump the version in package.json before running the workflow."
+            exit 1
+          fi
+
+          # A prerelease's notes cover what changed since the *previous prerelease* of the same
+          # version, if there is one - otherwise there'd be a growing, mostly-repeated changelog on
+          # every prerelease of a version that takes a few rounds to settle.
+          if [ "$IS_PRERELEASE" = true ]; then
+            PREVIOUS_TAG=$(
+              git tag --list "v${TARGET_VERSION}-prerelease.*" --sort=-version:refname |
+                head -n 1 ||
+                true
+            )
+          fi
+
+          if [ -z "${PREVIOUS_TAG:-}" ]; then
+            PREVIOUS_TAG=$(
+              git for-each-ref --sort=-creatordate --format='%(refname:short)' refs/tags |
+                grep -E '^v[0-9][0-9A-Za-z.+-]*$' |
+                grep -v -- '-prerelease\.' |
+                head -n 1 ||
+                true
+            )
+          fi
+
+          if [ -n "$PREVIOUS_TAG" ]; then
+            COMMIT_RANGE="${PREVIOUS_TAG}..HEAD"
+          else
+            COMMIT_RANGE="HEAD"
+          fi
+
+          echo "version=${RELEASE_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=${IS_PRERELEASE}" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## What's changed"
+            echo
+            git log --reverse --pretty=format:'%s' "$COMMIT_RANGE" |
+              awk -v version="$TARGET_VERSION" '$0 != version && $0 != "v" version { print "- " $0 }'
+            echo
+          } > release-notes.md
+
+      # `-- --publish never` passes the flag through npm to electron-builder itself. It sees the CI
+      # environment variables and assumes a build there is meant to be released, so it goes looking
+      # for a GH_TOKEN and fails the job *after* the installer has already been built. Publishing
+      # happens in the last step instead, from the artifact this produces.
+      #
+      # The installer is unsigned - there's no code-signing certificate here - so SmartScreen will
+      # warn on first run until the download builds up reputation. electron-builder only signs when
+      # it's given a certificate, so nothing needs disabling for that the way macOS needs
+      # CSC_IDENTITY_AUTO_DISCOVERY (see build-macos.yml).
+      - name: Build the installer
+        run: npm run build -- --publish never
+
+      - name: Rename the installer
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # The built name carries package.json's version (see artifactName in
+          # electron-builder.yml); this release's version differs from it for every prerelease, so
+          # the copy below is what puts the real one in front of the person downloading it.
+          #
+          # Matched on that exact pattern rather than on any .exe: electron-builder also writes an
+          # __uninstaller-nsis-*.exe into this directory while building, and picking that up would
+          # publish a 200KB uninstaller as the release.
+          shopt -s nullglob
+          INSTALLERS=(release/hibiki-v*-setup.exe)
+          if [ ${#INSTALLERS[@]} -ne 1 ] || [ ! -s "${INSTALLERS[0]}" ]; then
+            echo "Expected exactly one installer in release/, found ${#INSTALLERS[@]}:"
+            ls -la release || true
+            exit 1
+          fi
+          INSTALLER="${INSTALLERS[0]}"
+
+          mkdir -p dist-release
+          cp "$INSTALLER" "dist-release/hibiki-v${{ steps.release.outputs.version }}-setup.exe"
+          ls -la dist-release
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          name: v${{ steps.release.outputs.version }}
+          body_path: release-notes.md
+          files: dist-release/*.exe
+          prerelease: ${{ steps.release.outputs.is_prerelease }}

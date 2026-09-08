@@ -1,0 +1,403 @@
+{
+  "nav": {
+    "browse": "Просмотр",
+    "home": "Главная",
+    "catalog": "Каталог",
+    "sources": "Источники",
+    "yourSpace": "Ваше пространство",
+    "profile": "Профиль",
+    "settings": "Настройки"
+  },
+  "onboarding": {
+    "getStarted": "Начать",
+    "back": "Назад",
+    "next": "Далее",
+    "done": "Готово",
+    "welcome": {
+      "title": "Добро пожаловать в hibiki",
+      "description": "Настроим приложение за пару шагов, чтобы вы могли сразу начать смотреть."
+    },
+    "sources": {
+      "title": "Добавьте источники",
+      "description": "Установите хотя бы один источник и выберите его активным — без этого будет не с чем работать."
+    }
+  },
+  "common": {
+    "loadFailed": "Не удалось загрузить: {{message}}",
+    "offlineHint": "Похоже, вы офлайн — можно посмотреть уже скачанное.",
+    "openDownloads": "Открыть сохранённые эпизоды",
+    "noPoster": "Нет постера",
+    "anime": "Аниме",
+    "episodesShort": "{{count}} эп.",
+    "readDescription": "Читать описание",
+    "hideDescription": "Скрыть описание",
+    "typeFallback": "АНИМЕ",
+    "cancel": "Отмена",
+    "save": "Сохранить",
+    "scrollLeft": "Прокрутить назад",
+    "scrollRight": "Прокрутить вперёд"
+  },
+  "catalog": {
+    "searchPlaceholder": "Поиск аниме",
+    "trendingOn": "В тренде на {{source}}",
+    "heroFallbackDescription": "Одно из тайтлов, которые сейчас смотрят чаще всего.",
+    "openTitle": "Открыть",
+    "continueWatching": "Продолжить просмотр",
+    "removeProgress": "Удалить данные о просмотре",
+    "viewHistory": "История",
+    "popularNow": "Популярное сейчас",
+    "becauseYouWatched": "Вам может понравиться",
+    "genreSection": "Жанр: {{genre}}",
+    "openCatalog": "Открыть каталог",
+    "emptySourcesTitle": "Каталог начинается с источника",
+    "emptySourcesText": "Добавьте источник аниме, чтобы увидеть популярное, просматривать каталог и продолжать просмотр.",
+    "openSources": "Открыть источники"
+  },
+  "detail": {
+    "back": "Назад",
+    "episodes": "Эпизоды",
+    "loadingEpisodes": "Загрузка эпизодов…",
+    "noEpisodesYet": "Для этого тайтла пока нет эпизодов.",
+    "status": {
+      "ongoing": "Онгоинг",
+      "released": "Завершён",
+      "announced": "Анонс"
+    },
+    "watch": "Смотреть",
+    "remainingMinutes": "Осталось {{minutes}} мин",
+    "remainingUnderMinute": "Осталось меньше минуты",
+    "playbackFinished": "Просмотр завершён",
+    "continueRemaining": "Продолжить · осталось {{minutes}} мин",
+    "continueLessThanMinute": "Продолжить · меньше минуты",
+    "continueNext": "Продолжить · Эп. {{number}}",
+    "rewatch": "Смотреть заново",
+    "noEpisodes": "Нет эпизодов",
+    "nextEpisodeToday": "Новая серия сегодня",
+    "nextEpisodeTomorrow": "Новая серия завтра",
+    "nextEpisodeInDays": "Новая серия через {{count}} дн.",
+    "nextEpisodeOn": "Новая серия {{date}}",
+    "addToLibrary": "Добавить в библиотеку",
+    "removeFromLibrary": "Убрать из библиотеки",
+    "episodeFallback": "Эпизод {{number}}",
+    "downloadDialog": {
+      "title": "Скачать серию",
+      "translation": "Озвучка",
+      "quality": "Качество",
+      "loadingQualities": "Загрузка вариантов…",
+      "qualityUnknown": "Качество неизвестно, но серию можно скачать"
+    },
+    "relatedTitles": "Связанные тайтлы",
+    "relatedCurrentTitle": "Вы сейчас здесь",
+    "similarTitles": "Похожие тайтлы",
+    "episodeMenu": {
+      "download": "Скачать серию",
+      "downloading": "Скачивание… {{percent}}%",
+      "queued": "В очереди",
+      "cancelDownload": "Отменить загрузку",
+      "removeDownload": "Удалить скачанное",
+      "pauseDownload": "Приостановить",
+      "resumeDownload": "Продолжить загрузку",
+      "downloadQueued": "Серия поставлена в очередь на загрузку",
+      "downloadDone": "Серия скачана",
+      "downloadFailed": "Не удалось скачать: {{message}}",
+      "downloadCancelled": "Загрузка отменена",
+      "downloadUnsupported": "Эта серия недоступна для скачивания",
+      "favoriteAdd": "Добавить в избранное",
+      "favoriteRemove": "Убрать из избранного"
+    }
+  },
+  "watch": {
+    "loadingLink": "Загрузка ссылки…",
+    "linkError": "Не удалось получить ссылку: {{message}}",
+    "availableSources": "Доступно источников: {{count}}",
+    "player": {
+      "skip": "Пропустить",
+      "watch": "Смотреть"
+    },
+    "settings": {
+      "speed": "Скорость",
+      "autoSkipSegments": "Пропускать опенинг/эндинг",
+      "autoPlayNextEpisode": "Следующий эпизод автоматически",
+      "translation": "Озвучка",
+      "dub": "Озвучка",
+      "player": "Плеер",
+      "quality": "Качество"
+    }
+  },
+  "library": {
+    "title": "Библиотека",
+    "empty": "Пока пусто",
+    "filterAll": "Все",
+    "categoryEmpty": "Здесь пока пусто",
+    "categories": {
+      "watching": "Смотрю",
+      "planned": "Запланировано",
+      "completed": "Просмотрено",
+      "dropped": "Брошено",
+      "on_hold": "Отложено",
+      "favorite": "Избранное"
+    }
+  },
+  "downloads": {
+    "title": "Сохранённые эпизоды",
+    "empty": "Пока нет скачанных серий",
+    "episodeCount": "{{count}} эп.",
+    "remove": "Удалить"
+  },
+  "catalogPage": {
+    "empty": "В этом источнике пока пусто",
+    "loadMore": "Показать ещё",
+    "sort": {
+      "popularity": "По популярности",
+      "alphabetical": "По алфавиту",
+      "recent": "Недавно обновлённое"
+    }
+  },
+  "search": {
+    "prompt": "Начните вводить название аниме",
+    "empty": "По запросу «{{query}}» ничего не найдено",
+    "resultsFor": "Результаты по запросу «{{query}}»",
+    "filters": {
+      "button": "Фильтры",
+      "type": "Тип",
+      "status": "Статус",
+      "genres": "Жанры",
+      "genresExpand": "Показать все жанры",
+      "genresCollapse": "Свернуть жанры",
+      "year": "Год",
+      "reset": "Сбросить",
+      "apply": "Применить",
+      "typeLabels": {
+        "tv": "ТВ",
+        "ona": "ONA",
+        "ova": "OVA",
+        "movie": "Фильм",
+        "special": "Спешл"
+      },
+      "statusLabels": {
+        "ongoing": "Онгоинг",
+        "released": "Завершён",
+        "announced": "Анонс",
+        "cancelled": "Отменён",
+        "hiatus": "Приостановлен"
+      }
+    }
+  },
+  "history": {
+    "title": "История просмотра",
+    "empty": "История пуста",
+    "deleteEntry": "Удалить из истории"
+  },
+  "sources": {
+    "tabs": {
+      "extensions": "Расширения",
+      "repositories": "Репозитории"
+    },
+    "searchPlaceholder": "Поиск источников",
+    "filterLanguages": "Языки",
+    "refresh": "Обновить",
+    "manage": "Управление",
+    "update": "Обновить",
+    "uninstall": "Удалить",
+    "noResults": "Ничего не найдено по запросу",
+    "install": "Установить",
+    "installedSection": "Установленные · {{count}}",
+    "updatesSection": "Обновления",
+    "updateAll": "Обновить все",
+    "availableSection": "Доступные · {{count}}",
+    "repositoryLoading": "Загрузка доступных расширений…",
+    "repositoryError": "Не удалось загрузить репозиторий расширений",
+    "repositoryRetry": "Повторить",
+    "repositoryEmpty": "Сейчас нет доступных расширений",
+    "repositoriesAdd": "Добавить репозиторий",
+    "repositoriesAddHint": "URL индекса репозитория",
+    "repositoriesInvalidUrl": "Введите корректный HTTPS-адрес индекса репозитория",
+    "repositoriesRemove": "Удалить",
+    "repositoriesRemoveConfirmTitle": "Удалить репозиторий?",
+    "repositoriesRemoveConfirmMessage": "Удалить {{name}} из списка репозиториев? Установленные расширения останутся доступными.",
+    "repositoriesEmpty": "Репозитории ещё не добавлены",
+    "repositoriesExtensionCount": "{{count}} расширений",
+    "openInBrowser": "Открыть в браузере",
+    "copyUrl": "Скопировать ссылку",
+    "nsfwBadge": "18+",
+    "capability": {
+      "latest": "Новинки",
+      "playback": "Просмотр",
+      "related": "Похожие тайтлы",
+      "similar": "Рекомендации"
+    }
+  },
+  "achievements": {
+    "unlockedToast": "Достижение открыто"
+  },
+  "profile": {
+    "editAvatar": "Изменить аватар",
+    "editName": "Изменить имя",
+    "statCompletedTitles": "Тайтлов просмотрено",
+    "statLibrarySize": "В библиотеке",
+    "streakBest": "Лучшая серия: {{count}} дней",
+    "streakAtRisk": "Посмотрите что-нибудь сегодня, чтобы не потерять серию",
+    "xpHistoryTitle": "История XP",
+    "xpHistoryEmpty": "Пока нет ни одной записи",
+    "statWatchTime": "Время просмотра",
+    "statPace": "Темп просмотра в неделю",
+    "continueWatchingTitle": "Продолжить просмотр",
+    "recentTitle": "Недавно добавлено",
+    "recentEmpty": "Пока ничего не добавлено",
+    "episodesCompleted": "Эпизодов просмотрено",
+    "activityTitle": "Активность за 30 дней",
+    "activityEpisodes": "{{count}} эпизодов просмотрено",
+    "activityMinutes": "{{count}} мин. просмотра",
+    "hours": "{{hours}} ч",
+    "today": "Сегодня",
+    "yesterday": "Вчера",
+    "daysAgo": "{{count}} дн. назад",
+    "achievementsTitle": "Достижения",
+    "achievementLevel": "Уровень {{level}}/{{maxLevel}}",
+    "levelBadge": "Ур. {{level}}",
+    "xp": "XP",
+    "achievements": {
+      "first_title": {
+        "title": "Первый шаг",
+        "description": "Добавьте тайтл в библиотеку"
+      },
+      "collector_10": {
+        "title": "Коллекционер",
+        "description": "{{target}} тайтлов в библиотеке"
+      },
+      "collector_25": {
+        "title": "Энтузиаст",
+        "description": "{{target}} тайтлов в библиотеке"
+      },
+      "collector_50": {
+        "title": "Куратор",
+        "description": "{{target}} тайтлов в библиотеке"
+      },
+      "finisher": {
+        "title": "Финишер",
+        "description": "Завершите первый тайтл"
+      },
+      "marathoner_10": {
+        "title": "Марафонец",
+        "description": "Завершите {{target}} тайтлов"
+      },
+      "streak_7": {
+        "title": "Неделя подряд",
+        "description": "Стрик {{target}} дней"
+      },
+      "streak_14": {
+        "title": "Две недели подряд",
+        "description": "Стрик {{target}} дней"
+      },
+      "streak_30": {
+        "title": "Месяц подряд",
+        "description": "Стрик {{target}} дней"
+      },
+      "watch_24h": {
+        "title": "Погружение",
+        "description": "{{target}} часов просмотра"
+      },
+      "watch_100h": {
+        "title": "Ветеран",
+        "description": "{{target}} часов просмотра"
+      },
+      "watch_500h": {
+        "title": "Легенда",
+        "description": "{{target}} часов просмотра"
+      },
+      "marathoner_50": {
+        "title": "Чемпион",
+        "description": "Завершите {{target}} тайтлов"
+      },
+      "episodes_50": {
+        "title": "Зритель",
+        "description": "{{target}} просмотренных эпизодов"
+      },
+      "episodes_100": {
+        "title": "Сотня",
+        "description": "{{target}} просмотренных эпизодов"
+      },
+      "episodes_300": {
+        "title": "Киноман",
+        "description": "{{target}} просмотренных эпизодов"
+      },
+      "genre_explorer": {
+        "title": "Разносторонний зритель",
+        "description": "{{target}} разных жанров в библиотеке"
+      },
+      "genre_explorer_10": {
+        "title": "Ценитель жанров",
+        "description": "{{target}} разных жанров в библиотеке"
+      },
+      "genre_explorer_15": {
+        "title": "Энциклопедист",
+        "description": "{{target}} разных жанров в библиотеке"
+      }
+    }
+  },
+  "settings": {
+    "subtitle": "Настройте, как hibiki выглядит и воспроизводит видео",
+    "appearance": {
+      "title": "Оформление",
+      "theme": "Тема",
+      "themeHint": "Светлая или тёмная схема",
+      "light": "Светлая",
+      "dark": "Тёмная",
+      "accentColor": "Акцентный цвет",
+      "accentColorHint": "Цвет кнопок и активных элементов",
+      "backgroundTheme": "Фон приложения",
+      "backgroundThemeHint": "Градиент за панелью — как в Discord",
+      "backgroundThemeNone": "Обычный",
+      "customColor": "Свой цвет"
+    },
+    "general": "Общие",
+    "language": "Язык",
+    "languageNames": {
+      "ru": "Русский",
+      "en": "English",
+      "uk": "Українська"
+    },
+    "player": {
+      "title": "Плеер",
+      "autoSkipDelay": "Задержка авто-пропуска",
+      "autoSkipDelayHint": "Задержка перед пропуском опенинга/эндинга",
+      "skipButtonTimeout": "Время показа кнопки «Пропустить»",
+      "skipButtonTimeoutHint": "Сколько кнопка «Пропустить» видна на экране",
+      "watchedThreshold": "Порог автопросмотра",
+      "watchedThresholdHint": "Доля серии для отметки «просмотрено»"
+    },
+    "discord": {
+      "title": "Discord",
+      "enabled": "Показывать активность в Discord",
+      "hint": "Тайтл, озвучка и таймлайн в статусе Discord"
+    },
+    "catalogAutoLoad": {
+      "enabled": "Автоподгрузка каталога",
+      "hint": "Подгружает каталог сама при прокрутке"
+    },
+    "data": {
+      "title": "Данные",
+      "backup": "Резервная копия",
+      "backupHint": "Библиотека, история, источники и настройки",
+      "backupAction": "Создать резервную копию",
+      "backupCreated": "Резервная копия сохранена: {{path}}",
+      "restore": "Восстановление",
+      "restoreHint": "Заменяет текущие данные файлом копии",
+      "restoreAction": "Восстановить из копии",
+      "restoreConfirm": "Текущие данные будут заменены содержимым резервной копии, приложение перезапустится. Отменить это будет нельзя.",
+      "restoreConfirmAction": "Да, восстановить",
+      "version": "hibiki {{version}}"
+    },
+    "diagnostics": {
+      "title": "Диагностика",
+      "export": "Журнал приложения",
+      "exportHint": "Сохраняет журнал этой сессии в файл: HTTP-запросы источников, попытки плееров и ошибки воспроизведения с таймингами. Прикрепите его к сообщению об ошибке, если серия не загружается или грузится слишком долго.",
+      "exportAction": "Экспортировать журнал",
+      "openFolder": "Открыть папку",
+      "show": "Показать журнал",
+      "hide": "Скрыть журнал",
+      "empty": "Журнал пуст.",
+      "exported": "Журнал сохранён: {{path}}"
+    }
+  }
+}
