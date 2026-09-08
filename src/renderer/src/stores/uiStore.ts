@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { normalizeZoom } from "@/lib/zoom";
 
 interface UiState {
   theme: "light" | "dark";
@@ -35,6 +36,11 @@ interface UiState {
   // Settings just gives a way back to the manual button for anyone who'd rather not have pages
   // load automatically as they scroll.
   catalogAutoLoad: boolean;
+  // Window zoom as a plain factor (1 = 100%), stepped with Ctrl +/- and reset with Ctrl+0 - see
+  // lib/zoom.ts. Stored as the factor rather than Chromium's logarithmic zoom *level* because it
+  // is the number a person would recognise, and because the ladder in lib/zoom.ts is defined in
+  // those terms.
+  zoomFactor: number;
   setTheme: (theme: "light" | "dark") => void;
   setActiveSourceId: (id: string | null) => void;
   setSidebarWidth: (width: number) => void;
@@ -44,6 +50,7 @@ interface UiState {
   setAccentColor: (color: string | null) => void;
   setBackgroundTheme: (id: string | null) => void;
   setCatalogAutoLoad: (enabled: boolean) => void;
+  setZoomFactor: (factor: number) => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -58,6 +65,7 @@ export const useUiStore = create<UiState>()(
       accentColor: null,
       backgroundTheme: null,
       catalogAutoLoad: true,
+      zoomFactor: 1,
       setTheme: (theme) => set({ theme }),
       setActiveSourceId: (activeSourceId) => set({ activeSourceId }),
       setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
@@ -67,6 +75,7 @@ export const useUiStore = create<UiState>()(
       setAccentColor: (accentColor) => set({ accentColor }),
       setBackgroundTheme: (backgroundTheme) => set({ backgroundTheme }),
       setCatalogAutoLoad: (catalogAutoLoad) => set({ catalogAutoLoad }),
+      setZoomFactor: (zoomFactor) => set({ zoomFactor: normalizeZoom(zoomFactor) }),
     }),
     { name: "hibiki-ui" },
   ),

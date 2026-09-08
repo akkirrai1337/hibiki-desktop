@@ -11,6 +11,7 @@ import { useAchievementUnlocks } from "@/lib/achievementUnlocks";
 import { useContinueWatching } from "@/lib/continueWatching";
 import { hibiki } from "@/lib/hibiki";
 import { installGlobalErrorLogging } from "@/lib/log";
+import { useAppZoom } from "@/lib/useAppZoom";
 import { cn } from "@/lib/cn";
 import { CatalogPage } from "@/routes/index";
 import { CatalogBrowsePage } from "@/routes/catalog";
@@ -51,6 +52,9 @@ function RootLayout() {
   // active, not just which accent is picked).
   // Once per app start, not per render - see lib/log.ts.
   useEffect(() => { installGlobalErrorLogging(); }, []);
+
+  // Ctrl/Cmd +/-/0, and re-applying the saved factor on launch.
+  useAppZoom();
 
   useEffect(() => { applyAccentColor(accentColor, theme); }, [accentColor, theme]);
   const backgroundTheme = useUiStore((s) => s.backgroundTheme);

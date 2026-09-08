@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webFrame } from "electron";
 import { IPC } from "@shared/ipc";
 import type {
   AnimeTitle,
@@ -110,6 +110,13 @@ const api = {
       ipcRenderer.on(IPC.windowMaximizedChanged, listener);
       return () => ipcRenderer.removeListener(IPC.windowMaximizedChanged, listener);
     },
+  },
+  // Not IPC: zoom belongs to this frame, and webFrame is only reachable from a preload script -
+  // the renderer can't import electron, and routing it through the main process would add a round
+  // trip to something that is a local, synchronous property of the window.
+  zoom: {
+    set: (factor: number): void => { webFrame.setZoomFactor(factor); },
+    get: (): number => webFrame.getZoomFactor(),
   },
   platform: process.platform,
   app: {

@@ -79,6 +79,10 @@ export interface HibikiApi {
     isMaximized(): Promise<boolean>;
     onMaximizedChanged(callback: (maximized: boolean) => void): () => void;
   };
+  zoom: {
+    set(factor: number): void;
+    get(): number;
+  };
   platform: NodeJS.Platform;
   app: {
     getVersion(): Promise<string>;
