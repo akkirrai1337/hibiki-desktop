@@ -9,7 +9,18 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
-import type { AnimeTitle, PlaybackGroup, PlayerLink, PlayerLinkType, SearchFilterCatalog, SearchRequest, SourceInfo } from "@shared/types";
+import type {
+  AnimeTitle,
+  PlaybackGroup,
+  PlayerLink,
+  PlayerLinkType,
+  SearchFilterCatalog,
+  SearchRequest,
+  SourceAccount,
+  SourceComment,
+  SourceInfo,
+  SourceReview,
+} from "@shared/types";
 import type { ExtensionCall, ExtensionMethod } from "./execute";
 import type { WorkerCallMessage, WorkerResultMessage } from "./worker";
 import { performBrowserFetch, performChallenge } from "./browserFetchHost";
@@ -17,6 +28,7 @@ import { performNetFetch, performNetFetchAll } from "./netFetchHost";
 import { logger } from "../logger";
 import { performBrowserResolve } from "./browserResolveHost";
 import type { BridgeRequestMessage } from "./syncHostBridge";
+import { ExtensionStorage } from "./extensionStorage";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WORKER_TIMEOUT_MS = 30_000;
@@ -36,6 +48,7 @@ interface Manifest {
   capabilities?: string[];
   supportedSorts?: string[];
   supportedFilters?: string[];
+  settings?: SourceInfo["settings"];
 }
 
 interface LoadedExtension {
@@ -63,8 +76,19 @@ export class ExtensionRuntime {
   private readonly resolvers = new Map<string, ResolverManifest>();
   private readonly resolversDir: string;
 
+  private readonly storage: ExtensionStorage;
+
   constructor(private readonly extensionsDir: string) {
     this.resolversDir = path.join(extensionsDir, "resolvers");
+    // Beside the extensions rather than inside them: uninstalling a source should be able to take
+    // its stored token with it without the store having to survive a directory being rewritten.
+    this.storage = new ExtensionStorage(path.join(path.dirname(extensionsDir), "extension-storage"));
+  }
+
+  /** Called when a source is removed - a token for a source that is no longer installed is only a
+   * secret waiting to leak. */
+  forgetStorage(sourceId: string): void {
+    this.storage.clear(sourceId);
   }
 
   reload(): void {
@@ -109,6 +133,7 @@ export class ExtensionRuntime {
       supportedSorts: manifest.supportedSorts ?? [],
       supportedFilters: (manifest.supportedFilters ?? []) as SourceInfo["supportedFilters"],
       runtime: "NODE",
+      settings: manifest.settings ?? [],
     }));
   }
 
@@ -202,7 +227,9 @@ export class ExtensionRuntime {
     const extensionsDir = options?.extensionsDir ?? this.extensionsDir;
     if (!options && !this.extensions.has(sourceId)) return Promise.reject(new Error(`Unknown source: ${sourceId}`));
 
-    const call: ExtensionCall = { extensionsDir, sourceId, method, args };
+    // Read once per call, at dispatch: the script sees a consistent snapshot for its whole run,
+    // and a call that writes has its writes applied when it comes back.
+    const call: ExtensionCall = { extensionsDir, sourceId, method, args, storage: this.storage.read(sourceId) };
 
     const startedAt = Date.now();
     logger.debug("ext", `${sourceId}.${method}() start`);
@@ -237,6 +264,9 @@ export class ExtensionRuntime {
         settled = true;
         clearTimeout(timeout);
         this.releaseWorker(worker);
+        // Before resolve/reject either way: a call that stored a token and then failed still
+        // stored the token.
+        if (message.storageWrites) this.storage.apply(sourceId, message.storageWrites);
         if (message.ok) {
           logger.debug("ext", `${sourceId}.${method}() ok in ${Date.now() - startedAt}ms`);
           resolve(message.result as T);
@@ -270,6 +300,50 @@ export class ExtensionRuntime {
 
   latest(sourceId: string, limit: number): Promise<AnimeTitle[]> {
     return this.run("latest", sourceId, [limit]);
+  }
+
+  /**
+   * Account and the things it unlocks.
+   *
+   * All of them are optional on the script side and gated by the source's declared capabilities -
+   * see ExtensionMethod in execute.ts. Credentials pass straight through to the script and are
+   * never written anywhere by the host; whatever the script needs to prove itself again later goes
+   * in its own store instead.
+   */
+  login(sourceId: string, credentials: { login: string; password: string }): Promise<SourceAccount> {
+    return this.run("login", sourceId, [credentials]);
+  }
+
+  logout(sourceId: string): Promise<void> {
+    return this.run("logout", sourceId, []);
+  }
+
+  getAccount(sourceId: string): Promise<SourceAccount | null> {
+    return this.run("getAccount", sourceId, []);
+  }
+
+  listComments(sourceId: string, request: { animeId: string; parentId?: string | null; offset?: number }): Promise<SourceComment[]> {
+    return this.run("listComments", sourceId, [request]);
+  }
+
+  postComment(sourceId: string, request: { animeId: string; text: string; parentId?: string | null }): Promise<SourceComment> {
+    return this.run("postComment", sourceId, [request]);
+  }
+
+  listReviews(sourceId: string, request: { animeId: string; offset?: number }): Promise<SourceReview[]> {
+    return this.run("listReviews", sourceId, [request]);
+  }
+
+  postReview(sourceId: string, request: { animeId: string; text: string; rating?: number | null }): Promise<SourceReview> {
+    return this.run("postReview", sourceId, [request]);
+  }
+
+  /** Pushes one library row's status (and rating, when there is one) to the account. */
+  syncLibraryEntry(
+    sourceId: string,
+    request: { animeId: string; category: string | null; rating?: number | null },
+  ): Promise<void> {
+    return this.run("syncLibraryEntry", sourceId, [request]);
   }
 
   getById(sourceId: string, id: string): Promise<AnimeTitle> {
@@ -476,6 +550,8 @@ export class ExtensionRuntime {
   }
 
   uninstall(id: string): void {
+    // A stored token for a source that is no longer installed is a secret nobody is watching.
+    this.forgetStorage(id);
     for (const suffix of [".manifest.json", ".js", ".origin"]) {
       const file = path.join(this.extensionsDir, `${id}${suffix}`);
       if (fs.existsSync(file)) fs.unlinkSync(file);

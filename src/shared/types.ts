@@ -143,7 +143,67 @@ export interface DownloadProgress {
   message?: string;
 }
 
-export type SourceCapability = "LATEST_RELEASES" | "PLAYBACK" | "RELATED_TITLES" | "SIMILAR_TITLES";
+export type SourceCapability =
+  | "LATEST_RELEASES"
+  | "PLAYBACK"
+  | "RELATED_TITLES"
+  | "SIMILAR_TITLES"
+  // What a source can do once someone is signed in to it. Each one gates a piece of UI, so a
+  // source that declares nothing here looks exactly as it does today.
+  | "ACCOUNT"
+  | "COMMENTS"
+  | "REVIEWS"
+  | "LIBRARY_SYNC";
+
+/**
+ * One row on a source's settings page, as the source itself declares it.
+ *
+ * The app renders these without knowing which source it is looking at - it understands field
+ * types, not source names. "ACCOUNT" is the one that is not a value at all: it stands for the
+ * sign-in block, which the app draws itself from the source's login/logout/getAccount methods.
+ */
+export type SourceSettingType = "ACCOUNT" | "TOGGLE" | "TEXT" | "SELECT";
+
+export interface SourceSetting {
+  key: string;
+  type: SourceSettingType;
+  title: string;
+  description?: string | null;
+  /** SELECT only. */
+  options?: SearchFilterOption[];
+  /** TOGGLE and TEXT. Absent means off / empty. */
+  default?: boolean | string;
+}
+
+/** Who is signed in to a source, as far as the source is concerned. */
+export interface SourceAccount {
+  id: string;
+  name: string;
+  avatarUrl?: string | null;
+  profileUrl?: string | null;
+}
+
+export interface SourceComment {
+  id: string;
+  authorName: string;
+  authorAvatarUrl?: string | null;
+  text: string;
+  createdAt: number;
+  likes?: number;
+  replyCount?: number;
+  /** Set on replies, so a flat list can still be drawn as threads. */
+  parentId?: string | null;
+}
+
+export interface SourceReview {
+  id: string;
+  authorName: string;
+  authorAvatarUrl?: string | null;
+  text: string;
+  createdAt: number;
+  rating?: number | null;
+  likes?: number;
+}
 
 // Mirrors Android's AnimeSearchFilter enum (hibiki/parsers/.../model/Models.kt) - what a source's
 // manifest declares it accepts in a search request, gating which filter controls the UI shows.
@@ -159,6 +219,8 @@ export interface SourceInfo {
   supportedSorts: string[];
   supportedFilters: SearchFilterKind[];
   runtime?: "NODE" | "BROWSER";
+  /** Empty for every source that does not declare any - which is all of them until one does. */
+  settings: SourceSetting[];
 }
 
 // A source-declared (id, display title) pair - options come from the source itself (e.g. its own

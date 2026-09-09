@@ -17,7 +17,10 @@ import type {
   RepositoryFetchResult,
   SearchFilterCatalog,
   SearchRequest,
+  SourceAccount,
+  SourceComment,
   SourceInfo,
+  SourceReview,
   UpdateDownloadProgress,
   WatchProgress,
   XpEvent,
@@ -42,6 +45,28 @@ const api = {
       ipcRenderer.invoke(IPC.sourceResolvePlayerLink, link),
     filterCatalog: (sourceId: string): Promise<SearchFilterCatalog> =>
       ipcRenderer.invoke(IPC.sourceFilterCatalog, sourceId),
+    account: {
+      get: (sourceId: string): Promise<SourceAccount | null> => ipcRenderer.invoke(IPC.sourceAccount, sourceId),
+      login: (sourceId: string, credentials: { login: string; password: string }): Promise<SourceAccount> =>
+        ipcRenderer.invoke(IPC.sourceLogin, sourceId, credentials),
+      logout: (sourceId: string): Promise<void> => ipcRenderer.invoke(IPC.sourceLogout, sourceId),
+    },
+    comments: {
+      list: (sourceId: string, request: { animeId: string; parentId?: string | null; offset?: number }): Promise<SourceComment[]> =>
+        ipcRenderer.invoke(IPC.sourceComments, sourceId, request),
+      post: (sourceId: string, request: { animeId: string; text: string; parentId?: string | null }): Promise<SourceComment> =>
+        ipcRenderer.invoke(IPC.sourcePostComment, sourceId, request),
+    },
+    reviews: {
+      list: (sourceId: string, request: { animeId: string; offset?: number }): Promise<SourceReview[]> =>
+        ipcRenderer.invoke(IPC.sourceReviews, sourceId, request),
+      post: (sourceId: string, request: { animeId: string; text: string; rating?: number | null }): Promise<SourceReview> =>
+        ipcRenderer.invoke(IPC.sourcePostReview, sourceId, request),
+    },
+    syncLibraryEntry: (
+      sourceId: string,
+      request: { animeId: string; category: string | null; rating?: number | null },
+    ): Promise<void> => ipcRenderer.invoke(IPC.sourceSyncLibraryEntry, sourceId, request),
     repositories: {
       list: (): Promise<string[]> => ipcRenderer.invoke(IPC.sourcesRepositoriesList),
       add: (url: string): Promise<string[]> => ipcRenderer.invoke(IPC.sourcesRepositoriesAdd, url),

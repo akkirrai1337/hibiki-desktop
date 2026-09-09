@@ -5,6 +5,7 @@ import zlib from "node:zlib";
 import syncFetch from "sync-fetch";
 import { JsoupBinding } from "./jsoupShim";
 import type { ChallengeProvider, BrowserFetchProvider, NetFetchProvider, NetFetchRequest } from "./browserBridge";
+import type { ExtensionStorageBinding } from "@shared/extensionCallStorage";
 
 export interface FetchOptions {
   method?: string;
@@ -194,6 +195,9 @@ export interface BuildGlobalsOptions {
   browserFetch: BrowserFetchProvider;
   /** Omitted only outside the app (see syncFetchFallback). */
   netFetch?: NetFetchProvider;
+  /** Omitted by callers that have nowhere to persist to; the script then sees an empty store that
+   * forgets every write, which is the right shape for tooling and tests. */
+  storage?: ExtensionStorageBinding;
 }
 
 export function buildExtensionGlobals(options: BuildGlobalsOptions) {
@@ -238,6 +242,13 @@ export function buildExtensionGlobals(options: BuildGlobalsOptions) {
       options.challenge.acquire(url, cookieNames ?? [], Boolean(forceRefresh)),
     browserFetch: (pageUrl: string, targetUrl: string, fetchOptions?: FetchOptions) =>
       options.browserFetch.fetch(pageUrl, targetUrl, fetchOptions),
+    // What makes an account possible: a token survives the call that fetched it. A script must
+    // never put a password in here - only what it needs to prove itself again later.
+    storage: options.storage ?? {
+      get: () => null,
+      set: () => {},
+      remove: () => {},
+    },
     preferredLanguage: options.preferredLanguage,
   };
 }

@@ -224,7 +224,11 @@
       "latest": "Latest releases",
       "playback": "Playback",
       "related": "Related titles",
-      "similar": "Recommendations"
+      "similar": "Recommendations",
+      "account": "Account",
+      "comments": "Comments",
+      "reviews": "Reviews",
+      "librarySync": "Library sync"
     }
   },
   "achievements": {

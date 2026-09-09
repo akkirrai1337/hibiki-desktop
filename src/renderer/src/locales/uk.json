@@ -224,7 +224,11 @@
       "latest": "Новинки",
       "playback": "Перегляд",
       "related": "Схожі тайтли",
-      "similar": "Рекомендації"
+      "similar": "Рекомендації",
+      "account": "Акаунт",
+      "comments": "Коментарі",
+      "reviews": "Відгуки",
+      "librarySync": "Синхронізація списків"
     }
   },
   "achievements": {

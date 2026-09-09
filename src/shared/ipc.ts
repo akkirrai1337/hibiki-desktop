@@ -11,6 +11,17 @@ export const IPC = {
   sourceResolvePlayerLink: "source:resolvePlayerLink",
   sourceFilterCatalog: "source:filterCatalog",
 
+  // Account, and what an account unlocks. Each is answered only by sources that declare the
+  // matching capability - see SourceCapability.
+  sourceLogin: "source:account:login",
+  sourceLogout: "source:account:logout",
+  sourceAccount: "source:account:get",
+  sourceComments: "source:comments:list",
+  sourcePostComment: "source:comments:post",
+  sourceReviews: "source:reviews:list",
+  sourcePostReview: "source:reviews:post",
+  sourceSyncLibraryEntry: "source:library:sync",
+
   sourcesRepositoriesList: "sources:repositories:list",
   sourcesRepositoriesAdd: "sources:repositories:add",
   sourcesRepositoriesRemove: "sources:repositories:remove",

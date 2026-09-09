@@ -45,4 +45,30 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   );
   ipcMain.handle(IPC.sourceResolvePlayerLink, (_e, link: PlayerLink) => runtime.resolvePlayerLink(link));
   ipcMain.handle(IPC.sourceFilterCatalog, (_e, sourceId: string) => runtime.getFilterCatalog(sourceId));
+
+  // Straight through to the source. The password is a parameter of this one call and is written
+  // nowhere: whatever the source needs in order to prove itself again later, it puts in its own
+  // store (see extensionStorage.ts), and the host never learns what that is.
+  ipcMain.handle(IPC.sourceLogin, (_e, sourceId: string, credentials: { login: string; password: string }) =>
+    runtime.login(sourceId, credentials),
+  );
+  ipcMain.handle(IPC.sourceLogout, (_e, sourceId: string) => runtime.logout(sourceId));
+  ipcMain.handle(IPC.sourceAccount, (_e, sourceId: string) => runtime.getAccount(sourceId));
+  ipcMain.handle(IPC.sourceComments, (_e, sourceId: string, request: Parameters<typeof runtime.listComments>[1]) =>
+    runtime.listComments(sourceId, request),
+  );
+  ipcMain.handle(IPC.sourcePostComment, (_e, sourceId: string, request: Parameters<typeof runtime.postComment>[1]) =>
+    runtime.postComment(sourceId, request),
+  );
+  ipcMain.handle(IPC.sourceReviews, (_e, sourceId: string, request: Parameters<typeof runtime.listReviews>[1]) =>
+    runtime.listReviews(sourceId, request),
+  );
+  ipcMain.handle(IPC.sourcePostReview, (_e, sourceId: string, request: Parameters<typeof runtime.postReview>[1]) =>
+    runtime.postReview(sourceId, request),
+  );
+  ipcMain.handle(
+    IPC.sourceSyncLibraryEntry,
+    (_e, sourceId: string, request: Parameters<typeof runtime.syncLibraryEntry>[1]) =>
+      runtime.syncLibraryEntry(sourceId, request),
+  );
 }

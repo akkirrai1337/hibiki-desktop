@@ -19,6 +19,9 @@ import {
   Play,
   Layers,
   Shuffle,
+  UserRound,
+  MessageSquare,
+  Star,
 } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
 import { useUiStore } from "@/stores/uiStore";
@@ -47,6 +50,10 @@ const CAPABILITY_ICONS: Record<SourceCapability, typeof Sparkles> = {
   PLAYBACK: Play,
   RELATED_TITLES: Layers,
   SIMILAR_TITLES: Shuffle,
+  ACCOUNT: UserRound,
+  COMMENTS: MessageSquare,
+  REVIEWS: Star,
+  LIBRARY_SYNC: RefreshCw,
 };
 
 const CAPABILITY_LABEL_KEYS: Record<SourceCapability, string> = {
@@ -54,6 +61,10 @@ const CAPABILITY_LABEL_KEYS: Record<SourceCapability, string> = {
   PLAYBACK: "sources.capability.playback",
   RELATED_TITLES: "sources.capability.related",
   SIMILAR_TITLES: "sources.capability.similar",
+  ACCOUNT: "sources.capability.account",
+  COMMENTS: "sources.capability.comments",
+  REVIEWS: "sources.capability.reviews",
+  LIBRARY_SYNC: "sources.capability.librarySync",
 };
 
 function languageLabel(lang: string): { native: string; english: string } {

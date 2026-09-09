@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { buildExtensionGlobals } from "./globals";
+import type { ExtensionStorageBinding } from "@shared/extensionCallStorage";
 import { notImplementedBrowserFetchProvider, notImplementedChallengeProvider } from "./browserBridge";
 import type { BrowserFetchProvider, ChallengeProvider, NetFetchProvider } from "./browserBridge";
 
@@ -18,13 +19,34 @@ export interface ExtensionBridgeProviders {
   netFetch?: NetFetchProvider;
 }
 
-export type ExtensionMethod = "search" | "latest" | "getById" | "getPlaybackGroups" | "getPlayerLinks" | "getSettings" | "resolve" | "browserScript";
+export type ExtensionMethod =
+  | "search"
+  | "latest"
+  | "getById"
+  | "getPlaybackGroups"
+  | "getPlayerLinks"
+  | "getSettings"
+  | "resolve"
+  | "browserScript"
+  // Account and the things an account unlocks. Every one of these is optional on the script side:
+  // a source that declares none of the matching capabilities never gets asked, and one that
+  // declares them but lacks the function fails loudly rather than silently doing nothing.
+  | "login"
+  | "logout"
+  | "getAccount"
+  | "listComments"
+  | "postComment"
+  | "listReviews"
+  | "postReview"
+  | "syncLibraryEntry";
 
 export interface ExtensionCall {
   extensionsDir: string;
   sourceId: string;
   method: ExtensionMethod;
   args: unknown[];
+  /** This source's stored values, as of the moment the call was dispatched. */
+  storage?: Record<string, string>;
 }
 
 function findScriptPath(extensionsDir: string, sourceId: string): string {
@@ -36,7 +58,12 @@ function findScriptPath(extensionsDir: string, sourceId: string): string {
   return scriptPath;
 }
 
-function loadProvider(scriptPath: string, sourceId: string, providers: ExtensionBridgeProviders): Record<string, unknown> {
+function loadProvider(
+  scriptPath: string,
+  sourceId: string,
+  providers: ExtensionBridgeProviders,
+  storage?: ExtensionStorageBinding,
+): Record<string, unknown> {
   const source = fs.readFileSync(scriptPath, "utf-8");
 
   const globals = buildExtensionGlobals({
@@ -49,6 +76,7 @@ function loadProvider(scriptPath: string, sourceId: string, providers: Extension
     challenge: providers.challenge ?? notImplementedChallengeProvider,
     browserFetch: providers.browserFetch ?? notImplementedBrowserFetchProvider,
     netFetch: providers.netFetch,
+    storage,
   });
 
   const sandbox: Record<string, unknown> = { ...globals, Provider: undefined };
@@ -65,9 +93,13 @@ function tagSource<T extends { id: string }>(sourceId: string, item: T): T & { s
   return { ...item, sourceId };
 }
 
-export function executeExtensionCall(call: ExtensionCall, providers: ExtensionBridgeProviders = {}): unknown {
+export function executeExtensionCall(
+  call: ExtensionCall,
+  providers: ExtensionBridgeProviders = {},
+  storage?: ExtensionStorageBinding,
+): unknown {
   const scriptPath = findScriptPath(call.extensionsDir, call.sourceId);
-  const provider = loadProvider(scriptPath, call.sourceId, providers);
+  const provider = loadProvider(scriptPath, call.sourceId, providers, storage);
 
   switch (call.method) {
     case "search": {
@@ -105,6 +137,24 @@ export function executeExtensionCall(call: ExtensionCall, providers: ExtensionBr
       // with a source id the way search/getById results are.
       const fn = provider.resolve as (json: string) => unknown[];
       return fn.call(provider, call.args[0] as string) ?? [];
+    }
+    // One shape for all of these: the argument, if any, is a JSON string, and so is the answer's
+    // payload - the same convention search/resolve already use, and the one Rhino needs, since it
+    // cannot hand a real object across the boundary either.
+    case "login":
+    case "logout":
+    case "getAccount":
+    case "listComments":
+    case "postComment":
+    case "listReviews":
+    case "postReview":
+    case "syncLibraryEntry": {
+      const fn = provider[call.method] as ((json?: string) => unknown) | undefined;
+      if (typeof fn !== "function") {
+        throw new Error(`Source "${call.sourceId}" declares ${call.method} but does not implement it`);
+      }
+      const argument = call.args.length > 0 ? JSON.stringify(call.args[0]) : undefined;
+      return fn.call(provider, argument) ?? null;
     }
     case "browserScript": {
       // BROWSER-runtime resolvers (extractors/alloha.js and similar) expose this instead of

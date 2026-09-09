@@ -224,7 +224,11 @@
       "latest": "Новинки",
       "playback": "Просмотр",
       "related": "Похожие тайтлы",
-      "similar": "Рекомендации"
+      "similar": "Рекомендации",
+      "account": "Аккаунт",
+      "comments": "Комментарии",
+      "reviews": "Отзывы",
+      "librarySync": "Синхронизация списков"
     }
   },
   "achievements": {

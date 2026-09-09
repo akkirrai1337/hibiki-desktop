@@ -16,6 +16,7 @@
 // is to hand each in-flight call its own worker.
 import { parentPort, workerData } from "node:worker_threads";
 import { executeExtensionCall, type ExtensionCall } from "./execute";
+import { createCallStorage } from "@shared/extensionCallStorage";
 import { hostBrowserFetchProvider, hostChallengeProvider, hostNetFetchProvider } from "./syncHostBridge";
 
 // Only still needed for globals.ts's sync-fetch *fallback* - the normal path bridges plain fetch()
@@ -37,6 +38,10 @@ export interface WorkerResultMessage {
   ok: boolean;
   result?: unknown;
   error?: string;
+  /** Keys the script wrote during this call, for the main thread to persist. A failed call still
+   * reports them: a login that stored a token and then threw while reading the profile back has
+   * still logged the user in. */
+  storageWrites?: Record<string, string | null>;
 }
 
 const providers = {
@@ -46,14 +51,23 @@ const providers = {
 };
 
 function handle(id: number, call: ExtensionCall): void {
+  const storage = createCallStorage(call.storage);
   try {
-    parentPort?.postMessage({ kind: "result", id, ok: true, result: executeExtensionCall(call, providers) } satisfies WorkerResultMessage);
+    const result = executeExtensionCall(call, providers, storage.binding);
+    parentPort?.postMessage({
+      kind: "result",
+      id,
+      ok: true,
+      result,
+      storageWrites: storage.writes,
+    } satisfies WorkerResultMessage);
   } catch (error) {
     parentPort?.postMessage({
       kind: "result",
       id,
       ok: false,
       error: error instanceof Error ? error.message : String(error),
+      storageWrites: storage.writes,
     } satisfies WorkerResultMessage);
   }
 }
