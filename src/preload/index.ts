@@ -63,6 +63,12 @@ const api = {
       post: (sourceId: string, request: { animeId: string; text: string; rating?: number | null }): Promise<SourceReview> =>
         ipcRenderer.invoke(IPC.sourcePostReview, sourceId, request),
     },
+    settings: {
+      read: (sourceId: string): Promise<Record<string, string>> =>
+        ipcRenderer.invoke(IPC.sourceSettingsRead, sourceId),
+      write: (sourceId: string, key: string, value: string | null): Promise<void> =>
+        ipcRenderer.invoke(IPC.sourceSettingsWrite, sourceId, key, value),
+    },
     syncLibraryEntry: (
       sourceId: string,
       request: { animeId: string; category: string | null; rating?: number | null },

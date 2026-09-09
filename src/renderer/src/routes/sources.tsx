@@ -27,6 +27,7 @@ import { hibiki } from "@/lib/hibiki";
 import { useUiStore } from "@/stores/uiStore";
 import { Switch } from "@/components/Switch";
 import { cn } from "@/lib/cn";
+import { SourceSettingsDialog } from "@/components/SourceSettingsDialog";
 import { isExtensionUpdateAvailable } from "@/lib/version";
 import { TabButton } from "@/components/TabButton";
 import type { MarketplaceExtension, RepositoryFetchResult, SourceCapability } from "@shared/types";
@@ -77,6 +78,9 @@ function repositoryDisplayName(url: string): string {
 }
 
 export function SourcesPage() {
+  // Which source's settings screen is open, if any. One at a time: the screen is modal, and a
+  // source is identified by id so it survives the list refreshing underneath it.
+  const [settingsSourceId, setSettingsSourceId] = useState<string | null>(null);
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("extensions");
@@ -94,6 +98,16 @@ export function SourcesPage() {
 
   const installedSources = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });
   const repositories = useQuery({ queryKey: ["repositories"], queryFn: () => hibiki.sources.repositories.list() });
+  // Which installed sources have anything to configure. The cards below are built from marketplace
+  // entries, which carry no settings - only the installed manifest does.
+  const sourcesWithSettings = useMemo(
+    () => new Set((installedSources.data ?? []).filter((source) => (source.settings?.length ?? 0) > 0).map((source) => source.id)),
+    [installedSources.data],
+  );
+  const settingsSource = useMemo(
+    () => (installedSources.data ?? []).find((source) => source.id === settingsSourceId),
+    [installedSources.data, settingsSourceId],
+  );
   const marketplace = useQuery({
     queryKey: ["marketplace", repositories.data, refreshSignal],
     enabled: !!repositories.data,
@@ -303,6 +317,8 @@ export function SourcesPage() {
                 installingIds={installingIds}
                 installErrors={installErrors}
                 activeSourceId={activeSourceId ?? installedSources.data?.[0]?.id ?? null}
+                onOpenSettings={setSettingsSourceId}
+                sourcesWithSettings={sourcesWithSettings}
                 onInstall={installExtension}
                 onUpdateAll={() => updateAvailableExtensions.forEach(installExtension)}
                 onUninstall={uninstallExtension}
@@ -337,6 +353,9 @@ export function SourcesPage() {
             onConfirm={() => { removeRepository(repositoryPendingRemoval); setRepositoryPendingRemoval(null); }}
             onDismiss={() => setRepositoryPendingRemoval(null)}
           />
+        )}
+        {settingsSource && (
+          <SourceSettingsDialog source={settingsSource} onClose={() => setSettingsSourceId(null)} />
         )}
       </AnimatePresence>
     </div>
@@ -439,6 +458,8 @@ function ExtensionsTab({
   installErrors,
   activeSourceId,
   onInstall,
+  onOpenSettings,
+  sourcesWithSettings,
   onUpdateAll,
   onUninstall,
   onSelect,
@@ -457,6 +478,10 @@ function ExtensionsTab({
   onInstall: (extension: MarketplaceExtension) => void;
   onUpdateAll: () => void;
   onUninstall: (id: string) => void;
+  onOpenSettings: (id: string) => void;
+  /** Ids whose installed manifest declares any settings - the marketplace entries these cards are
+   * built from carry no settings of their own. */
+  sourcesWithSettings: Set<string>;
   onSelect: (id: string) => void;
 }) {
   const { t } = useTranslation();
@@ -475,7 +500,7 @@ function ExtensionsTab({
           <div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-3">
             <AnimatePresence initial={false}>
               {updateAvailable.map((extension) => (
-                <ExtensionCard key={extension.id} extension={extension} installedVersion={installedVersions.get(extension.id) ?? null} updateAvailable installing={installingIds.has(extension.id)} errorMessage={installErrors[extension.id]} selected={extension.id === activeSourceId} onInstall={() => onInstall(extension)} onUninstall={() => onUninstall(extension.id)} onSelect={() => onSelect(extension.id)} />
+                <ExtensionCard key={extension.id} extension={extension} installedVersion={installedVersions.get(extension.id) ?? null} updateAvailable installing={installingIds.has(extension.id)} errorMessage={installErrors[extension.id]} selected={extension.id === activeSourceId} onInstall={() => onInstall(extension)} onUninstall={() => onUninstall(extension.id)} onOpenSettings={() => onOpenSettings(extension.id)} hasSettings={sourcesWithSettings.has(extension.id)} onSelect={() => onSelect(extension.id)} />
               ))}
             </AnimatePresence>
           </div>
@@ -487,7 +512,7 @@ function ExtensionsTab({
           <div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-3">
             <AnimatePresence initial={false}>
               {upToDate.map((extension) => (
-                <ExtensionCard key={extension.id} extension={extension} installedVersion={installedVersions.get(extension.id) ?? null} updateAvailable={false} installing={installingIds.has(extension.id)} errorMessage={installErrors[extension.id]} selected={extension.id === activeSourceId} onInstall={() => onInstall(extension)} onUninstall={() => onUninstall(extension.id)} onSelect={() => onSelect(extension.id)} />
+                <ExtensionCard key={extension.id} extension={extension} installedVersion={installedVersions.get(extension.id) ?? null} updateAvailable={false} installing={installingIds.has(extension.id)} errorMessage={installErrors[extension.id]} selected={extension.id === activeSourceId} onInstall={() => onInstall(extension)} onUninstall={() => onUninstall(extension.id)} onOpenSettings={() => onOpenSettings(extension.id)} hasSettings={sourcesWithSettings.has(extension.id)} onSelect={() => onSelect(extension.id)} />
               ))}
             </AnimatePresence>
           </div>
@@ -499,7 +524,7 @@ function ExtensionsTab({
           <div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-3">
             <AnimatePresence initial={false}>
               {available.map((extension) => (
-                <ExtensionCard key={extension.id} extension={extension} installedVersion={null} installing={installingIds.has(extension.id)} errorMessage={installErrors[extension.id]} selected={false} onInstall={() => onInstall(extension)} onUninstall={() => onUninstall(extension.id)} onSelect={() => onSelect(extension.id)} />
+                <ExtensionCard key={extension.id} extension={extension} installedVersion={null} installing={installingIds.has(extension.id)} errorMessage={installErrors[extension.id]} selected={false} onInstall={() => onInstall(extension)} onUninstall={() => onUninstall(extension.id)} onOpenSettings={() => onOpenSettings(extension.id)} hasSettings={sourcesWithSettings.has(extension.id)} onSelect={() => onSelect(extension.id)} />
               ))}
             </AnimatePresence>
           </div>
@@ -518,6 +543,8 @@ function ExtensionCard({
   selected,
   onInstall,
   onUninstall,
+  onOpenSettings,
+  hasSettings,
   onSelect,
 }: {
   extension: MarketplaceExtension;
@@ -528,6 +555,8 @@ function ExtensionCard({
   selected: boolean;
   onInstall: () => void;
   onUninstall: () => void;
+  onOpenSettings: () => void;
+  hasSettings: boolean;
   onSelect: () => void;
 }) {
   const { t } = useTranslation();
@@ -630,6 +659,9 @@ function ExtensionCard({
                   >
                     {!upToDate && (
                       <button onClick={() => { setMenuOpen(false); onInstall(); }} className="block w-full px-3 py-2 text-left text-sm text-text hover:bg-text/[.06]">{t("sources.update")}</button>
+                    )}
+                    {hasSettings && (
+                      <button onClick={() => { setMenuOpen(false); onOpenSettings(); }} className="block w-full px-3 py-2 text-left text-sm text-text hover:bg-text/[.06]">{t("sources.settings")}</button>
                     )}
                     <button onClick={() => { setMenuOpen(false); onUninstall(); }} className="block w-full px-3 py-2 text-left text-sm text-rose-400 hover:bg-text/[.06]">{t("sources.uninstall")}</button>
                   </motion.div>

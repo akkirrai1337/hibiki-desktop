@@ -229,7 +229,15 @@
       "comments": "Коментарі",
       "reviews": "Відгуки",
       "librarySync": "Синхронізація списків"
-    }
+    },
+    "settings": "Налаштування",
+    "settingsTitle": "Налаштування джерела",
+    "settingsEmpty": "У цього джерела нічого налаштовувати.",
+    "accountSignIn": "Увійти",
+    "accountSignOut": "Вийти",
+    "accountLogin": "Логін або пошта",
+    "accountPassword": "Пароль",
+    "accountOpenProfile": "Відкрити профіль"
   },
   "achievements": {
     "unlockedToast": "Досягнення відкрито"

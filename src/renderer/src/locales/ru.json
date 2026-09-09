@@ -229,7 +229,15 @@
       "comments": "Комментарии",
       "reviews": "Отзывы",
       "librarySync": "Синхронизация списков"
-    }
+    },
+    "settings": "Настройки",
+    "settingsTitle": "Настройки источника",
+    "settingsEmpty": "У этого источника нечего настраивать.",
+    "accountSignIn": "Войти",
+    "accountSignOut": "Выйти",
+    "accountLogin": "Логин или почта",
+    "accountPassword": "Пароль",
+    "accountOpenProfile": "Открыть профиль"
   },
   "achievements": {
     "unlockedToast": "Достижение открыто"

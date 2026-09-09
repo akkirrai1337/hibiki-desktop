@@ -15,7 +15,10 @@ import type {
   RepositoryFetchResult,
   SearchFilterCatalog,
   SearchRequest,
+  SourceAccount,
+  SourceComment,
   SourceInfo,
+  SourceReview,
   UpdateDownloadProgress,
   WatchProgress,
   XpEvent,
@@ -39,6 +42,29 @@ export interface HibikiApi {
     playerLinks(sourceId: string, titleId: string, groupId: string, episodeId: string): Promise<PlayerLink[]>;
     resolvePlayerLink(link: PlayerLink): Promise<PlayerLink[]>;
     filterCatalog(sourceId: string): Promise<SearchFilterCatalog>;
+    // Account, and what an account unlocks. Answered only by sources declaring the matching
+    // capability - see SourceCapability.
+    account: {
+      get(sourceId: string): Promise<SourceAccount | null>;
+      login(sourceId: string, credentials: { login: string; password: string }): Promise<SourceAccount>;
+      logout(sourceId: string): Promise<void>;
+    };
+    comments: {
+      list(sourceId: string, request: { animeId: string; parentId?: string | null; offset?: number }): Promise<SourceComment[]>;
+      post(sourceId: string, request: { animeId: string; text: string; parentId?: string | null }): Promise<SourceComment>;
+    };
+    reviews: {
+      list(sourceId: string, request: { animeId: string; offset?: number }): Promise<SourceReview[]>;
+      post(sourceId: string, request: { animeId: string; text: string; rating?: number | null }): Promise<SourceReview>;
+    };
+    // Values for the rows a source's manifest declares - the same store its script reads, so a
+    // toggle flipped here is a value the source can act on. Declared keys only: a session token
+    // lives in that store too, and this is not a way to read it.
+    settings: {
+      read(sourceId: string): Promise<Record<string, string>>;
+      write(sourceId: string, key: string, value: string | null): Promise<void>;
+    };
+    syncLibraryEntry(sourceId: string, request: { animeId: string; category: string | null; rating?: number | null }): Promise<void>;
     repositories: {
       list(): Promise<string[]>;
       add(url: string): Promise<string[]>;

@@ -229,7 +229,15 @@
       "comments": "Comments",
       "reviews": "Reviews",
       "librarySync": "Library sync"
-    }
+    },
+    "settings": "Settings",
+    "settingsTitle": "Source settings",
+    "settingsEmpty": "This source has nothing to configure.",
+    "accountSignIn": "Sign in",
+    "accountSignOut": "Sign out",
+    "accountLogin": "Login or email",
+    "accountPassword": "Password",
+    "accountOpenProfile": "Open profile"
   },
   "achievements": {
     "unlockedToast": "Achievement unlocked"

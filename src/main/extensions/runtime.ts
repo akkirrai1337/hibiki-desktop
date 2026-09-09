@@ -91,6 +91,31 @@ export class ExtensionRuntime {
     this.storage.clear(sourceId);
   }
 
+  /**
+   * The values behind a source's declared settings rows.
+   *
+   * Only declared keys, never the whole store: a source's session token lives in the same place,
+   * and the settings screen has no business reading it - nor does anything else in the renderer.
+   */
+  readSettings(sourceId: string): Record<string, string> {
+    const declared = new Set(this.settingKeysOf(sourceId));
+    const stored = this.storage.read(sourceId);
+    return Object.fromEntries(Object.entries(stored).filter(([key]) => declared.has(key)));
+  }
+
+  writeSetting(sourceId: string, key: string, value: string | null): void {
+    if (!this.settingKeysOf(sourceId).includes(key)) {
+      throw new Error(`Source "${sourceId}" declares no setting named "${key}"`);
+    }
+    this.storage.apply(sourceId, { [key]: value });
+  }
+
+  /** ACCOUNT rows are excluded: they stand for the sign-in block, not for a value. */
+  private settingKeysOf(sourceId: string): string[] {
+    const manifest = this.extensions.get(sourceId)?.manifest;
+    return (manifest?.settings ?? []).filter((setting) => setting.type !== "ACCOUNT").map((setting) => setting.key);
+  }
+
   reload(): void {
     this.extensions.clear();
     if (fs.existsSync(this.extensionsDir)) {
