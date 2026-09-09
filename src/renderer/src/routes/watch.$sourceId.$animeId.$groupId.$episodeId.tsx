@@ -341,19 +341,29 @@ function WatchPage() {
   );
   // Switching dub means switching PlaybackGroup, and groups number their episodes independently
   // (different ids, sometimes a different count) - match on episode *number* first so "episode 7"
-  // stays episode 7, fall back to the same position in the list, and finally to the first episode
-  // for a dub that simply doesn't have this one yet.
+  // stays episode 7.
+  //
+  // When that misses, the dub is behind the one being watched: it has not released this episode
+  // yet. The nearest episode it does have at or below the current number is a near miss; its
+  // *first* episode, which is where this used to land, is a teleport to the start of the show
+  // dressed up as a dub switch - and that is what made switching dub on a just-released episode
+  // look broken while every earlier episode worked. The positional fallback that used to sit
+  // between the two was a guess either way: a group that lists specials or recaps has every
+  // position shifted, so index 15 is not episode 16.
   const selectDub = useCallback(
     (targetGroupId: string) => {
       const target = groupsQuery.data?.find((g) => g.id === targetGroupId);
       if (!target || target.episodes.length === 0) return;
-      const targetEpisode =
-        target.episodes.find((e) => e.number === episodeNumber)
-        ?? target.episodes[episodeIndex]
-        ?? target.episodes[0];
+      const nearestBelow = target.episodes
+        .filter((e) => e.number <= episodeNumber)
+        .sort((a, b) => b.number - a.number)[0];
+      const targetEpisode = target.episodes.find((e) => e.number === episodeNumber) ?? nearestBelow ?? target.episodes[0];
+      if (targetEpisode.number !== episodeNumber) {
+        log.info("player", `${target.title} has no episode ${episodeNumber}, opening episode ${targetEpisode.number} instead`);
+      }
       navigate({ to: "/watch/$sourceId/$animeId/$groupId/$episodeId", params: { sourceId, animeId, groupId: targetGroupId, episodeId: targetEpisode.id }, replace: true });
     },
-    [navigate, groupsQuery.data, sourceId, animeId, episodeNumber, episodeIndex],
+    [navigate, groupsQuery.data, sourceId, animeId, episodeNumber],
   );
   // A real history.back() (not a push to the detail route) so the titlebar's back/forward arrows
   // stay consistent with "Escape" - otherwise this would push a *new* detail-page entry, leaving

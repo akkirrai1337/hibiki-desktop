@@ -438,7 +438,8 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     setSwitchingSource(true);
     return true;
   }, [currentTime, link, playing]);
-  const selectDimension = (changed: Partial<Pick<PlayerLink, "translation" | "playerName" | "quality">>) => {
+  /** Whether the pick actually moved playback somewhere. */
+  const selectDimension = (changed: Partial<Pick<PlayerLink, "translation" | "playerName" | "quality">>): boolean => {
     // With no link resolved yet there is nothing to keep the other two dimensions *close* to, so
     // the pick is just "the first link carrying what was asked for" - which is exactly what this
     // menu is for in that state: getting off a player that isn't coming back.
@@ -447,10 +448,21 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       : links.find((candidate) =>
           (Object.entries(changed) as [keyof typeof changed, string | null | undefined][])
             .every(([key, value]) => candidate[key] === value));
-    if (next && beginSourceSwitch(next)) onSelectLink?.(next);
+    if (!next) {
+      log.info("player", `no link carries ${JSON.stringify(changed)}, leaving playback where it is`);
+      return false;
+    }
+    if (!beginSourceSwitch(next)) return false;
+    onSelectLink?.(next);
+    return true;
   };
-  const selectTranslation = (translation: string) => { setPendingSelection({ translation }); selectDimension({ translation }); };
-  const selectPlayerName = (playerName: string) => { setPendingSelection({ playerName }); selectDimension({ playerName }); };
+  // The menu is only told a pick took effect once it has. Announcing it up front - which is what
+  // selectQuality below has always been careful not to do - left the menu showing a dub that was
+  // never switched to when no link carried it, and nothing afterwards to correct it: the effect
+  // that clears a pending pick keys off the link and the switching flags, none of which move when
+  // nothing happened.
+  const selectTranslation = (translation: string) => { if (selectDimension({ translation })) setPendingSelection({ translation }); };
+  const selectPlayerName = (playerName: string) => { if (selectDimension({ playerName })) setPendingSelection({ playerName }); };
   const selectQuality = (quality: string) => {
     const candidate = link ? pickLinkForQuality(links, link, quality) : undefined;
     if (candidate && beginSourceSwitch(candidate)) { setPendingSelection({ quality }); onSelectLink?.(candidate); }
