@@ -6,7 +6,8 @@ import { cacheAnime, cachePlaybackGroups, getCachedAnime, getCachedAnimeMany, ge
 
 export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   ipcMain.handle(IPC.sourcesList, () => runtime.list());
-  ipcMain.handle(IPC.sourceSearch, (_e, sourceId: string, request) => runtime.search(sourceId, request));
+  ipcMain.handle(IPC.sourceSearch, (_e, sourceId: string, request, requestId?: string) => runtime.search(sourceId, request, requestId));
+  ipcMain.on(IPC.sourceSearchCancel, (_e, requestId: string) => runtime.cancelRequest(requestId));
   ipcMain.handle(IPC.sourceLatest, (_e, sourceId: string, limit: number) => runtime.latest(sourceId, limit));
   // Falls back to whatever's cached (either from a previous successful fetch below, or from one of
   // this title's episodes finishing a download - see downloads.ts's cacheForOffline) - the source

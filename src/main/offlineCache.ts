@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, or } from "drizzle-orm";
 import type { AnimeTitle, CachedAnimeEntry, CachedPlaybackGroupsEntry, DownloadedEpisode, PlaybackGroup } from "@shared/types";
 import { getDb } from "./db";
 import { cachedAnime, cachedPlaybackGroups, downloadedEpisodes } from "./db/schema";
@@ -29,16 +29,23 @@ export function getCachedAnimeMany(
 ): Record<string, CachedAnimeEntry> {
   if (keys.length === 0) return {};
   const result: Record<string, CachedAnimeEntry> = {};
-  for (const { sourceId, animeId } of keys) {
-    const row = getDb()
+  // Two bound values per title. Keep comfortably below SQLite's common 999-variable limit while
+  // turning the normal 12-card screen from twelve statements into one.
+  const unique = [...new Map(keys.map((key) => [`${key.sourceId}:${key.animeId}`, key])).values()];
+  const BATCH_SIZE = 400;
+  for (let offset = 0; offset < unique.length; offset += BATCH_SIZE) {
+    const batch = unique.slice(offset, offset + BATCH_SIZE);
+    const rows = getDb()
       .select()
       .from(cachedAnime)
-      .where(and(eq(cachedAnime.sourceId, sourceId), eq(cachedAnime.animeId, animeId)))
-      .get();
+      .where(or(...batch.map(({ sourceId, animeId }) => and(eq(cachedAnime.sourceId, sourceId), eq(cachedAnime.animeId, animeId)))))
+      .all();
     // `cachedAt` travels with the title on purpose: it is what lets a caller answer "is this still
     // good enough" without a round trip. Without it the only options are to trust the cache
     // forever or to refetch every time, and this data sits squarely between the two.
-    if (row) result[`${sourceId}:${animeId}`] = { title: JSON.parse(row.animeJson) as AnimeTitle, cachedAt: row.cachedAt };
+    for (const row of rows) {
+      result[`${row.sourceId}:${row.animeId}`] = { title: JSON.parse(row.animeJson) as AnimeTitle, cachedAt: row.cachedAt };
+    }
   }
   return result;
 }
@@ -118,31 +125,31 @@ function titleFor(anime: AnimeTitle | null, fallbackId: string): string {
   return anime?.russianName || anime?.englishName || anime?.originalName || fallbackId;
 }
 
-// Joined with cachedAnime in-memory (not a SQL join) - the "Downloaded episodes" screen's whole
-// dataset is realistically a few dozen rows at most, so a second lookup per row is simpler than a
-// join across two JSON-blob tables for no real benefit at that scale.
+// Joined with cachedAnime in-memory after one batched lookup. Keeping the JSON decode here is
+// simpler than a SQL join while avoiding the old extra indexed statement for every episode row.
 export function listDownloadedEpisodes(): DownloadedEpisode[] {
-  return getDb()
+  const rows = getDb()
     .select()
     .from(downloadedEpisodes)
-    .all()
-    .map((r) => {
-      const anime = getCachedAnime(r.sourceId, r.animeId);
-      return {
-        sourceId: r.sourceId,
-        animeId: r.animeId,
-        groupId: r.groupId,
-        episodeId: r.episodeId,
-        episodeNumber: r.episodeNumber,
-        episodeLabel: r.episodeLabel,
-        filePath: r.filePath,
-        fileSizeBytes: r.fileSizeBytes,
-        durationMs: r.durationMs,
-        downloadedAt: r.downloadedAt,
-        animeTitle: titleFor(anime, r.animeId),
-        animePosterUrl: anime?.posterUrl ?? null,
-      };
-    });
+    .all();
+  const cached = getCachedAnimeMany(rows.map((row) => ({ sourceId: row.sourceId, animeId: row.animeId })));
+  return rows.map((r) => {
+    const anime = cached[`${r.sourceId}:${r.animeId}`]?.title ?? null;
+    return {
+      sourceId: r.sourceId,
+      animeId: r.animeId,
+      groupId: r.groupId,
+      episodeId: r.episodeId,
+      episodeNumber: r.episodeNumber,
+      episodeLabel: r.episodeLabel,
+      filePath: r.filePath,
+      fileSizeBytes: r.fileSizeBytes,
+      durationMs: r.durationMs,
+      downloadedAt: r.downloadedAt,
+      animeTitle: titleFor(anime, r.animeId),
+      animePosterUrl: anime?.posterUrl ?? null,
+    };
+  });
 }
 
 export function getDownloadedEpisode(sourceId: string, animeId: string, episodeId: string): { filePath: string; durationMs: number | null; quality: string | null } | null {

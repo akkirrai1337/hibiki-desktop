@@ -207,10 +207,10 @@ function streamTypeForUrl(url: string): string {
  * the page's own network requests) surface, and returns them in the same shape a plain
  * Provider.resolve() call would - so callers (see runtime.ts) don't need to distinguish the two.
  */
-export async function performBrowserResolve(link: PlayerLink, script: string): Promise<ResolvedStream[]> {
+export async function performBrowserResolve(link: PlayerLink, script: string, timeoutMs = TIMEOUT_MS): Promise<ResolvedStream[]> {
   // Covers navigation, iframe setup, probing and validation. Previously the clock started only
   // after all navigation had completed, allowing a dead embed page to hang well beyond 25s.
-  const deadline = Date.now() + TIMEOUT_MS;
+  const deadline = Date.now() + Math.min(TIMEOUT_MS, timeoutMs);
   const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, images: false } });
   const ses = win.webContents.session;
   const networkCaptures: Capture[] = [];

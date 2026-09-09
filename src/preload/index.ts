@@ -32,8 +32,9 @@ import type {
 const api = {
   sources: {
     list: (): Promise<SourceInfo[]> => ipcRenderer.invoke(IPC.sourcesList),
-    search: (sourceId: string, request: SearchRequest): Promise<AnimeTitle[]> =>
-      ipcRenderer.invoke(IPC.sourceSearch, sourceId, request),
+    search: (sourceId: string, request: SearchRequest, requestId?: string): Promise<AnimeTitle[]> =>
+      ipcRenderer.invoke(IPC.sourceSearch, sourceId, request, requestId),
+    cancelSearch: (requestId: string): void => ipcRenderer.send(IPC.sourceSearchCancel, requestId),
     latest: (sourceId: string, limit: number): Promise<AnimeTitle[]> =>
       ipcRenderer.invoke(IPC.sourceLatest, sourceId, limit),
     getById: (sourceId: string, id: string): Promise<AnimeTitle> =>

@@ -1,6 +1,7 @@
 export const IPC = {
   sourcesList: "sources:list",
   sourceSearch: "source:search",
+  sourceSearchCancel: "source:search:cancel",
   sourceLatest: "source:latest",
   sourceGetById: "source:getById",
   // Whatever is already on disk for a set of titles - lets a screen paint before the network

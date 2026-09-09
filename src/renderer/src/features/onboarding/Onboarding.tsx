@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 import appIcon from "@/assets/app-icon.png";
-import { SourcesPage } from "@/routes/sources";
 import { cn } from "@/lib/cn";
+
+const SourcesPage = lazy(() => import("@/pages/sources").then((module) => ({ default: module.SourcesPage })));
 
 // Loosely mirrors the Android app's own first-launch flow, with one extra step in between -
 // Android's onboarding never actually grew a source-picking step of its own (leftover, unused
@@ -86,7 +87,7 @@ function SourcesStep() {
         <p className="mt-2 text-sm text-muted">{t("onboarding.sources.description")}</p>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-border bg-text/[.03]">
-        <SourcesPage />
+        <Suspense fallback={null}><SourcesPage /></Suspense>
       </div>
     </div>
   );

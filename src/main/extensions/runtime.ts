@@ -34,6 +34,7 @@ import { ExtensionStorage } from "./extensionStorage";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WORKER_TIMEOUT_MS = 30_000;
+const RESOLVE_TOTAL_TIMEOUT_MS = 45_000;
 
 const RESOLVER_STREAM_TYPE_TO_PLAYER_LINK_TYPE: Record<string, PlayerLinkType | undefined> = {
   HLS: "DIRECT_HLS",
@@ -82,6 +83,7 @@ export class ExtensionRuntime {
   private readonly resolvers = new Map<string, ResolverManifest>();
   private readonly resolverHealth = new Map<string, ResolverHealth>();
   private readonly inFlightReads = new Map<string, Promise<unknown>>();
+  private readonly cancellations = new Map<string, () => void>();
   private readonly resolversDir: string;
 
   private readonly storage: ExtensionStorage;
@@ -278,10 +280,11 @@ export class ExtensionRuntime {
     method: ExtensionMethod,
     sourceId: string,
     args: unknown[],
-    options?: { extensionsDir: string },
+    options?: { extensionsDir?: string; requestId?: string; timeoutMs?: number },
   ): Promise<T> {
     const extensionsDir = options?.extensionsDir ?? this.extensionsDir;
-    if (!options && !this.extensions.has(sourceId)) return Promise.reject(new Error(`Unknown source: ${sourceId}`));
+    const timeoutMs = options?.timeoutMs ?? WORKER_TIMEOUT_MS;
+    if (!options?.extensionsDir && !this.extensions.has(sourceId)) return Promise.reject(new Error(`Unknown source: ${sourceId}`));
 
     // Read once per call, at dispatch: the script sees a consistent snapshot for its whole run,
     // and a call that writes has its writes applied when it comes back.
@@ -298,15 +301,30 @@ export class ExtensionRuntime {
       // a result would deliver both a result and an error.
       let settled = false;
 
+      const clearCancellation = () => {
+        if (options?.requestId && this.cancellations.get(options.requestId) === cancel) {
+          this.cancellations.delete(options.requestId);
+        }
+      };
+      const cancel = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        clearCancellation();
+        void worker.terminate();
+        reject(new Error(`Source "${sourceId}" cancelled calling ${method}()`));
+      };
+
       const timeout = setTimeout(() => {
         if (settled) return;
         settled = true;
+        clearCancellation();
         // Deliberately terminated, never pooled: this worker is stuck inside a script that hasn't
         // returned, and handing the next call to it would hang that one too.
         void worker.terminate();
-        logger.error("ext", `${sourceId}.${method}() timed out after ${WORKER_TIMEOUT_MS}ms`);
+        logger.error("ext", `${sourceId}.${method}() timed out after ${timeoutMs}ms`);
         reject(new Error(`Source "${sourceId}" timed out calling ${method}()`));
-      }, WORKER_TIMEOUT_MS);
+      }, timeoutMs);
 
       worker.on("message", (message: BridgeRequestMessage | WorkerResultMessage) => {
         if (message.kind === "bridge") {
@@ -319,6 +337,7 @@ export class ExtensionRuntime {
         if (settled || message.id !== callId) return;
         settled = true;
         clearTimeout(timeout);
+        clearCancellation();
         this.releaseWorker(worker);
         // Before resolve/reject either way: a call that stored a token and then failed still
         // stored the token.
@@ -335,6 +354,7 @@ export class ExtensionRuntime {
         if (settled) return;
         settled = true;
         clearTimeout(timeout);
+        clearCancellation();
         void worker.terminate();
         const failure = error instanceof Error ? error : new Error(String(error));
         logger.error("ext", `${sourceId}.${method}() crashed in ${Date.now() - startedAt}ms: ${failure.message}`);
@@ -342,7 +362,15 @@ export class ExtensionRuntime {
       });
 
       if (!fresh) worker.postMessage({ kind: "call", id: callId, call } satisfies WorkerCallMessage);
+      if (options?.requestId) this.cancellations.set(options.requestId, cancel);
     });
+  }
+
+  cancelRequest(requestId: string): boolean {
+    const cancel = this.cancellations.get(requestId);
+    if (!cancel) return false;
+    cancel();
+    return true;
   }
 
   /** Tears the pool down - called on app quit, so idle threads don't hold the process open. */
@@ -371,7 +399,10 @@ export class ExtensionRuntime {
     return pending;
   }
 
-  search(sourceId: string, request: SearchRequest): Promise<AnimeTitle[]> {
+  search(sourceId: string, request: SearchRequest, requestId?: string): Promise<AnimeTitle[]> {
+    // A renderer search carries a cancellation id, so it must own its worker rather than sharing
+    // one whose other caller might still need it. Background/catalog reads remain coalesced.
+    if (requestId) return this.run("search", sourceId, [request], { requestId });
     return this.shareRead("search", sourceId, [request], () => this.run("search", sourceId, [request]));
   }
 
@@ -536,11 +567,12 @@ export class ExtensionRuntime {
   // via the same sandboxed worker as every other extension call), but *running* it has to happen
   // inside a real page in a real browser context, which is Electron-main-only territory (see
   // browserResolveHost.ts, same reasoning as challenge()/browserFetch() elsewhere in this app).
-  private async runBrowserResolver(resolverId: string, link: PlayerLink): Promise<Array<PlayerLink & { type: string }>> {
+  private async runBrowserResolver(resolverId: string, link: PlayerLink, deadline: number): Promise<Array<PlayerLink & { type: string }>> {
     const script = await this.run<string>("browserScript", resolverId, [JSON.stringify(link)], {
       extensionsDir: this.resolversDir,
+      timeoutMs: Math.max(1, Math.min(WORKER_TIMEOUT_MS, deadline - Date.now())),
     });
-    const streams = await performBrowserResolve(link, script);
+    const streams = await performBrowserResolve(link, script, Math.max(1, deadline - Date.now()));
     return streams as unknown as Array<PlayerLink & { type: string }>;
   }
 
@@ -569,6 +601,7 @@ export class ExtensionRuntime {
     const attemptsByResolver = new Map<string, number>();
     let attempts = 0;
     const startedAt = Date.now();
+    const deadline = startedAt + RESOLVE_TOTAL_TIMEOUT_MS;
 
     const orderedIndexes = links.map((_link, index) => index);
     if (preferredIndex >= 0) {
@@ -589,7 +622,7 @@ export class ExtensionRuntime {
     });
 
     for (const i of orderedIndexes) {
-      if (attempts >= MAX_ATTEMPTS) break;
+      if (attempts >= MAX_ATTEMPTS || Date.now() >= deadline) break;
       const link = links[i];
       if (link.type !== "EMBED") continue;
       const resolver = this.findResolverForUrl(link.url);
@@ -603,9 +636,10 @@ export class ExtensionRuntime {
       try {
         const raw =
           resolver.runtime === "BROWSER"
-            ? await this.runBrowserResolver(resolver.id, link)
+            ? await this.runBrowserResolver(resolver.id, link, deadline)
             : await this.run<Array<PlayerLink & { type: string }>>("resolve", resolver.id, [JSON.stringify(link)], {
                 extensionsDir: this.resolversDir,
+                timeoutMs: Math.max(1, Math.min(WORKER_TIMEOUT_MS, deadline - Date.now())),
               });
         // Resolvers speak the same VideoStream.type vocabulary as their compiled-in Kotlin
         // originals (HLS/MP4/DASH - see extractors/kodik.js's streamTypeFor), not this app's own

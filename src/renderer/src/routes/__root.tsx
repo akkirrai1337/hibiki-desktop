@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useState } from "react";
 import { createRootRoute, Outlet, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useUiStore } from "@/stores/uiStore";
@@ -8,34 +8,25 @@ import { TitleBar } from "@/components/TitleBar";
 import { Sidebar } from "@/components/Sidebar";
 import { AchievementToast } from "@/components/AchievementToast";
 import { useAchievementUnlocks } from "@/lib/achievementUnlocks";
-import { useContinueWatching } from "@/lib/continueWatching";
 import { hibiki } from "@/lib/hibiki";
 import { installGlobalErrorLogging } from "@/lib/log";
 import { useAppZoom } from "@/lib/useAppZoom";
 import { cn } from "@/lib/cn";
-import { CatalogPage } from "@/routes/index";
-import { CatalogBrowsePage } from "@/routes/catalog";
-import { LibraryPage } from "@/routes/library";
-import { HistoryPage } from "@/routes/history";
-import { DownloadsPage } from "@/routes/downloads";
-import { ProfilePage } from "@/routes/profile";
-import { SettingsPage } from "@/routes/settings";
-import { SourcesPage } from "@/routes/sources";
-import { SearchPage } from "@/routes/search";
 import { Onboarding } from "@/features/onboarding/Onboarding";
 
 // Every static (paramless) route's own route component is a no-op (see index.tsx) - its real
-// content is one of these, kept alive here instead once first visited (see `visited` below).
-const PERSISTED_PAGES: Record<string, () => React.JSX.Element | null> = {
-  "/": CatalogPage,
-  "/catalog": CatalogBrowsePage,
-  "/library": LibraryPage,
-  "/history": HistoryPage,
-  "/downloads": DownloadsPage,
-  "/profile": ProfilePage,
-  "/settings": SettingsPage,
-  "/sources": SourcesPage,
-  "/search": SearchPage,
+// content is one of these, kept alive here instead once first visited (see `visited` below). Lazy
+// imports keep every unvisited screen out of the startup bundle without changing that persistence.
+const PERSISTED_PAGES: Record<string, React.LazyExoticComponent<React.ComponentType>> = {
+  "/": lazy(() => import("@/pages/home").then((module) => ({ default: module.CatalogPage }))),
+  "/catalog": lazy(() => import("@/pages/catalog").then((module) => ({ default: module.CatalogBrowsePage }))),
+  "/library": lazy(() => import("@/pages/library").then((module) => ({ default: module.LibraryPage }))),
+  "/history": lazy(() => import("@/pages/history").then((module) => ({ default: module.HistoryPage }))),
+  "/downloads": lazy(() => import("@/pages/downloads").then((module) => ({ default: module.DownloadsPage }))),
+  "/profile": lazy(() => import("@/pages/profile").then((module) => ({ default: module.ProfilePage }))),
+  "/settings": lazy(() => import("@/pages/settings").then((module) => ({ default: module.SettingsPage }))),
+  "/sources": lazy(() => import("@/pages/sources").then((module) => ({ default: module.SourcesPage }))),
+  "/search": lazy(() => import("@/pages/search").then((module) => ({ default: module.SearchPage }))),
 };
 
 // Development StrictMode intentionally remounts effects once. This is a real account write, not
@@ -62,11 +53,17 @@ function RootLayout() {
   // one cheap check in the main process.
   useEffect(() => {
     if (activityPingStarted) return;
-    activityPingStarted = true;
-    void hibiki.sources
-      .list()
-      .then((sources) => Promise.all(sources.map((source) => hibiki.sources.pingOnline(source.id).catch(() => false))))
-      .catch(() => undefined);
+    // Account streak maintenance is background work. Starting it alongside the home catalog made
+    // both compete for workers/network on the only load where first paint matters most.
+    const timer = window.setTimeout(() => {
+      if (activityPingStarted) return;
+      activityPingStarted = true;
+      void hibiki.sources
+        .list()
+        .then((sources) => Promise.all(sources.map((source) => hibiki.sources.pingOnline(source.id).catch(() => false))))
+        .catch(() => undefined);
+    }, 1_500);
+    return () => window.clearTimeout(timer);
   }, []);
 
   // Ctrl/Cmd +/-/0, and re-applying the saved factor on launch.
@@ -115,16 +112,6 @@ function RootLayout() {
   // actually is when it happens. See its own comment for why profile.tsx no longer computes this
   // itself.
   useAchievementUnlocks();
-  // Prefetches "continue watching" at the app shell level, same reasoning as useAchievementUnlocks
-  // above - the home page and the profile page both render this via the exact same query keys (see
-  // continueWatching.ts), but each title's own metadata (`getById`) is a real network call to that
-  // title's actual source, not a local DB read. Without this, whichever of those pages happened to
-  // be opened first paid that cost live; a plain visit to Profile before Home ever got a chance to
-  // warm the shared cache read as the whole page being slow to load. The default (unlimited) fetch
-  // here covers Profile's own smaller CONTINUE_LIMIT too, since its top few recent titles are
-  // always a strict subset of this one's - the per-title queries are keyed by title, not by which
-  // page's `limit` asked for them, so they're shared regardless of the limit mismatch.
-  useContinueWatching();
   // Remembers every currently-installed source's name/icon (see knownSourcesStore) - shared with
   // whichever page happens to fetch ["sources"] first (React Query dedupes the actual request), so
   // a continue-watching/library card whose source later gets uninstalled can still show its real
@@ -199,7 +186,7 @@ function RootLayout() {
               isActive ? "flex-1" : "hidden",
             )}
           >
-            <Page />
+            <Suspense fallback={null}><Page /></Suspense>
           </div>;
         })}
         {/* Param routes (anime details, the player) aren't persisted above - a fresh mount every

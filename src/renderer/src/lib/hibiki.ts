@@ -37,7 +37,8 @@ export interface LogEntry {
 export interface HibikiApi {
   sources: {
     list(): Promise<SourceInfo[]>;
-    search(sourceId: string, request: SearchRequest): Promise<AnimeTitle[]>;
+    search(sourceId: string, request: SearchRequest, requestId?: string): Promise<AnimeTitle[]>;
+    cancelSearch(requestId: string): void;
     latest(sourceId: string, limit: number): Promise<AnimeTitle[]>;
     getById(sourceId: string, id: string): Promise<AnimeTitle>;
     cachedTitles(keys: Array<{ sourceId: string; animeId: string }>): Promise<Record<string, CachedAnimeEntry>>;
@@ -167,6 +168,41 @@ declare global {
 }
 
 export const hibiki = window.hibiki;
+
+/** Lets React Query's AbortSignal terminate the actual extension worker, not merely ignore its
+ * eventual answer in the renderer. Used for live search where a newer query supersedes the old. */
+export function searchSource(sourceId: string, request: SearchRequest, signal?: AbortSignal): Promise<AnimeTitle[]> {
+  if (!signal) return hibiki.sources.search(sourceId, request);
+  if (signal.aborted) return Promise.reject(new DOMException("Search cancelled", "AbortError"));
+
+  const requestId = crypto.randomUUID();
+  const pending = hibiki.sources.search(sourceId, request, requestId);
+  return new Promise<AnimeTitle[]>((resolve, reject) => {
+    let settled = false;
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", onAbort);
+      hibiki.sources.cancelSearch(requestId);
+      reject(new DOMException("Search cancelled", "AbortError"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    void pending.then(
+      (result) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener("abort", onAbort);
+        resolve(result);
+      },
+      (error) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+}
 
 // Builds a src the player can actually load for a downloaded file - see main/index.ts's
 // `hibiki-download` protocol handler for why this can't just be a plain `file://` path (blocked
