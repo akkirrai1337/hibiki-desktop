@@ -30,6 +30,8 @@ const api = {
       ipcRenderer.invoke(IPC.sourceLatest, sourceId, limit),
     getById: (sourceId: string, id: string): Promise<AnimeTitle> =>
       ipcRenderer.invoke(IPC.sourceGetById, sourceId, id),
+    cachedTitles: (keys: Array<{ sourceId: string; animeId: string }>): Promise<Record<string, AnimeTitle>> =>
+      ipcRenderer.invoke(IPC.sourceCachedTitles, keys),
     playbackGroups: (sourceId: string, titleId: string): Promise<PlaybackGroup[]> =>
       ipcRenderer.invoke(IPC.sourcePlaybackGroups, sourceId, titleId),
     playerLinks: (sourceId: string, titleId: string, groupId: string, episodeId: string): Promise<PlayerLink[]> =>

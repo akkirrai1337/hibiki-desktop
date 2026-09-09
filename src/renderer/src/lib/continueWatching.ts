@@ -34,6 +34,19 @@ export function useContinueWatching(limit: number = RECENT_FETCH_LIMIT): { slots
   }, [recent.data]);
   // Each title resolves independently (a slow or dead source shouldn't block the other slots) -
   // the slot count is known immediately from local watch-progress rows.
+  // Whatever the app already has on disk for these titles, read in one go before any of the
+  // per-title fetches below resolve. cacheAnime has been writing this table on every successful
+  // getById all along, but it was only ever read back when a source was unreachable - so a row of
+  // titles the app had fetched a hundred times still waited on the network to draw a name and a
+  // poster it was holding the whole time. The read costs about a millisecond; a getById costs a
+  // few hundred, and this row is the first thing on screen at launch.
+  const cached = useQuery({
+    queryKey: ["cached-titles", recentUnique.map((p) => `${p.sourceId}:${p.titleId}`).join(",")],
+    queryFn: () => hibiki.sources.cachedTitles(recentUnique.map((p) => ({ sourceId: p.sourceId, animeId: p.titleId }))),
+    enabled: recentUnique.length > 0,
+    staleTime: Infinity,
+  });
+
   const queries = useQueries({
     queries: recentUnique.map((progress) => ({
       queryKey: ["continue-item", progress.sourceId, progress.titleId],
@@ -44,6 +57,10 @@ export function useContinueWatching(limit: number = RECENT_FETCH_LIMIT): { slots
           return null;
         }
       },
+      // Placeholder, not initialData: the live fetch still runs and replaces this, so the cards
+      // are drawn from disk immediately and corrected a moment later rather than being pinned to
+      // whatever the app last saw. Nothing here is cached *instead of* being fetched.
+      placeholderData: cached.data?.[`${progress.sourceId}:${progress.titleId}`],
     })),
   });
   // Cheap enough (12 items, no work per item) to just recompute on every render rather than

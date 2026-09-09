@@ -12,6 +12,28 @@ function stripForCache(anime: AnimeTitle): AnimeTitle {
   return rest;
 }
 
+/**
+ * Everything already on disk for the given titles, keyed "sourceId:animeId".
+ *
+ * This table has been written on every successful getById since it was added, but until now it was
+ * only ever *read* in the catch branch - a fallback for when the source is unreachable. So a home
+ * screen full of titles the app had already fetched a dozen times still waited on the network to
+ * draw a name and a poster it had on disk the whole time. Reading all of it costs about a
+ * millisecond; one getById costs a few hundred.
+ *
+ * Deliberately keyed by request rather than "give me everything": the table grows with every title
+ * ever opened, and a screen only ever needs the handful it is about to draw.
+ */
+export function getCachedAnimeMany(keys: Array<{ sourceId: string; animeId: string }>): Record<string, AnimeTitle> {
+  if (keys.length === 0) return {};
+  const result: Record<string, AnimeTitle> = {};
+  for (const { sourceId, animeId } of keys) {
+    const cached = getCachedAnime(sourceId, animeId);
+    if (cached) result[`${sourceId}:${animeId}`] = cached;
+  }
+  return result;
+}
+
 export function cacheAnime(sourceId: string, animeId: string, anime: AnimeTitle): void {
   getDb()
     .insert(cachedAnime)

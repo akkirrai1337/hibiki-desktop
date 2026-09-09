@@ -32,6 +32,7 @@ export interface HibikiApi {
     search(sourceId: string, request: SearchRequest): Promise<AnimeTitle[]>;
     latest(sourceId: string, limit: number): Promise<AnimeTitle[]>;
     getById(sourceId: string, id: string): Promise<AnimeTitle>;
+    cachedTitles(keys: Array<{ sourceId: string; animeId: string }>): Promise<Record<string, AnimeTitle>>;
     playbackGroups(sourceId: string, titleId: string): Promise<PlaybackGroup[]>;
     playerLinks(sourceId: string, titleId: string, groupId: string, episodeId: string): Promise<PlayerLink[]>;
     resolvePlayerLink(link: PlayerLink): Promise<PlayerLink[]>;

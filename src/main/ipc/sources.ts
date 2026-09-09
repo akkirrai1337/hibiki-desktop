@@ -2,7 +2,7 @@ import { ipcMain } from "electron";
 import { IPC } from "@shared/ipc";
 import type { AnimeTitle, PlaybackGroup, PlayerLink } from "@shared/types";
 import type { ExtensionRuntime } from "../extensions/runtime";
-import { cacheAnime, getCachedAnime, getCachedPlaybackGroups } from "../offlineCache";
+import { cacheAnime, getCachedAnime, getCachedAnimeMany, getCachedPlaybackGroups } from "../offlineCache";
 
 export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   ipcMain.handle(IPC.sourcesList, () => runtime.list());
@@ -24,6 +24,11 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
       throw err;
     }
   });
+  // Synchronous on purpose - it is a single indexed SQLite read per title, and making the
+  // renderer wait a microtask for it would defeat the point of having it.
+  ipcMain.handle(IPC.sourceCachedTitles, (_e, keys: Array<{ sourceId: string; animeId: string }>) =>
+    getCachedAnimeMany(keys),
+  );
   ipcMain.handle(IPC.sourcePlaybackGroups, async (_e, sourceId: string, titleId: string): Promise<PlaybackGroup[]> => {
     try {
       return await runtime.getPlaybackGroups(sourceId, titleId);
