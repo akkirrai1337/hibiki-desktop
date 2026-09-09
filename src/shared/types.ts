@@ -291,3 +291,9 @@ export interface UpdateDownloadProgress {
   receivedBytes: number;
   totalBytes: number;
 }
+
+/** A title read back out of the on-disk cache, with when it was last written. */
+export interface CachedAnimeEntry {
+  title: AnimeTitle;
+  cachedAt: number;
+}

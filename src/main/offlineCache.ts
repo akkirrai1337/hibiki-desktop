@@ -1,5 +1,5 @@
 import { eq, and } from "drizzle-orm";
-import type { AnimeTitle, DownloadedEpisode, PlaybackGroup } from "@shared/types";
+import type { AnimeTitle, CachedAnimeEntry, DownloadedEpisode, PlaybackGroup } from "@shared/types";
 import { getDb } from "./db";
 import { cachedAnime, cachedPlaybackGroups, downloadedEpisodes } from "./db/schema";
 
@@ -24,12 +24,21 @@ function stripForCache(anime: AnimeTitle): AnimeTitle {
  * Deliberately keyed by request rather than "give me everything": the table grows with every title
  * ever opened, and a screen only ever needs the handful it is about to draw.
  */
-export function getCachedAnimeMany(keys: Array<{ sourceId: string; animeId: string }>): Record<string, AnimeTitle> {
+export function getCachedAnimeMany(
+  keys: Array<{ sourceId: string; animeId: string }>,
+): Record<string, CachedAnimeEntry> {
   if (keys.length === 0) return {};
-  const result: Record<string, AnimeTitle> = {};
+  const result: Record<string, CachedAnimeEntry> = {};
   for (const { sourceId, animeId } of keys) {
-    const cached = getCachedAnime(sourceId, animeId);
-    if (cached) result[`${sourceId}:${animeId}`] = cached;
+    const row = getDb()
+      .select()
+      .from(cachedAnime)
+      .where(and(eq(cachedAnime.sourceId, sourceId), eq(cachedAnime.animeId, animeId)))
+      .get();
+    // `cachedAt` travels with the title on purpose: it is what lets a caller answer "is this still
+    // good enough" without a round trip. Without it the only options are to trust the cache
+    // forever or to refetch every time, and this data sits squarely between the two.
+    if (row) result[`${sourceId}:${animeId}`] = { title: JSON.parse(row.animeJson) as AnimeTitle, cachedAt: row.cachedAt };
   }
   return result;
 }

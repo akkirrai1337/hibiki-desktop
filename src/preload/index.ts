@@ -3,6 +3,7 @@ import { IPC } from "@shared/ipc";
 import type {
   AnimeTitle,
   AppUpdate,
+  CachedAnimeEntry,
   DailyActivity,
   DiscordPresence,
   DownloadedEpisode,
@@ -30,7 +31,7 @@ const api = {
       ipcRenderer.invoke(IPC.sourceLatest, sourceId, limit),
     getById: (sourceId: string, id: string): Promise<AnimeTitle> =>
       ipcRenderer.invoke(IPC.sourceGetById, sourceId, id),
-    cachedTitles: (keys: Array<{ sourceId: string; animeId: string }>): Promise<Record<string, AnimeTitle>> =>
+    cachedTitles: (keys: Array<{ sourceId: string; animeId: string }>): Promise<Record<string, CachedAnimeEntry>> =>
       ipcRenderer.invoke(IPC.sourceCachedTitles, keys),
     playbackGroups: (sourceId: string, titleId: string): Promise<PlaybackGroup[]> =>
       ipcRenderer.invoke(IPC.sourcePlaybackGroups, sourceId, titleId),
