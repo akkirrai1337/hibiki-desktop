@@ -98,7 +98,7 @@ function ValueRow({ sourceId, row }: { sourceId: string; row: SourceSetting }) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["sourceSettings", sourceId] }),
   });
 
-  if (row.type === "TOGGLE") {
+  if (row.type === "TOGGLE" || row.type === "ACTIVITY_SYNC") {
     // A stored value wins; the manifest's default only decides what an untouched toggle shows.
     const checked = value === undefined ? row.default === true : value === "true";
     return (
@@ -374,6 +374,8 @@ function LibrarySyncRow({ sourceId, row }: { sourceId: string; row: SourceSettin
       <div className="flex items-start gap-4">
         <RowHeader row={row} />
         <Switch
+          // `choosing` keeps it up while the question is open: flipping back down under a dialog
+          // asking about it would read as the switch refusing.
           checked={enabled || choosing}
           onChange={(next) => {
             setError(null);
@@ -387,7 +389,12 @@ function LibrarySyncRow({ sourceId, row }: { sourceId: string; row: SourceSettin
       </div>
 
       {choosing && (
-        <div className="flex flex-col gap-3 rounded-xl border border-border p-4">
+        <SyncChoiceDialog
+          title={row.title}
+          // Only while nothing is being written: stopping half way through a first sync leaves
+          // both libraries in a state nobody chose, so the way out during a run is Stop, not Esc.
+          onDismiss={progress ? undefined : () => { setChoosing(false); setConfirmingPull(false); }}
+        >
           {sides.isLoading && <p className="text-sm text-muted">{t("sources.syncCounting")}</p>}
           {sides.isError && <p className="select-text text-xs text-rose-400">{messageOf(sides.error)}</p>}
 
@@ -451,9 +458,71 @@ function LibrarySyncRow({ sourceId, row }: { sourceId: string; row: SourceSettin
           )}
 
           {error && <p className="select-text text-xs text-rose-400">{error}</p>}
-        </div>
+        </SyncChoiceDialog>
       )}
     </div>
+  );
+}
+
+/**
+ * The reconciliation question, in front of the settings screen rather than inside it.
+ *
+ * Four choices and a warning do not belong in a list of switches - inline, the settings screen had
+ * to be scrolled to read a decision that has to be made now, and the row it belonged to scrolled
+ * out of sight while reading it. Its own dialog also gives the destructive choice somewhere to ask
+ * again without the list shifting under the pointer.
+ */
+function SyncChoiceDialog({
+  title,
+  onDismiss,
+  children,
+}: {
+  title: string;
+  /** Absent while a run is in progress - see the call site. */
+  onDismiss?: () => void;
+  children: React.ReactNode;
+}) {
+  const { t } = useTranslation();
+  useEffect(() => {
+    if (!onDismiss) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      // Stops the settings screen behind this one from closing too - the topmost thing on screen
+      // is what Escape is for.
+      event.stopPropagation();
+      onDismiss();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [onDismiss]);
+
+  return createPortal(
+    <>
+      <div className="fixed inset-0 z-[70] bg-black/50" onClick={onDismiss} />
+      <div className="pointer-events-none fixed inset-0 z-[71] flex items-center justify-center p-6">
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 500, damping: 45 }}
+          className="pointer-events-auto flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl"
+        >
+          <div className="flex items-center gap-3 border-b border-border px-5 py-4">
+            <p className="min-w-0 flex-1 truncate text-sm font-bold text-text">{title}</p>
+            {onDismiss && (
+              <button
+                onClick={onDismiss}
+                title={t("sources.syncBack")}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-text/[.06] hover:text-text"
+              >
+                <X className="h-4 w-4" strokeWidth={2} />
+              </button>
+            )}
+          </div>
+          <div className="flex flex-col gap-3 overflow-y-auto p-5">{children}</div>
+        </motion.div>
+      </div>
+    </>,
+    document.body,
   );
 }
 
