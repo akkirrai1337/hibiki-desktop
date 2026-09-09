@@ -76,7 +76,13 @@ interface ResolverManifest {
 
 interface ResolverHealth {
   consecutiveFailures: number;
+  lastFailureAt: number;
 }
+
+// A resolver that failed once - a dropped connection, an ISP hiccup at app start - must not stay
+// demoted for the whole session waiting for a success it is never ordered first enough to get.
+// Failures older than this stop counting against it.
+const RESOLVER_FAILURE_DECAY_MS = 10 * 60_000;
 
 export class ExtensionRuntime {
   private readonly extensions = new Map<string, LoadedExtension>();
@@ -228,11 +234,17 @@ export class ExtensionRuntime {
   // threads is the point, a thread per source the user has ever touched is not.
   private static readonly MAX_IDLE_WORKERS = 4;
 
+  // Deliberately below MAX_IDLE_WORKERS: warm-up runs while the window is still being created and
+  // the renderer's own bundle is being parsed, so spawning the whole pool up front competes for
+  // CPU on the one load where first paint matters most. The pool still grows to its full size on
+  // demand, from calls that would have spawned a worker anyway.
+  private static readonly WARM_WORKERS = 2;
+
   /** Starts the expensive worker bundle parsing before the renderer's first source queries arrive.
    * Only workers that have loaded the whole module and posted `ready` enter the idle pool; calls
    * arriving earlier still take the normal fresh-worker path rather than waiting behind warm-up. */
   warmWorkers(): void {
-    const missing = ExtensionRuntime.MAX_IDLE_WORKERS - this.idleWorkers.length - this.warmingWorkers.size;
+    const missing = ExtensionRuntime.WARM_WORKERS - this.idleWorkers.length - this.warmingWorkers.size;
     for (let i = 0; i < missing; i++) {
       const worker = new Worker(path.join(__dirname, "extensionWorker.js"));
       this.warmingWorkers.add(worker);
@@ -242,6 +254,8 @@ export class ExtensionRuntime {
       });
       worker.once("error", (error) => {
         this.warmingWorkers.delete(worker);
+        // Terminated, not just forgotten: a warm-up that failed still holds a live thread.
+        void worker.terminate();
         logger.warn("ext", `worker warm-up failed: ${error instanceof Error ? error.message : String(error)}`);
       });
     }
@@ -558,8 +572,22 @@ export class ExtensionRuntime {
   }
 
   private noteResolverResult(resolverId: string, succeeded: boolean): void {
-    const previous = this.resolverHealth.get(resolverId)?.consecutiveFailures ?? 0;
-    this.resolverHealth.set(resolverId, { consecutiveFailures: succeeded ? 0 : previous + 1 });
+    if (succeeded) {
+      this.resolverHealth.delete(resolverId);
+      return;
+    }
+    const previous = this.recentFailures(resolverId);
+    this.resolverHealth.set(resolverId, { consecutiveFailures: previous + 1, lastFailureAt: Date.now() });
+  }
+
+  private recentFailures(resolverId: string): number {
+    const health = this.resolverHealth.get(resolverId);
+    if (!health) return 0;
+    if (Date.now() - health.lastFailureAt >= RESOLVER_FAILURE_DECAY_MS) {
+      this.resolverHealth.delete(resolverId);
+      return 0;
+    }
+    return health.consecutiveFailures;
   }
 
   // BROWSER-runtime resolvers (extractors/alloha.js and similar) expose Provider.browserScript()
@@ -611,14 +639,14 @@ export class ExtensionRuntime {
     // Preserve the source's declared ordering while all providers are healthy. Once one starts
     // failing, put untouched/working resolvers ahead of it on subsequent episodes instead of
     // repeatedly paying its timeout first. The failed resolver remains in the list as fallback.
+    const failuresByIndex = links.map((link) => {
+      const resolver = link.type === "EMBED" ? this.findResolverForUrl(link.url) : null;
+      return resolver ? this.recentFailures(resolver.id) : 0;
+    });
     orderedIndexes.sort((a, b) => {
       if (a === preferredIndex) return -1;
       if (b === preferredIndex) return 1;
-      const resolverA = links[a].type === "EMBED" ? this.findResolverForUrl(links[a].url) : null;
-      const resolverB = links[b].type === "EMBED" ? this.findResolverForUrl(links[b].url) : null;
-      const failuresA = resolverA ? (this.resolverHealth.get(resolverA.id)?.consecutiveFailures ?? 0) : 0;
-      const failuresB = resolverB ? (this.resolverHealth.get(resolverB.id)?.consecutiveFailures ?? 0) : 0;
-      return failuresA - failuresB || a - b;
+      return failuresByIndex[a] - failuresByIndex[b] || a - b;
     });
 
     for (const i of orderedIndexes) {

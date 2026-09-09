@@ -37,20 +37,38 @@ const MEDIA_URL_PATTERN = /\.(m3u8|mpd|mp4)(\?|#|$)/i;
 // captured as a "candidate" for an Alloha resolve, ahead of the two real streams it also found).
 const PLACEHOLDER_URL_PATTERN = /cdn\.plyr\.io\/static\/blank\.mp4/i;
 
-// Electron permits one onBeforeRequest listener per session. Keep one dispatcher installed and
-// route captures by webContents id; installing a new listener per resolve let two simultaneous
-// player/download requests overwrite each other, and either cleanup then removed the other's
-// listener as well.
+// Electron permits one onBeforeRequest listener per session, and these hidden windows share the
+// app's default session (same as browserFetchHost.ts's pooled windows) so a challenge solved there
+// still applies here. One dispatcher is installed per session and captures are routed by
+// webContents id - installing a listener per resolve let two simultaneous player/download resolves
+// overwrite each other, and either one's cleanup then removed the other's listener as well.
+//
+// Refcounted rather than installed once and left in place: every request the app makes - the main
+// window's own UI, posters, HLS segments during playback - is routed through this callback while
+// the listener exists, so it is removed again as soon as the last resolve finishes.
 const networkCaptureByWebContents = new Map<number, (url: string) => void>();
-let networkCaptureHookInstalled = false;
+const hookedSessions = new Map<Electron.Session, number>();
 
-function ensureNetworkCaptureHook(session: Electron.Session): void {
-  if (networkCaptureHookInstalled) return;
-  networkCaptureHookInstalled = true;
+function addNetworkCapture(session: Electron.Session, webContentsId: number, capture: (url: string) => void): void {
+  networkCaptureByWebContents.set(webContentsId, capture);
+  const active = hookedSessions.get(session) ?? 0;
+  hookedSessions.set(session, active + 1);
+  if (active > 0) return;
   session.webRequest.onBeforeRequest((details, callback) => {
     if (details.webContentsId !== undefined) networkCaptureByWebContents.get(details.webContentsId)?.(details.url);
     callback({});
   });
+}
+
+function removeNetworkCapture(session: Electron.Session, webContentsId: number): void {
+  networkCaptureByWebContents.delete(webContentsId);
+  const active = (hookedSessions.get(session) ?? 1) - 1;
+  if (active > 0) {
+    hookedSessions.set(session, active);
+    return;
+  }
+  hookedSessions.delete(session);
+  session.webRequest.onBeforeRequest(null);
 }
 
 type CaptureKind = "master" | "video" | "audio" | "stream" | "network";
@@ -216,8 +234,10 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
   const networkCaptures: Capture[] = [];
   let currentQuality: string | null = null;
 
-  ensureNetworkCaptureHook(ses);
-  networkCaptureByWebContents.set(win.webContents.id, (url) => {
+  // Read once, up front: `win.webContents` throws on a destroyed window, and the cleanup below
+  // runs on exactly the paths where the window may already be gone.
+  const webContentsId = win.webContents.id;
+  addNetworkCapture(ses, webContentsId, (url) => {
     if (MEDIA_URL_PATTERN.test(url) && !PLACEHOLDER_URL_PATTERN.test(url)) {
       networkCaptures.push({ url, kind: "network", quality: currentQuality });
     }
@@ -317,7 +337,7 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
     const finalState = await readPageState(target, deadline);
     return await buildResult(finalState.captures, networkCaptures, link, win, target, deadline);
   } finally {
-    networkCaptureByWebContents.delete(win.webContents.id);
+    removeNetworkCapture(ses, webContentsId);
     if (!win.isDestroyed()) {
       win.destroy();
     }

@@ -2,7 +2,7 @@
 // one-to-one (Jsoup/Base64/Gzip/Url/AnimeTitle/collectPaginated/console/fetch/challenge/
 // browserFetch/preferredLanguage) so the .js payloads in hibiki-sources/extensions run unmodified.
 import zlib from "node:zlib";
-import syncFetch from "sync-fetch";
+import { createRequire } from "node:module";
 import { JsoupBinding } from "./jsoupShim";
 import type { ChallengeProvider, BrowserFetchProvider, NetFetchProvider, NetFetchRequest } from "./browserBridge";
 import type { ExtensionStorageBinding } from "@shared/extensionCallStorage";
@@ -39,9 +39,19 @@ function normalizeRequest(options?: FetchOptions): { method: string; headers: Re
 // execute.ts directly). Inside the app every fetch goes through the NetFetchProvider instead -
 // see netFetchHost.ts for why: sync-fetch spawns a child process of the *Electron binary* per
 // request, with no timeout of any kind, so a stalled connect hangs until the worker is killed.
+// Loaded on demand, like Cheerio in jsoupShim.ts: inside the app this path never runs, and its
+// dependency tree would otherwise be parsed on every worker start for nothing.
+const require = createRequire(import.meta.url);
+let syncFetchModule: typeof import("sync-fetch").default | null = null;
+
+function loadSyncFetch(): typeof import("sync-fetch").default {
+  syncFetchModule ??= require("sync-fetch") as typeof import("sync-fetch").default;
+  return syncFetchModule;
+}
+
 function syncFetchFallback(url: string, options?: FetchOptions): FetchResult {
   const { method, headers, body } = normalizeRequest(options);
-  const res = syncFetch(url, { method, headers, body });
+  const res = loadSyncFetch()(url, { method, headers, body });
   const text = res.text();
   const responseHeaders: Record<string, string> = {};
   res.headers.forEach((value: string, key: string) => {

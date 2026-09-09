@@ -180,7 +180,6 @@ app.whenReady().then(() => {
 
   const runtime = new ExtensionRuntime(EXTENSIONS_DIR);
   runtime.reload();
-  runtime.warmWorkers();
   extensionRuntime = runtime;
 
   registerSourceHandlers(runtime);
@@ -308,6 +307,10 @@ app.whenReady().then(() => {
   });
 
   createWindow();
+  // After the window exists, not before: warming the worker pool parses a bundle on new threads,
+  // and doing that while Chromium is still bringing up the renderer only slows down first paint.
+  // Source queries arriving before warm-up finishes still take the normal fresh-worker path.
+  mainWindow?.webContents.once("did-finish-load", () => runtime.warmWorkers());
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
