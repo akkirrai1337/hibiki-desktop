@@ -122,9 +122,19 @@ export function pickResolvedLink(playable: PlayerLink[], requested: PlayerLink):
   return sameQuality ?? pickDefaultLink(playable);
 }
 
-function linkOrigin(url: string): string | null {
+/**
+ * The provider a URL belongs to, rather than the exact host serving it.
+ *
+ * Kodik hands out p12/p13/p14.solodcdn.com for the very same library, and scoring by full origin
+ * read those as three unrelated routes - enough to send a fallback down to 360p on a neighbouring
+ * edge node while a working 480p sat on the one that had just failed. The last two labels are a
+ * rough stand-in for the registrable domain; where it is too rough, two genuinely distinct
+ * providers merely stop being credited for the difference, which is the harmless direction.
+ */
+function linkProvider(url: string): string | null {
   try {
-    return new URL(url).origin;
+    const labels = new URL(url).hostname.split(".");
+    return labels.length <= 2 ? labels.join(".") : labels.slice(-2).join(".");
   } catch {
     return null;
   }
@@ -136,13 +146,13 @@ export function pickPlaybackFallback(
   failed: PlayerLink,
   excludedUrls: ReadonlySet<string>,
 ): PlayerLink | undefined {
-  const failedOrigin = linkOrigin(failed.url);
+  const failedProvider = linkProvider(failed.url);
   return links
     .filter((link) => link.url !== failed.url && !excludedUrls.has(link.url))
     .map((link, index) => {
-      const origin = linkOrigin(link.url);
+      const provider = linkProvider(link.url);
       const score =
-        (origin && failedOrigin && origin !== failedOrigin ? 100 : 0) +
+        (provider && failedProvider && provider !== failedProvider ? 100 : 0) +
         (link.translation === failed.translation ? 20 : 0) +
         (link.playerName === failed.playerName ? 10 : 0) +
         (link.type !== "EMBED" ? 5 : 0);

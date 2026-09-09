@@ -533,6 +533,13 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         // the recovery behavior for genuinely transient blips.
         let networkRetries = 0;
         const MAX_NETWORK_RETRIES = 3;
+        // A manifest that came back with an HTTP status has been answered: the server has looked
+        // for this rendition and said what it found. Retrying it three times on a backoff spends
+        // twenty-odd seconds of the user's time before reaching the fallback link that was sitting
+        // there the whole while (seen live: Kodik listing a 720p that resolves to a file its CDN
+        // does not have, answered with a 500 every time). Only the statuses that actually mean
+        // "ask again later" are worth the wait; everything else goes straight to the fallback.
+        const RETRYABLE_MANIFEST_STATUSES = new Set([408, 429, 502, 503, 504]);
         // recoverMediaError() was uncapped - a stream with a genuinely broken fragment (not a
         // transient decode hiccup) just re-throws the same fatal MEDIA_ERROR immediately after
         // every recovery attempt, forever: error → recover → same error → recover → ... which
@@ -555,10 +562,16 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
           log.error("player", `hls.js ${data.fatal ? "fatal" : "non-fatal"} error:`, data.type, data.details, data.reason ?? "", data.response ? `http ${data.response.code}` : "");
           if (!data.fatal) return;
           switch (data.type) {
-            case HlsEngine.ErrorTypes.NETWORK_ERROR:
+            case HlsEngine.ErrorTypes.NETWORK_ERROR: {
+              const isManifestFailure = data.details === HlsEngine.ErrorDetails.MANIFEST_LOAD_ERROR ||
+                data.details === HlsEngine.ErrorDetails.MANIFEST_LOAD_TIMEOUT;
+              const status = data.response?.code;
+              const answered = isManifestFailure && typeof status === "number" && status > 0 &&
+                !RETRYABLE_MANIFEST_STATUSES.has(status);
               networkRetries += 1;
-              if (networkRetries > MAX_NETWORK_RETRIES) {
+              if (answered || networkRetries > MAX_NETWORK_RETRIES) {
                 const reason = data.details || "playback failed";
+                if (answered) log.info("player", `manifest answered http ${status}, not retrying`);
                 if (!reportPlaybackFailure(link, reason)) setPlaybackError(reason);
                 hls?.destroy();
                 break;
@@ -571,8 +584,6 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
               networkRetryTimer = window.setTimeout(() => {
                 networkRetryTimer = null;
                 if (cancelled || !hls) return;
-                const isManifestFailure = data.details === HlsEngine.ErrorDetails.MANIFEST_LOAD_ERROR ||
-                  data.details === HlsEngine.ErrorDetails.MANIFEST_LOAD_TIMEOUT;
                 log.info("player", `retrying ${isManifestFailure ? "manifest" : "stream"} load (${networkRetries}/${MAX_NETWORK_RETRIES})`);
                 if (!isManifestFailure) {
                   hls.startLoad();
@@ -594,6 +605,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
                 });
               }, 500 * (2 ** (networkRetries - 1)));
               break;
+            }
             case HlsEngine.ErrorTypes.MEDIA_ERROR:
               mediaRetries += 1;
               if (mediaRetries > MAX_MEDIA_RETRIES) {

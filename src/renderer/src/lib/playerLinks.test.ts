@@ -32,6 +32,17 @@ describe("pickPlaybackFallback", () => {
     expect(pickPlaybackFallback([failed, sameHost, otherHost], failed, new Set([failed.url]))).toBe(otherHost);
   });
 
+  it("does not read two edge nodes of one CDN as different routes", () => {
+    // The shipped bug: Kodik listed a 720p whose URL its CDN answered with a 500, and the fallback
+    // dropped to 360p on a neighbouring edge node because the hostname differed, while a working
+    // 480p sat on the node that had just failed.
+    const failed = link({ url: "https://p13.solodcdn.com/a/720.mp4:hls:manifest.m3u8", quality: "720p", playerName: "Kodik", translation: "Dub" });
+    const sameCdn480 = link({ url: "https://p13.solodcdn.com/a/480.mp4:hls:manifest.m3u8", quality: "480p", playerName: "Kodik", translation: "Dub" });
+    const sameCdn360 = link({ url: "https://p12.solodcdn.com/a/360.mp4:hls:manifest.m3u8", quality: "360p", playerName: "Kodik", translation: "Dub" });
+
+    expect(pickPlaybackFallback([failed, sameCdn480, sameCdn360], failed, new Set([failed.url]))).toBe(sameCdn480);
+  });
+
   it("never returns a URL that already failed", () => {
     const failed = link({ url: "https://edge-a.test/720.m3u8" });
     const previouslyFailed = link({ url: "https://edge-b.test/480.m3u8" });
