@@ -11,6 +11,9 @@ import type { BrowserFetchResult, ChallengeSession } from "./browserBridge";
 // finishes loading, not once it's done solving itself, so there's no better signal than a fixed
 // settle delay to wait on here.
 const CHALLENGE_SETTLE_MS = 4000;
+const NAVIGATION_TIMEOUT_MS = 15_000;
+const FETCH_TIMEOUT_MS = 12_000;
+const FETCH_TOTAL_TIMEOUT_MS = 25_000;
 
 // One search/title/episode-list screen makes several independent search()/getById()/
 // playbackGroups() calls back-to-back, and each used to spin up its own fresh hidden window and
@@ -21,6 +24,22 @@ const CHALLENGE_SETTLE_MS = 4000;
 // loaded) cuts that down to one real page load per session instead of one per call.
 const WINDOW_IDLE_TTL_MS = 5 * 60_000;
 const pool = new Map<string, { window: BrowserWindow; loadedAt: number }>();
+const pendingLoads = new Map<string, Promise<BrowserWindow>>();
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  if (timeoutMs <= 0) throw new Error(message);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 function getPooledWindow(key: string): BrowserWindow | null {
   const entry = pool.get(key);
@@ -37,6 +56,23 @@ async function acquireLoadedWindow(key: string, url: string, forceReload: boolea
   const existing = !forceReload && getPooledWindow(key);
   if (existing) return existing;
 
+  // Search, title details and playback groups are commonly requested together. Before the first
+  // page load has reached the pool they must share that in-flight load too, otherwise every call
+  // sees an empty pool and starts its own Chromium process/navigation (the exact burst pooling is
+  // meant to prevent).
+  const pending = !forceReload ? pendingLoads.get(key) : null;
+  if (pending) return pending;
+
+  const load = createLoadedWindow(key, url, forceReload);
+  pendingLoads.set(key, load);
+  try {
+    return await load;
+  } finally {
+    if (pendingLoads.get(key) === load) pendingLoads.delete(key);
+  }
+}
+
+async function createLoadedWindow(key: string, url: string, forceReload: boolean): Promise<BrowserWindow> {
   const previous = pool.get(key);
   if (previous && !previous.window.isDestroyed()) previous.window.destroy();
 
@@ -44,17 +80,25 @@ async function acquireLoadedWindow(key: string, url: string, forceReload: boolea
   win.on("closed", () => {
     if (pool.get(key)?.window === win) pool.delete(key);
   });
-  if (forceReload) await win.webContents.session.clearStorageData({ origin: new URL(url).origin });
-  await win.loadURL(url);
-  await new Promise((resolve) => setTimeout(resolve, CHALLENGE_SETTLE_MS));
-  pool.set(key, { window: win, loadedAt: Date.now() });
-  return win;
+  try {
+    if (forceReload) await win.webContents.session.clearStorageData({ origin: new URL(url).origin });
+    await withTimeout(win.loadURL(url), NAVIGATION_TIMEOUT_MS, `Browser page navigation timed out for ${url}`);
+    await new Promise((resolve) => setTimeout(resolve, CHALLENGE_SETTLE_MS));
+    pool.set(key, { window: win, loadedAt: Date.now() });
+    return win;
+  } catch (error) {
+    if (!win.isDestroyed()) win.destroy();
+    throw error;
+  }
 }
 
 /** Releases every pooled window - call on app quit so no hidden renderer processes linger. */
 export function destroyAllPooledWindows(): void {
   for (const { window } of pool.values()) if (!window.isDestroyed()) window.destroy();
   pool.clear();
+  // Pending windows are registered in the pool only after loading. They observe app shutdown via
+  // Electron, while clearing the map prevents a later caller from adopting a stale promise.
+  pendingLoads.clear();
 }
 
 const RATE_LIMIT_RETRY_DELAYS_MS = [1000, 2500, 5000];
@@ -69,34 +113,49 @@ export async function performBrowserFetch(
   targetUrl: string,
   options?: { method?: string; headers?: Record<string, string>; body?: string },
 ): Promise<BrowserFetchResult> {
+  const deadline = Date.now() + FETCH_TOTAL_TIMEOUT_MS;
   const requestInit = {
     method: options?.method ?? "GET",
     headers: options?.headers ?? {},
     body: options?.body,
     credentials: "include" as const,
   };
-  const script = `
-    fetch(${JSON.stringify(targetUrl)}, ${JSON.stringify(requestInit)})
-      .then(async (res) => ({
-        status: res.status,
-        ok: res.ok,
-        body: await res.text(),
-        headers: Object.fromEntries(res.headers.entries()),
-      }))
-      .catch((error) => ({ status: 0, ok: false, body: "", headers: {}, __error: String(error) }));
-  `;
-
   for (let attempt = 0; ; attempt++) {
     const win = await acquireLoadedWindow(pageUrl, pageUrl, false);
+    const requestTimeoutMs = Math.min(FETCH_TIMEOUT_MS, deadline - Date.now());
+    if (requestTimeoutMs <= 0) throw new Error(`browserFetch() timed out for ${targetUrl}`);
+    const script = `
+      (function () {
+        var controller = new AbortController();
+        var timer = setTimeout(function () { controller.abort(); }, ${requestTimeoutMs});
+        var options = ${JSON.stringify(requestInit)};
+        options.signal = controller.signal;
+        return fetch(${JSON.stringify(targetUrl)}, options)
+          .then(async (res) => ({
+            status: res.status,
+            ok: res.ok,
+            body: await res.text(),
+            headers: Object.fromEntries(res.headers.entries()),
+          }))
+          .catch((error) => ({ status: 0, ok: false, body: "", headers: {}, __error: String(error) }))
+          .finally(function () { clearTimeout(timer); });
+      })();
+    `;
     // Runs inside the page itself, so it carries whatever cookies/session the challenge just
     // established and matches that page's own TLS/JS fingerprint - the entire point of routing
     // this through a real browser context instead of our own fetch().
-    const result = await win.webContents.executeJavaScript(script);
+    const result = await withTimeout(
+      win.webContents.executeJavaScript(script),
+      requestTimeoutMs,
+      `browserFetch() timed out for ${targetUrl}`,
+    );
     if (result && typeof result === "object" && "__error" in result) {
       throw new Error(`browserFetch() in-page request failed: ${(result as { __error: string }).__error}`);
     }
     if (!RETRYABLE_STATUSES.has(result.status) || attempt >= RATE_LIMIT_RETRY_DELAYS_MS.length) return result as BrowserFetchResult;
-    await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_RETRY_DELAYS_MS[attempt]));
+    const retryDelay = RATE_LIMIT_RETRY_DELAYS_MS[attempt];
+    if (Date.now() + retryDelay >= deadline) throw new Error(`browserFetch() retry budget exhausted for ${targetUrl}`);
+    await new Promise((resolve) => setTimeout(resolve, retryDelay));
   }
 }
 

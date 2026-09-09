@@ -20,6 +20,8 @@ interface ScriptTarget {
 const PROBE_DELAY_MS = 500;
 const MAX_PROBES = 24;
 const TIMEOUT_MS = 25_000;
+const NAVIGATION_TIMEOUT_MS = 10_000;
+const VALIDATION_TIMEOUT_MS = 5_000;
 const SETTLE_MS = 1_000;
 const MAX_VALIDATION_CONCURRENCY = 3;
 
@@ -69,6 +71,31 @@ export interface ResolvedStream {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  if (timeoutMs <= 0) throw new Error(message);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function loadURLBefore(win: BrowserWindow, url: string, deadline: number, options?: Electron.LoadURLOptions): Promise<void> {
+  const timeoutMs = Math.min(NAVIGATION_TIMEOUT_MS, deadline - Date.now());
+  try {
+    await withTimeout(win.loadURL(url, options), timeoutMs, `Navigation timed out for ${url}`);
+  } catch (error) {
+    if (!win.isDestroyed()) win.webContents.stop();
+    throw error;
+  }
 }
 
 function buildLoadOptions(headers?: Record<string, string> | null): Electron.LoadURLOptions | undefined {
@@ -129,10 +156,14 @@ interface PageState {
   lastQuality: string | null;
 }
 
-async function readPageState(target: ScriptTarget): Promise<PageState> {
+async function readPageState(target: ScriptTarget, deadline: number): Promise<PageState> {
   try {
-    return (await target.executeJavaScript(
-      `({ done: window.__hibikiDone === true, captures: window.__hibikiCaptures || [], lastQuality: window.__hibikiLastQuality || null })`,
+    return (await withTimeout(
+      target.executeJavaScript(
+        `({ done: window.__hibikiDone === true, captures: window.__hibikiCaptures || [], lastQuality: window.__hibikiLastQuality || null })`,
+      ),
+      deadline - Date.now(),
+      "Browser resolver state probe timed out",
     )) as PageState;
   } catch {
     return { done: false, captures: [], lastQuality: null };
@@ -177,6 +208,9 @@ function streamTypeForUrl(url: string): string {
  * Provider.resolve() call would - so callers (see runtime.ts) don't need to distinguish the two.
  */
 export async function performBrowserResolve(link: PlayerLink, script: string): Promise<ResolvedStream[]> {
+  // Covers navigation, iframe setup, probing and validation. Previously the clock started only
+  // after all navigation had completed, allowing a dead embed page to hang well beyond 25s.
+  const deadline = Date.now() + TIMEOUT_MS;
   const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, images: false } });
   const ses = win.webContents.session;
   const networkCaptures: Capture[] = [];
@@ -205,15 +239,15 @@ export async function performBrowserResolve(link: PlayerLink, script: string): P
     let target: ScriptTarget = win.webContents;
     if (refererUrl) {
       try {
-        await win.loadURL(refererUrl);
+        await loadURLBefore(win, refererUrl, deadline);
       } catch {
         // Some referring pages are themselves slow/heavy SPAs that never fully settle - as long
         // as *some* document loaded at that origin, embedding the real link below still works.
       }
     }
     if (refererUrl && win.webContents.getURL() !== "" && win.webContents.getURL() !== "about:blank") {
-      const frameLoaded = waitForChildFrame(win, 8_000);
-      await win.webContents.executeJavaScript(`
+      const frameLoaded = waitForChildFrame(win, Math.max(0, Math.min(8_000, deadline - Date.now())));
+      await withTimeout(win.webContents.executeJavaScript(`
         (function () {
           var iframe = document.createElement("iframe");
           iframe.src = ${JSON.stringify(link.url)};
@@ -223,23 +257,21 @@ export async function performBrowserResolve(link: PlayerLink, script: string): P
           document.body.innerHTML = "";
           document.body.appendChild(iframe);
         })();
-      `);
+      `), deadline - Date.now(), "Browser resolver iframe setup timed out");
       const childFrame = await frameLoaded;
       // Falling back to the top frame (rather than throwing) matches the plain-loadURL behavior
       // this replaces when there's no usable Referer to embed against - some resolver still gets
       // a chance to work even without the real cross-site-embed context.
       if (childFrame) target = childFrame;
-      else await win.loadURL(link.url, buildLoadOptions(link.headers));
+      else await loadURLBefore(win, link.url, deadline, buildLoadOptions(link.headers));
     } else {
-      await win.loadURL(link.url, buildLoadOptions(link.headers));
+      await loadURLBefore(win, link.url, deadline, buildLoadOptions(link.headers));
     }
 
     let started = false;
     let done = false;
     let lastCount = 0;
     let lastChangeAt = Date.now();
-    const deadline = Date.now() + TIMEOUT_MS;
-
     for (let probe = 0; probe < MAX_PROBES && !done && Date.now() < deadline; probe++) {
       if (!started) {
         // The script is expected to drive its own state machine forward (see alloha.js's
@@ -253,15 +285,19 @@ export async function performBrowserResolve(link: PlayerLink, script: string): P
         // wrapper's own (undefined) return instead of surfacing to us.
         let result: unknown;
         try {
-          result = await target.executeJavaScript(`${BRIDGE_SCRIPT}\n${script}`);
+          result = await withTimeout(
+            target.executeJavaScript(`${BRIDGE_SCRIPT}\n${script}`),
+            deadline - Date.now(),
+            "Browser resolver script timed out",
+          );
         } catch {
           result = "no-player";
         }
         started = result !== "no-player";
       }
 
-      await sleep(PROBE_DELAY_MS);
-      const state = await readPageState(target);
+      await sleep(Math.min(PROBE_DELAY_MS, Math.max(0, deadline - Date.now())));
+      const state = await readPageState(target, deadline);
       currentQuality = state.lastQuality; // tags network captures made before the *next* tick
       done = state.done;
 
@@ -274,12 +310,12 @@ export async function performBrowserResolve(link: PlayerLink, script: string): P
       }
 
       if (done) {
-        return await buildResult(state.captures, networkCaptures, link, win, target);
+        return await buildResult(state.captures, networkCaptures, link, win, target, deadline);
       }
     }
 
-    const finalState = await readPageState(target);
-    return await buildResult(finalState.captures, networkCaptures, link, win, target);
+    const finalState = await readPageState(target, deadline);
+    return await buildResult(finalState.captures, networkCaptures, link, win, target, deadline);
   } finally {
     networkCaptureByWebContents.delete(win.webContents.id);
     if (!win.isDestroyed()) {
@@ -298,13 +334,19 @@ const CAPTURE_KIND_RANK: Record<CaptureKind, number> = { master: 0, video: 1, au
 // fetch/XHR) while rejecting a validation check made from Node, producing a false negative that
 // throws away a URL that would actually have played fine. Running the check through the same
 // engine the eventual player uses removes that mismatch.
-async function validateInBrowser(target: ScriptTarget, url: string): Promise<boolean> {
+async function validateInBrowser(target: ScriptTarget, url: string, deadline: number): Promise<boolean> {
   try {
-    const result = (await target.executeJavaScript(`
-      fetch(${JSON.stringify(url)}, { method: "GET", headers: { Range: "bytes=0-0" } })
-        .then(function (r) { return { ok: r.ok, status: r.status }; })
-        .catch(function () { return { ok: false, status: 0 }; })
-    `)) as { ok: boolean; status: number };
+    const timeoutMs = Math.min(VALIDATION_TIMEOUT_MS, deadline - Date.now());
+    const result = (await withTimeout(target.executeJavaScript(`
+      (function () {
+        var controller = new AbortController();
+        var timer = setTimeout(function () { controller.abort(); }, ${VALIDATION_TIMEOUT_MS});
+        return fetch(${JSON.stringify(url)}, { method: "GET", headers: { Range: "bytes=0-0" }, signal: controller.signal })
+          .then(function (r) { return { ok: r.ok, status: r.status }; })
+          .catch(function () { return { ok: false, status: 0 }; })
+          .finally(function () { clearTimeout(timer); });
+      })();
+    `), timeoutMs, `Stream validation timed out for ${url}`)) as { ok: boolean; status: number };
     return result.ok || result.status === 206;
   } catch {
     return false;
@@ -317,6 +359,7 @@ async function buildResult(
   link: PlayerLink,
   win: BrowserWindow,
   target: ScriptTarget,
+  deadline: number,
 ): Promise<ResolvedStream[]> {
   const seen = new Set<string>();
   const combined = [...pageCaptures, ...networkCaptures]
@@ -355,7 +398,7 @@ async function buildResult(
     for (;;) {
       const index = nextValidation++;
       if (index >= combined.length) return;
-      reachable[index] = await validateInBrowser(target, combined[index].url);
+      reachable[index] = await validateInBrowser(target, combined[index].url, deadline);
     }
   }
   await Promise.all(Array.from({ length: Math.min(MAX_VALIDATION_CONCURRENCY, combined.length) }, validateWorker));
