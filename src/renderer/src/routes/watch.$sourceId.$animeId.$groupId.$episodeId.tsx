@@ -331,8 +331,12 @@ function WatchPage() {
   });
   const [prevDownloaded, nextDownloaded] = neighborsDownloadedQuery.data ?? [null, null];
 
+  // `replace`, not a push: moving between episodes is staying in the player, not travelling
+  // somewhere new. Pushing meant an evening of five episodes left five entries behind it, so
+  // leaving the player walked back through every one of them instead of returning to the page the
+  // player was opened from. Same reasoning for the dub switch below.
   const goToEpisode = useCallback(
-    (targetEpisodeId: string) => navigate({ to: "/watch/$sourceId/$animeId/$groupId/$episodeId", params: { sourceId, animeId, groupId, episodeId: targetEpisodeId } }),
+    (targetEpisodeId: string) => navigate({ to: "/watch/$sourceId/$animeId/$groupId/$episodeId", params: { sourceId, animeId, groupId, episodeId: targetEpisodeId }, replace: true }),
     [navigate, sourceId, animeId, groupId],
   );
   // Switching dub means switching PlaybackGroup, and groups number their episodes independently
@@ -347,7 +351,7 @@ function WatchPage() {
         target.episodes.find((e) => e.number === episodeNumber)
         ?? target.episodes[episodeIndex]
         ?? target.episodes[0];
-      navigate({ to: "/watch/$sourceId/$animeId/$groupId/$episodeId", params: { sourceId, animeId, groupId: targetGroupId, episodeId: targetEpisode.id } });
+      navigate({ to: "/watch/$sourceId/$animeId/$groupId/$episodeId", params: { sourceId, animeId, groupId: targetGroupId, episodeId: targetEpisode.id }, replace: true });
     },
     [navigate, groupsQuery.data, sourceId, animeId, episodeNumber, episodeIndex],
   );

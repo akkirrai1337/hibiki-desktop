@@ -103,7 +103,9 @@
       "downloadCancelled": "Download cancelled",
       "downloadUnsupported": "This episode can't be downloaded",
       "favoriteAdd": "Add to favorites",
-      "favoriteRemove": "Remove from favorites"
+      "favoriteRemove": "Remove from favorites",
+      "markWatched": "Mark as watched",
+      "clearProgress": "Clear watch data"
     }
   },
   "watch": {

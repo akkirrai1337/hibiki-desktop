@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { AnimatePresence, motion } from "motion/react";
 import * as ContextMenu from "@radix-ui/react-context-menu";
-import { Play, Bookmark, Check, ChevronDown, Clock, Download, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
+import { Play, Bookmark, Check, ChevronDown, Clock, Download, Eraser, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
 import { findListedTitle } from "@/lib/listedTitles";
 import { usePlaybackGroups } from "@/lib/playbackGroups";
@@ -251,6 +251,13 @@ function AnimeDetailPage() {
   const activeGroup = groups.find((g) => g.id === requestedGroupId) ?? groups[0];
   const setActiveGroupId = (id: string) => navigate({ to: "/anime/$sourceId/$animeId", params: { sourceId, animeId }, search: { group: id }, replace: true });
   const progressByEpisode = new Map((progressQuery.data ?? []).map((p) => [p.episodeId, p]));
+  // Every screen that reads this episode's progress: this page's own grid, the watch route's
+  // resume position, and the "continue watching" rows the home and profile pages share.
+  const invalidateProgress = (episodeId: string) => {
+    queryClient.invalidateQueries({ queryKey: ["progress-all", sourceId, animeId] });
+    queryClient.invalidateQueries({ queryKey: ["progress", sourceId, animeId, episodeId] });
+    queryClient.invalidateQueries({ queryKey: ["recent-progress"] });
+  };
   const continueTarget = resolveContinue(activeGroup, progressByEpisode, t);
 
   // Mirrors Android's DetailsUiModel: franchiseAnime (a source's own "Season 1, Season 2, Movie,
@@ -355,6 +362,29 @@ function AnimeDetailPage() {
                 queryClient.invalidateQueries({ queryKey: ["downloadedEpisodes"] });
               }}
               onDownload={() => setDownloadEpisode(ep)}
+              onMarkWatched={async () => {
+                const existing = progressByEpisode.get(ep.id);
+                await hibiki.progress.upsert({
+                  ...existing,
+                  sourceId,
+                  titleId: animeId,
+                  episodeId: ep.id,
+                  episodeNumber: ep.number,
+                  groupId: activeGroup.id,
+                  positionMs: existing?.positionMs ?? 0,
+                  durationMs: existing?.durationMs ?? 0,
+                  watched: true,
+                  updatedAt: Date.now(),
+                  // Nothing was played to get here. The episode counts as completed, which the
+                  // upsert books on its own, but the time never happened and must not be invented.
+                  watchedDeltaMs: 0,
+                });
+                invalidateProgress(ep.id);
+              }}
+              onClearProgress={async () => {
+                await hibiki.progress.removeEpisode(sourceId, animeId, ep.id);
+                invalidateProgress(ep.id);
+              }}
             />
           ))}
         </div>}
@@ -388,6 +418,8 @@ function EpisodeChip({
   isDownloaded,
   onDownload,
   onRemoveDownload,
+  onMarkWatched,
+  onClearProgress,
 }: {
   sourceId: string;
   animeId: string;
@@ -402,6 +434,8 @@ function EpisodeChip({
   isDownloaded: boolean;
   onDownload: () => void;
   onRemoveDownload: () => void;
+  onMarkWatched: () => void;
+  onClearProgress: () => void;
 }) {
   const { t } = useTranslation();
   const watched = progress?.watched ?? false;
@@ -541,6 +575,27 @@ function EpisodeChip({
                   <Heart className={cn("h-4 w-4 shrink-0", isFavorite ? "fill-rose-400 text-rose-400" : "text-muted")} strokeWidth={2} />
                   {isFavorite ? t("detail.episodeMenu.favoriteRemove") : t("detail.episodeMenu.favoriteAdd")}
                 </ContextMenu.Item>
+                {/* Marking is offered only while the episode isn't already marked, and clearing
+                    only while there is something to clear - an item that does nothing is worse
+                    than an item that isn't there. */}
+                {!watched && (
+                  <ContextMenu.Item
+                    onSelect={onMarkWatched}
+                    className="flex cursor-default items-center gap-2.5 px-3.5 py-2.5 text-sm text-text outline-none transition-colors data-[highlighted]:bg-text/[.06]"
+                  >
+                    <Eye className="h-4 w-4 shrink-0 text-muted" strokeWidth={2} />
+                    {t("detail.episodeMenu.markWatched")}
+                  </ContextMenu.Item>
+                )}
+                {progress && (
+                  <ContextMenu.Item
+                    onSelect={onClearProgress}
+                    className="flex cursor-default items-center gap-2.5 px-3.5 py-2.5 text-sm text-rose-300 outline-none transition-colors data-[highlighted]:bg-text/[.06]"
+                  >
+                    <Eraser className="h-4 w-4 shrink-0" strokeWidth={2} />
+                    {t("detail.episodeMenu.clearProgress")}
+                  </ContextMenu.Item>
+                )}
               </motion.div>
             </ContextMenu.Content>
           )}

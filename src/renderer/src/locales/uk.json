@@ -103,7 +103,9 @@
       "downloadCancelled": "Завантаження скасовано",
       "downloadUnsupported": "Ця серія недоступна для завантаження",
       "favoriteAdd": "Додати в обране",
-      "favoriteRemove": "Прибрати з обраного"
+      "favoriteRemove": "Прибрати з обраного",
+      "markWatched": "Позначити переглянутою",
+      "clearProgress": "Видалити дані про перегляд"
     }
   },
   "watch": {
