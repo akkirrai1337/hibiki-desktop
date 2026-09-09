@@ -53,37 +53,32 @@ const PLACEHOLDER_URL_PATTERN = /cdn\.plyr\.io\/static\/blank\.mp4/i;
 // webContents id - installing a listener per resolve let two simultaneous player/download resolves
 // overwrite each other, and either one's cleanup then removed the other's listener as well.
 //
-// Refcounted rather than installed once and left in place: every request the app makes - the main
-// window's own UI, posters, HLS segments during playback - is routed through this callback while
-// the listener exists, so it is removed again as soon as the last resolve finishes.
+// Installed once and left in place, never torn down between resolves. Swapping a webRequest
+// listener in or out rebuilds the session's request proxy, and requests already in flight through
+// it can die with net::ERR_FAILED - which on this session means the segments of whatever is
+// playing, since a resolve for a newly picked dub overlaps the stream still running. Leaving it
+// installed costs a map lookup per request, against a proxy playerHeaders.ts keeps on this session
+// permanently anyway.
 //
 // The handler also decides whether a request is allowed to go out at all, which is what makes the
 // referring-page load below cheap - see loadRefererDocument.
 type RequestHandler = (details: Electron.OnBeforeRequestListenerDetails) => { cancel: boolean };
 
 const networkCaptureByWebContents = new Map<number, RequestHandler>();
-const hookedSessions = new Map<Electron.Session, number>();
+const hookedSessions = new WeakSet<Electron.Session>();
 
 function addNetworkCapture(session: Electron.Session, webContentsId: number, handler: RequestHandler): void {
   networkCaptureByWebContents.set(webContentsId, handler);
-  const active = hookedSessions.get(session) ?? 0;
-  hookedSessions.set(session, active + 1);
-  if (active > 0) return;
+  if (hookedSessions.has(session)) return;
+  hookedSessions.add(session);
   session.webRequest.onBeforeRequest((details, callback) => {
     const handle = details.webContentsId !== undefined ? networkCaptureByWebContents.get(details.webContentsId) : undefined;
     callback(handle ? handle(details) : {});
   });
 }
 
-function removeNetworkCapture(session: Electron.Session, webContentsId: number): void {
+function removeNetworkCapture(webContentsId: number): void {
   networkCaptureByWebContents.delete(webContentsId);
-  const active = (hookedSessions.get(session) ?? 1) - 1;
-  if (active > 0) {
-    hookedSessions.set(session, active);
-    return;
-  }
-  hookedSessions.delete(session);
-  session.webRequest.onBeforeRequest(null);
 }
 
 type CaptureKind = "master" | "video" | "audio" | "stream" | "network";
@@ -553,7 +548,7 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
     const finalState = await readPageState(target, deadline);
     return await buildResult(finalState.captures, networkCaptures, link, win, target, deadline, probes);
   } finally {
-    removeNetworkCapture(ses, webContentsId);
+    removeNetworkCapture(webContentsId);
     void releaseResolverWindow(win, heldRefererUrl);
   }
 }
