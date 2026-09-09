@@ -7,6 +7,7 @@
 // WebView + @JavascriptInterface bridge one-to-one, just backed by a hidden BrowserWindow instead.
 import { BrowserWindow } from "electron";
 import type { PlayerLink } from "@shared/types";
+import { logger } from "../logger";
 
 // Anything that can run JS in a given browsing context and give back its completion value - a
 // plain WebContents (no wrapper iframe was used) or an Electron WebFrameMain for a specific
@@ -50,17 +51,22 @@ const PLACEHOLDER_URL_PATTERN = /cdn\.plyr\.io\/static\/blank\.mp4/i;
 // Refcounted rather than installed once and left in place: every request the app makes - the main
 // window's own UI, posters, HLS segments during playback - is routed through this callback while
 // the listener exists, so it is removed again as soon as the last resolve finishes.
-const networkCaptureByWebContents = new Map<number, (url: string) => void>();
+//
+// The handler also decides whether a request is allowed to go out at all, which is what makes the
+// referring-page load below cheap - see loadRefererDocument.
+type RequestHandler = (details: Electron.OnBeforeRequestListenerDetails) => { cancel: boolean };
+
+const networkCaptureByWebContents = new Map<number, RequestHandler>();
 const hookedSessions = new Map<Electron.Session, number>();
 
-function addNetworkCapture(session: Electron.Session, webContentsId: number, capture: (url: string) => void): void {
-  networkCaptureByWebContents.set(webContentsId, capture);
+function addNetworkCapture(session: Electron.Session, webContentsId: number, handler: RequestHandler): void {
+  networkCaptureByWebContents.set(webContentsId, handler);
   const active = hookedSessions.get(session) ?? 0;
   hookedSessions.set(session, active + 1);
   if (active > 0) return;
   session.webRequest.onBeforeRequest((details, callback) => {
-    if (details.webContentsId !== undefined) networkCaptureByWebContents.get(details.webContentsId)?.(details.url);
-    callback({});
+    const handle = details.webContentsId !== undefined ? networkCaptureByWebContents.get(details.webContentsId) : undefined;
+    callback(handle ? handle(details) : {});
   });
 }
 
@@ -93,36 +99,78 @@ export interface ResolvedStream {
 
 // Every resolve used to build and tear down its own hidden window, which means a full Chromium
 // renderer process spawn per embed - paid again for each mirror the fallback chain tries. The
-// windows are interchangeable (nothing about one is tied to a particular embed), so they are kept
-// for a short while and handed to the next resolve instead.
+// windows are kept for a while and handed to the next resolve instead.
 //
-// A released window is navigated to about:blank first, so a reused one starts from exactly the
-// state a fresh one is in. That is not cosmetic: the iframe path below decides whether it has a
-// usable referer document by asking whether anything is loaded, and a reused window still showing
-// the *previous* embed's page would answer yes and then embed into a stranger's document.
-const RESOLVER_WINDOW_IDLE_TTL_MS = 60_000;
+// A pooled window is remembered *together with the referring page it is currently showing*, so a
+// second episode from the same source skips that page load entirely - the iframe below is simply
+// re-injected into the document already there. The URL is tracked here rather than read back off
+// the page on purpose: the decision "do I have a usable referer document" must never be answered
+// by a window still showing some *other* embed's page, which is how an iframe ends up injected
+// into a stranger's document.
+const RESOLVER_WINDOW_IDLE_TTL_MS = 5 * 60_000;
 const RESOLVER_WINDOW_RESET_TIMEOUT_MS = 2_000;
 const MAX_IDLE_RESOLVER_WINDOWS = 2;
-const idleResolverWindows: Array<{ window: BrowserWindow; timer: ReturnType<typeof setTimeout> }> = [];
 
-function acquireResolverWindow(): BrowserWindow {
-  for (let entry = idleResolverWindows.pop(); entry; entry = idleResolverWindows.pop()) {
-    clearTimeout(entry.timer);
-    if (!entry.window.isDestroyed()) return entry.window;
-  }
-  return new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, images: false } });
+interface IdleResolverWindow {
+  window: BrowserWindow;
+  /** The referring page loaded in it, or null for a window holding nothing reusable. */
+  refererUrl: string | null;
+  timer: ReturnType<typeof setTimeout>;
 }
 
-async function releaseResolverWindow(win: BrowserWindow): Promise<void> {
+const idleResolverWindows: IdleResolverWindow[] = [];
+
+function takeIdleWindow(match: (entry: IdleResolverWindow) => boolean): IdleResolverWindow | null {
+  for (let i = idleResolverWindows.length - 1; i >= 0; i--) {
+    const entry = idleResolverWindows[i];
+    if (!match(entry)) continue;
+    idleResolverWindows.splice(i, 1);
+    clearTimeout(entry.timer);
+    if (entry.window.isDestroyed()) continue;
+    return entry;
+  }
+  return null;
+}
+
+/** A pooled window plus whether it already holds `refererUrl` and needs no navigation. */
+function acquireResolverWindow(refererUrl: string | null): { window: BrowserWindow; hasReferer: boolean } {
+  if (refererUrl) {
+    const matching = takeIdleWindow((entry) => entry.refererUrl === refererUrl);
+    if (matching) return { window: matching.window, hasReferer: true };
+  }
+  const any = takeIdleWindow(() => true);
+  if (any) return { window: any.window, hasReferer: false };
+  return {
+    window: new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, images: false } }),
+    hasReferer: false,
+  };
+}
+
+async function releaseResolverWindow(win: BrowserWindow, refererUrl: string | null): Promise<void> {
   if (win.isDestroyed()) return;
   if (idleResolverWindows.length >= MAX_IDLE_RESOLVER_WINDOWS) {
     win.destroy();
     return;
   }
+  // An embed that broke out of its frame has navigated the window somewhere else entirely; what is
+  // on screen decides what this window may be pooled as, not what it was asked to load.
+  const held = refererUrl && originOf(win.webContents.getURL()) === originOf(refererUrl) ? refererUrl : null;
   try {
-    // Also how a page that is still running scripts of its own gets stopped: the document, and
-    // every timer it started, goes away with the navigation.
-    await withTimeout(win.loadURL("about:blank"), RESOLVER_WINDOW_RESET_TIMEOUT_MS, "reset timed out");
+    if (held) {
+      // The embed is torn out now rather than at the start of the next resolve. Two reasons: an
+      // idle pooled window must not sit there with somebody's player still loading and playing in
+      // it, and the next resolve attaches its child-frame listener before injecting - a leftover
+      // frame still navigating would be handed to it as though it were the new embed.
+      await withTimeout(
+        win.webContents.executeJavaScript(`(function () { if (document.body) document.body.innerHTML = ""; })();`),
+        RESOLVER_WINDOW_RESET_TIMEOUT_MS,
+        "reset timed out",
+      );
+    } else {
+      // Nothing worth keeping, and the page may still be running scripts of its own: the document,
+      // and every timer it started, goes away with the navigation.
+      await withTimeout(win.loadURL("about:blank"), RESOLVER_WINDOW_RESET_TIMEOUT_MS, "reset timed out");
+    }
   } catch {
     if (!win.isDestroyed()) win.destroy();
     return;
@@ -134,7 +182,7 @@ async function releaseResolverWindow(win: BrowserWindow): Promise<void> {
     if (!win.isDestroyed()) win.destroy();
   }, RESOLVER_WINDOW_IDLE_TTL_MS);
   timer.unref?.();
-  idleResolverWindows.push({ window: win, timer });
+  idleResolverWindows.push({ window: win, refererUrl: held, timer });
 }
 
 /** Releases every idle resolver window - called on app quit, alongside browserFetchHost's own. */
@@ -142,6 +190,14 @@ export function destroyIdleResolverWindows(): void {
   for (const entry of idleResolverWindows.splice(0)) {
     clearTimeout(entry.timer);
     if (!entry.window.isDestroyed()) entry.window.destroy();
+  }
+}
+
+function originOf(url: string): string | null {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
   }
 }
 
@@ -249,6 +305,16 @@ async function readPageState(target: ScriptTarget, deadline: number): Promise<Pa
 /** Waits for the iframe injected by performBrowserResolve to finish its own navigation, then
  * returns the WebFrameMain for it - or null if none showed up in time, so the caller can fall
  * back to treating the top frame as the target instead of hanging forever. */
+/**
+ * The embed frame, as soon as it is usable - which is when its document has committed, not when
+ * the last of its fonts and stylesheets has arrived.
+ *
+ * Waiting for did-frame-finish-load meant waiting out every trailing subresource of the embed page
+ * before the resolver script was allowed to look at it, on the assumption that the player would
+ * not exist before then. It usually exists far earlier, and when it does not the probe loop
+ * already handles that case: the script answers "no-player" and is re-injected on the next probe,
+ * a hundred milliseconds later. So the earlier of the two signals wins.
+ */
 function waitForChildFrame(win: BrowserWindow, timeoutMs: number): Promise<Electron.WebFrameMain | null> {
   return new Promise((resolve) => {
     let settled = false;
@@ -256,16 +322,35 @@ function waitForChildFrame(win: BrowserWindow, timeoutMs: number): Promise<Elect
       if (settled) return;
       settled = true;
       win.webContents.removeListener("did-frame-finish-load", onFrameLoad);
+      win.webContents.removeListener("did-frame-navigate", onFrameNavigate);
       resolve(frame);
     };
-    const onFrameLoad = (_event: unknown, isMainFrame: boolean, frameProcessId: number, frameRoutingId: number) => {
-      if (isMainFrame) return;
-      const frame = win.webContents.mainFrame.framesInSubtree.find(
+    const findFrame = (frameProcessId: number, frameRoutingId: number): Electron.WebFrameMain | undefined =>
+      win.webContents.mainFrame.framesInSubtree.find(
         (f) => f.processId === frameProcessId && f.routingId === frameRoutingId,
       );
+    const onFrameLoad = (_event: unknown, isMainFrame: boolean, frameProcessId: number, frameRoutingId: number) => {
+      if (isMainFrame) return;
+      const frame = findFrame(frameProcessId, frameRoutingId);
+      if (frame) finish(frame);
+    };
+    const onFrameNavigate = (
+      _event: unknown,
+      _url: string,
+      httpResponseCode: number,
+      _httpStatusText: string,
+      isMainFrame: boolean,
+      frameProcessId: number,
+      frameRoutingId: number,
+    ) => {
+      // A frame that committed an error page has nothing to run a resolver script in; let the
+      // finish-load path or the timeout answer for it instead.
+      if (isMainFrame || httpResponseCode >= 400) return;
+      const frame = findFrame(frameProcessId, frameRoutingId);
       if (frame) finish(frame);
     };
     win.webContents.on("did-frame-finish-load", onFrameLoad);
+    win.webContents.on("did-frame-navigate", onFrameNavigate);
     setTimeout(() => finish(null), timeoutMs);
   });
 }
@@ -287,19 +372,45 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
   // Covers navigation, iframe setup, probing and validation. Previously the clock started only
   // after all navigation had completed, allowing a dead embed page to hang well beyond 25s.
   const deadline = Date.now() + Math.min(TIMEOUT_MS, timeoutMs);
-  const win = acquireResolverWindow();
+  const refererUrl = link.headers?.Referer ?? link.headers?.referer ?? null;
+  const { window: win, hasReferer } = acquireResolverWindow(refererUrl);
   const ses = win.webContents.session;
   const networkCaptures: Capture[] = [];
   let currentQuality: string | null = null;
+  // Only ever true while the referring page itself is loading - see loadRefererDocument.
+  let documentOnly = false;
+  // The referring page this window may be pooled under afterwards. Set only once the embed is
+  // actually running as a child frame of that page - see the iframe branch below.
+  let heldRefererUrl: string | null = null;
 
   // Read once, up front: `win.webContents` throws on a destroyed window, and the cleanup below
   // runs on exactly the paths where the window may already be gone.
   const webContentsId = win.webContents.id;
-  addNetworkCapture(ses, webContentsId, (url) => {
-    if (MEDIA_URL_PATTERN.test(url) && !PLACEHOLDER_URL_PATTERN.test(url)) {
-      networkCaptures.push({ url, kind: "network", quality: currentQuality });
+  addNetworkCapture(ses, webContentsId, (details) => {
+    if (MEDIA_URL_PATTERN.test(details.url) && !PLACEHOLDER_URL_PATTERN.test(details.url)) {
+      networkCaptures.push({ url: details.url, kind: "network", quality: currentQuality });
     }
+    return { cancel: documentOnly && details.resourceType !== "mainFrame" };
   });
+
+  // The referring page is wanted for one thing only: a document at the right origin to host the
+  // iframe from. Its own scripts, stylesheets, fonts and XHRs are dead weight here - the body is
+  // wiped and replaced with the iframe immediately afterwards - but loadURL does not resolve until
+  // they have all finished, which on a heavy source SPA is most of the time a resolve takes. So
+  // everything below the top-level document is cancelled for the duration of that one navigation.
+  const loadRefererDocument = async (url: string): Promise<boolean> => {
+    documentOnly = true;
+    try {
+      await loadURLBefore(win, url, deadline);
+      return true;
+    } catch {
+      // Some referring pages never fully settle even stripped down to their HTML. As long as the
+      // window ended up at that origin, embedding the real link below still works.
+      return !win.isDestroyed() && originOf(win.webContents.getURL()) === originOf(url);
+    } finally {
+      documentOnly = false;
+    }
+  };
 
   try {
     // A real <iframe src> embed and a direct top-level loadURL() are NOT equivalent from the
@@ -313,17 +424,14 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
     // instead of navigated to directly - which conveniently also matches what browserScript
     // payloads like alloha.js already expect (they look for `document.querySelector("iframe")`
     // themselves before falling back to searching the top window).
-    const refererUrl = link.headers?.Referer ?? link.headers?.referer ?? null;
     let target: ScriptTarget = win.webContents;
-    if (refererUrl) {
-      try {
-        await loadURLBefore(win, refererUrl, deadline);
-      } catch {
-        // Some referring pages are themselves slow/heavy SPAs that never fully settle - as long
-        // as *some* document loaded at that origin, embedding the real link below still works.
-      }
-    }
-    if (refererUrl && win.webContents.getURL() !== "" && win.webContents.getURL() !== "about:blank") {
+    // A pooled window already showing this exact referring page needs no navigation at all - the
+    // iframe injection below wipes the body first, so what is left of the previous resolve goes
+    // with it.
+    const refererStartedAt = Date.now();
+    const refererReady = refererUrl ? hasReferer || (await loadRefererDocument(refererUrl)) : false;
+    const refererMs = Date.now() - refererStartedAt;
+    if (refererUrl && refererReady) {
       const frameLoaded = waitForChildFrame(win, Math.max(0, Math.min(8_000, deadline - Date.now())));
       await withTimeout(win.webContents.executeJavaScript(`
         (function () {
@@ -332,16 +440,30 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
           iframe.referrerPolicy = "unsafe-url";
           iframe.style.cssText = "position:fixed;inset:0;width:100%;height:100%;border:0;";
           iframe.setAttribute("allow", "autoplay");
+          if (!document.body) document.documentElement.appendChild(document.createElement("body"));
           document.body.innerHTML = "";
           document.body.appendChild(iframe);
         })();
       `), deadline - Date.now(), "Browser resolver iframe setup timed out");
+      const embedStartedAt = Date.now();
       const childFrame = await frameLoaded;
+      // The three phases that used to be one opaque wait, so a slow resolve can be attributed:
+      // reaching the referring page, the embed frame committing, and the probing after it.
+      logger.debug(
+        "resolve",
+        `embed ready: referer ${refererMs}ms${hasReferer ? " (pooled)" : ""}, frame ${Date.now() - embedStartedAt}ms`,
+      );
       // Falling back to the top frame (rather than throwing) matches the plain-loadURL behavior
       // this replaces when there's no usable Referer to embed against - some resolver still gets
       // a chance to work even without the real cross-site-embed context.
-      if (childFrame) target = childFrame;
-      else await loadURLBefore(win, link.url, deadline, buildLoadOptions(link.headers));
+      if (childFrame) {
+        target = childFrame;
+        // Only now is the window genuinely holding this referring page, with the embed as a child
+        // frame of it. Anything that navigated away below must not be pooled under that claim.
+        heldRefererUrl = refererUrl;
+      } else {
+        await loadURLBefore(win, link.url, deadline, buildLoadOptions(link.headers));
+      }
     } else {
       await loadURLBefore(win, link.url, deadline, buildLoadOptions(link.headers));
     }
@@ -397,7 +519,7 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
     return await buildResult(finalState.captures, networkCaptures, link, win, target, deadline);
   } finally {
     removeNetworkCapture(ses, webContentsId);
-    void releaseResolverWindow(win);
+    void releaseResolverWindow(win, heldRefererUrl);
   }
 }
 
