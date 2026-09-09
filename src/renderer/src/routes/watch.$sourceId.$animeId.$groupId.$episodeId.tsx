@@ -183,7 +183,13 @@ function WatchPage() {
     try {
       const resolved = await hibiki.sources.resolvePlayerLink(selected);
       log.info("player", `resolved ${selected.playerName ?? "?"} in ${Date.now() - startedAt}ms -> ${resolved.length} link(s)`);
-      if (requestId !== selectionRequestRef.current) return;
+      // Superseded while it was resolving. Whatever superseded it owns the outcome now, and that
+      // is worth saying out loud: from the outside this is indistinguishable from a resolve that
+      // simply never came back, and the screen sits on a spinner either way.
+      if (requestId !== selectionRequestRef.current) {
+        log.info("player", `discarding stale resolve ${requestId} (current ${selectionRequestRef.current})`);
+        return;
+      }
       const playable = resolved.filter((candidate) => candidate.type !== "EMBED");
       // An EMBED link resolves into a whole set of renditions, so the pick that got us here has to
       // survive that expansion: taking pickDefaultLink()'s own default outright is what made an
@@ -191,6 +197,9 @@ function WatchPage() {
       // first. Keep the requested quality when the resolved set actually offers it.
       const next = pickResolvedLink(playable, selected);
       if (!next) {
+        // Nothing direct came out of the resolve, so the embed page itself is what plays. That is
+        // the deliberate last resort, but it looks like a stall rather than a fallback.
+        log.warn("player", `no playable link from ${selected.playerName ?? "?"}, falling back to its embed page`);
         setManualLink(selected);
         return;
       }
@@ -207,7 +216,10 @@ function WatchPage() {
       );
       setManualLink(next);
     } catch (error) {
-      if (requestId !== selectionRequestRef.current) return;
+      if (requestId !== selectionRequestRef.current) {
+        log.info("player", `discarding stale failed resolve ${requestId} (current ${selectionRequestRef.current})`);
+        return;
+      }
       log.warn("player", `failed to resolve ${selected.playerName ?? selected.url}:`, error);
       setManualLink(selected);
     } finally {
@@ -278,7 +290,12 @@ function WatchPage() {
     const preferred = pickPreferredLink(linksQuery.data, { translation, playerName });
     // Nothing saved at all, or no link matches it any more (source reshuffled its players, the dub
     // is gone) - release the gate and let the default pick play.
-    if (!preferred) { setPreferencePending(false); return; }
+    if (!preferred) {
+      log.debug("player", "no saved pick to adopt, releasing the preference gate");
+      setPreferencePending(false);
+      return;
+    }
+    log.debug("player", `adopting saved pick ${preferred.translation ?? "?"}/${preferred.playerName ?? "?"}`);
     void selectLink(preferred);
   }, [manualLink, downloadedQuery.data, progressQuery.isFetched, progressQuery.data, linksQuery.data, selectLink, sourceId, animeId, groupId, episodeId]);
 
