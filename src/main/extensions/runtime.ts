@@ -73,9 +73,14 @@ interface ResolverManifest {
   runtime?: "NODE" | "BROWSER";
 }
 
+interface ResolverHealth {
+  consecutiveFailures: number;
+}
+
 export class ExtensionRuntime {
   private readonly extensions = new Map<string, LoadedExtension>();
   private readonly resolvers = new Map<string, ResolverManifest>();
+  private readonly resolverHealth = new Map<string, ResolverHealth>();
   private readonly resolversDir: string;
 
   private readonly storage: ExtensionStorage;
@@ -496,6 +501,11 @@ export class ExtensionRuntime {
     return bestIndex;
   }
 
+  private noteResolverResult(resolverId: string, succeeded: boolean): void {
+    const previous = this.resolverHealth.get(resolverId)?.consecutiveFailures ?? 0;
+    this.resolverHealth.set(resolverId, { consecutiveFailures: succeeded ? 0 : previous + 1 });
+  }
+
   // BROWSER-runtime resolvers (extractors/alloha.js and similar) expose Provider.browserScript()
   // instead of Provider.resolve() - the script text itself is plain, portable JS (fetched cheaply
   // via the same sandboxed worker as every other extension call), but *running* it has to happen
@@ -540,6 +550,18 @@ export class ExtensionRuntime {
       orderedIndexes.splice(preferredIndex, 1);
       orderedIndexes.unshift(preferredIndex);
     }
+    // Preserve the source's declared ordering while all providers are healthy. Once one starts
+    // failing, put untouched/working resolvers ahead of it on subsequent episodes instead of
+    // repeatedly paying its timeout first. The failed resolver remains in the list as fallback.
+    orderedIndexes.sort((a, b) => {
+      if (a === preferredIndex) return -1;
+      if (b === preferredIndex) return 1;
+      const resolverA = links[a].type === "EMBED" ? this.findResolverForUrl(links[a].url) : null;
+      const resolverB = links[b].type === "EMBED" ? this.findResolverForUrl(links[b].url) : null;
+      const failuresA = resolverA ? (this.resolverHealth.get(resolverA.id)?.consecutiveFailures ?? 0) : 0;
+      const failuresB = resolverB ? (this.resolverHealth.get(resolverB.id)?.consecutiveFailures ?? 0) : 0;
+      return failuresA - failuresB || a - b;
+    });
 
     for (const i of orderedIndexes) {
       if (attempts >= MAX_ATTEMPTS) break;
@@ -593,11 +615,14 @@ export class ExtensionRuntime {
           }))
           .filter((candidate): candidate is PlayerLink => candidate.type !== undefined);
         if (resolved.length > 0) {
+          this.noteResolverResult(resolver.id, true);
           logger.info("resolve", `${resolver.id} resolved ${resolved.length} stream(s) [${resolved.map((r) => r.quality ?? "?").join(", ")}] in ${Date.now() - attemptStartedAt}ms (${Date.now() - startedAt}ms total)`);
           return [...resolved, ...links.slice(0, i), ...links.slice(i + 1)];
         }
+        this.noteResolverResult(resolver.id, false);
         logger.warn("resolve", `${resolver.id} returned nothing playable in ${Date.now() - attemptStartedAt}ms`);
       } catch (error) {
+        this.noteResolverResult(resolver.id, false);
         logger.warn("resolve", `${resolver.id} failed on ${link.url} after ${Date.now() - attemptStartedAt}ms: ${error instanceof Error ? error.message : String(error)}`);
       }
     }

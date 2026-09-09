@@ -41,6 +41,10 @@ export default defineConfig({
                 id === "better-sqlite3" ||
                 id === "undici" ||
                 id === "sync-fetch" ||
+                // Loaded on demand by jsoupShim. JSON-only sources should not parse Cheerio's
+                // whole dependency tree merely because the compatibility global exists.
+                id === "cheerio" ||
+                id.startsWith("cheerio/") ||
                 // ws's own optional-native-addon acceleration (used by @xhayper/discord-rpc's
                 // websocket transport option) - neither is installed (ws falls back to a pure-JS
                 // path at runtime when they're missing, which is fine), but Rollup tries to

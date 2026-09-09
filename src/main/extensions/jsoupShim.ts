@@ -3,9 +3,19 @@
 // API on Android's Rhino runtime — run unmodified under Node. Method names/shapes here mirror
 // RhinoExtensionRuntime.kt's JsoupBinding + the subset of org.jsoup.nodes.Element that the
 // extension payloads actually call (select/selectFirst/text/attr/absUrl/html/parent/...).
-import * as cheerio from "cheerio";
+import { createRequire } from "node:module";
 import type { Cheerio, CheerioAPI } from "cheerio";
 import type { Element as DomElement } from "domhandler";
+
+const require = createRequire(import.meta.url);
+let cheerioModule: typeof import("cheerio") | null = null;
+
+// JSON-backed sources never touch Jsoup. Loading Cheerio lazily keeps its large parser tree out of
+// their cold worker path while HTML-backed sources pay the import cost once, on their first parse.
+function loadCheerio(): typeof import("cheerio") {
+  cheerioModule ??= require("cheerio") as typeof import("cheerio");
+  return cheerioModule;
+}
 
 function resolveUrl(baseUrl: string, relative: string): string {
   try {
@@ -187,7 +197,7 @@ export class DocumentShim extends ElementShim {}
 
 export const JsoupBinding = {
   parse(html: string, baseUri?: string): DocumentShim {
-    const $ = cheerio.load(html);
+    const $ = loadCheerio().load(html);
     const root = $.root().children().first();
     const rootEl = (root.length > 0 ? root[0] : $("body")[0]) as DomElement;
     return new DocumentShim($, rootEl, baseUri ?? "");

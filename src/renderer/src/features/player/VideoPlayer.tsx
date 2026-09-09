@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
-import Hls from "hls.js";
-import { MediaPlayer as DashMediaPlayer, type MediaPlayerClass } from "dashjs";
+import type Hls from "hls.js";
+import type { MediaPlayerClass } from "dashjs";
 import {
   ArrowLeft,
   Check,
@@ -501,15 +501,23 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     // plain <video src> has no header hook at all) — register them with the main process, which
     // injects them at the session level for every request to this URL's origin (playlist +
     // segments alike), then start playback once that's in place.
-    hibiki.player.registerHeaders(link.url, link.headers).then((sessionId) => {
+    hibiki.player.registerHeaders(link.url, link.headers).then(async (sessionId) => {
       if (cancelled) {
         void hibiki.player.unregisterHeaders(sessionId);
         return;
       }
       headerSessionId = sessionId;
-      elementOwnsSourceRef.current = !(isHls && Hls.isSupported()) && !isDash;
-      if (isHls && Hls.isSupported()) {
-        hls = new Hls();
+      if (isHls) {
+        // HLS/DASH are large libraries and the catalog never needs them. Import only the engine
+        // selected by this stream, keeping both out of the application's startup bundle.
+        const { default: HlsEngine } = await import("hls.js");
+        if (cancelled) return;
+        elementOwnsSourceRef.current = !HlsEngine.isSupported();
+        if (!HlsEngine.isSupported()) {
+          video.src = link.url;
+          return;
+        }
+        hls = new HlsEngine();
         // Without this, a failed manifest/segment load (CORS, a dead CDN host, ...) just leaves
         // the "buffering" spinner turning forever with nothing in the console to explain why -
         // network/media errors are usually transient (hls.js's own recommended recovery), but a
@@ -533,21 +541,21 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         // NETWORK_ERROR already was, giving up into the visible error overlay after a few tries.
         let mediaRetries = 0;
         const MAX_MEDIA_RETRIES = 3;
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        hls.on(HlsEngine.Events.MANIFEST_PARSED, () => {
           networkRetries = 0;
         });
         // A successful buffer append is the real signal that recovery actually worked - resetting
         // only on MANIFEST_PARSED (which fires once, near the very start) would let one recovered
         // error early in playback silently use up the whole retry budget for a later, unrelated one.
-        hls.on(Hls.Events.FRAG_BUFFERED, () => {
+        hls.on(HlsEngine.Events.FRAG_BUFFERED, () => {
           networkRetries = 0;
           mediaRetries = 0;
         });
-        hls.on(Hls.Events.ERROR, (_event, data) => {
+        hls.on(HlsEngine.Events.ERROR, (_event, data) => {
           log.error("player", `hls.js ${data.fatal ? "fatal" : "non-fatal"} error:`, data.type, data.details, data.reason ?? "", data.response ? `http ${data.response.code}` : "");
           if (!data.fatal) return;
           switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
+            case HlsEngine.ErrorTypes.NETWORK_ERROR:
               networkRetries += 1;
               if (networkRetries > MAX_NETWORK_RETRIES) {
                 const reason = data.details || "playback failed";
@@ -563,8 +571,8 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
               networkRetryTimer = window.setTimeout(() => {
                 networkRetryTimer = null;
                 if (cancelled || !hls) return;
-                const isManifestFailure = data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR ||
-                  data.details === Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT;
+                const isManifestFailure = data.details === HlsEngine.ErrorDetails.MANIFEST_LOAD_ERROR ||
+                  data.details === HlsEngine.ErrorDetails.MANIFEST_LOAD_TIMEOUT;
                 log.info("player", `retrying ${isManifestFailure ? "manifest" : "stream"} load (${networkRetries}/${MAX_NETWORK_RETRIES})`);
                 if (!isManifestFailure) {
                   hls.startLoad();
@@ -586,7 +594,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
                 });
               }, 500 * (2 ** (networkRetries - 1)));
               break;
-            case Hls.ErrorTypes.MEDIA_ERROR:
+            case HlsEngine.ErrorTypes.MEDIA_ERROR:
               mediaRetries += 1;
               if (mediaRetries > MAX_MEDIA_RETRIES) {
                 setPlaybackError(data.details || "playback failed");
@@ -603,6 +611,9 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         hls.loadSource(link.url);
         hls.attachMedia(video);
       } else if (isDash) {
+        const { MediaPlayer: DashMediaPlayer } = await import("dashjs");
+        if (cancelled) return;
+        elementOwnsSourceRef.current = false;
         dash = DashMediaPlayer().create();
         // Same reasoning as hls.js above: dash.js retries transient errors on its own, but a
         // manifest that's simply dead keeps re-erroring forever with nothing surfaced unless
@@ -624,6 +635,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         });
         dash.initialize(video, link.url, true);
       } else {
+        elementOwnsSourceRef.current = true;
         video.src = link.url;
       }
     }).catch((error) => {
