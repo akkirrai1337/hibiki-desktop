@@ -51,7 +51,7 @@ export function installPlayerHeaderInjector(): void {
       callback({ requestHeaders: { ...details.requestHeaders, ...extra } });
       return;
     }
-    callback({ requestHeaders: headersForImageRequest(details.resourceType, details.requestHeaders) });
+    callback({ requestHeaders: headersForImageRequest(details.resourceType, details.url, details.requestHeaders) });
   });
 
   // Playback CDNs commonly redirect between numbered edge hosts (Kodik currently does
