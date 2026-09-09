@@ -153,7 +153,10 @@ export type SourceCapability =
   | "ACCOUNT"
   | "COMMENTS"
   | "REVIEWS"
-  | "LIBRARY_SYNC";
+  | "LIBRARY_SYNC"
+  // Reports watching itself - an episode counted and the minutes actually spent in it - to the
+  // account, rather than only what is in a list.
+  | "ACTIVITY_SYNC";
 
 /**
  * One row on a source's settings page, as the source itself declares it.
@@ -168,6 +171,10 @@ export type SourceSettingType =
   // already disagree have to be reconciled, and that is a question only the person can answer. A
   // type rather than a well-known key, so the screen still knows nothing about any one source.
   | "LIBRARY_SYNC"
+  // Like TOGGLE, and known to the app for the same reason as LIBRARY_SYNC: it decides whether
+  // watching is reported at all, which the player has to be able to ask without knowing the
+  // source.
+  | "ACTIVITY_SYNC"
   | "TOGGLE"
   | "TEXT"
   | "SELECT";

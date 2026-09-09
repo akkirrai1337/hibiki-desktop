@@ -19,6 +19,7 @@ import {
   Play,
   Layers,
   Shuffle,
+  Activity,
   UserRound,
   MessageSquare,
   Star,
@@ -55,6 +56,7 @@ const CAPABILITY_ICONS: Record<SourceCapability, typeof Sparkles> = {
   COMMENTS: MessageSquare,
   REVIEWS: Star,
   LIBRARY_SYNC: RefreshCw,
+  ACTIVITY_SYNC: Activity,
 };
 
 const CAPABILITY_LABEL_KEYS: Record<SourceCapability, string> = {
@@ -66,6 +68,7 @@ const CAPABILITY_LABEL_KEYS: Record<SourceCapability, string> = {
   COMMENTS: "sources.capability.comments",
   REVIEWS: "sources.capability.reviews",
   LIBRARY_SYNC: "sources.capability.librarySync",
+  ACTIVITY_SYNC: "sources.capability.activitySync",
 };
 
 function languageLabel(lang: string): { native: string; english: string } {

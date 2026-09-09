@@ -52,6 +52,16 @@ function RootLayout() {
   // active, not just which accent is picked).
   // Once per app start, not per render - see lib/log.ts.
   useEffect(() => { installGlobalErrorLogging(); }, []);
+  // Once a launch, tell every source that reports activity that its account is online today -
+  // that is what a site's "day streak" counts, and it should not depend on whether an episode
+  // happened to be watched. Sources that report nothing, or are signed out, answer false and cost
+  // one cheap check in the main process.
+  useEffect(() => {
+    void hibiki.sources
+      .list()
+      .then((sources) => Promise.all(sources.map((source) => hibiki.sources.pingOnline(source.id).catch(() => false))))
+      .catch(() => undefined);
+  }, []);
 
   // Ctrl/Cmd +/-/0, and re-applying the saved factor on launch.
   useAppZoom();

@@ -70,6 +70,11 @@ const api = {
       write: (sourceId: string, key: string, value: string | null): Promise<void> =>
         ipcRenderer.invoke(IPC.sourceSettingsWrite, sourceId, key, value),
     },
+    reportPlayback: (
+      sourceId: string,
+      request: { videoId: string; positionSeconds: number; durationSeconds: number; watchedSeconds: number[] },
+    ): Promise<boolean> => ipcRenderer.invoke(IPC.sourceReportPlayback, sourceId, request),
+    pingOnline: (sourceId: string): Promise<boolean> => ipcRenderer.invoke(IPC.sourcePingOnline, sourceId),
     listLibrary: (sourceId: string): Promise<SourceLibraryEntry[]> =>
       ipcRenderer.invoke(IPC.sourceListLibrary, sourceId),
     syncLibraryEntry: (

@@ -364,10 +364,55 @@ export class ExtensionRuntime {
     return this.run("postReview", sourceId, [request]);
   }
 
+  /**
+   * Whether this source both can sync a library and has been told to.
+   *
+   * Asked before every push, and cheap on purpose - it reads the manifest and the source's own
+   * store, no script and no network. A source that declares nothing, or whose switch is off, must
+   * cost nothing at all on a library change.
+   */
+  isLibrarySyncEnabled(sourceId: string): boolean {
+    return this.isSwitchOn(sourceId, "LIBRARY_SYNC");
+  }
+
+  /** Whether this source reports watching to its account. Asked on every progress save, so it
+   * reads the manifest and the source's store and nothing else. */
+  isActivitySyncEnabled(sourceId: string): boolean {
+    return this.isSwitchOn(sourceId, "ACTIVITY_SYNC");
+  }
+
+  /** A capability the source declares, plus the switch of the same type being on. */
+  private isSwitchOn(sourceId: string, kind: "LIBRARY_SYNC" | "ACTIVITY_SYNC"): boolean {
+    const manifest = this.extensions.get(sourceId)?.manifest;
+    if (!manifest || !(manifest.capabilities ?? []).includes(kind)) return false;
+    const row = (manifest.settings ?? []).find((setting) => setting.type === kind);
+    if (!row) return false;
+    const stored = this.storage.read(sourceId)[row.key];
+    return stored === undefined ? row.default === true : stored === "true";
+  }
+
   /** Everything in the signed-in account's own lists - what the first-run reconciliation needs in
    * order to say "3 there, 50 here" rather than asking blind. */
   listLibrary(sourceId: string): Promise<SourceLibraryEntry[]> {
     return this.run("listLibrary", sourceId, []);
+  }
+
+  /**
+   * Reports one episode's watching: the seconds actually played, not the position reached.
+   *
+   * Answers false when there was nothing new to report, which is the normal case between two
+   * saves that happened while paused.
+   */
+  reportPlayback(
+    sourceId: string,
+    request: { videoId: string; positionSeconds: number; durationSeconds: number; watchedSeconds: number[] },
+  ): Promise<boolean> {
+    return this.run("reportPlayback", sourceId, [request]);
+  }
+
+  /** Marks the account online for today - what its day streak counts. */
+  pingOnline(sourceId: string): Promise<boolean> {
+    return this.run("pingOnline", sourceId, []);
   }
 
   /** Pushes one library row's status (and rating, when there is one) to the account. */
@@ -490,6 +535,11 @@ export class ExtensionRuntime {
             translation: candidate.translation ?? link.translation,
             playerName: candidate.playerName ?? link.playerName,
             segments: candidate.segments && candidate.segments.length > 0 ? candidate.segments : link.segments,
+            // Same reason as the three above, and now it matters: this is the source's own id for
+            // the episode, and reporting watch time to an account is addressed by it. A resolver
+            // has no idea what it is, so dropping it here left every resolved stream - which is
+            // most of them - unable to report anything.
+            videoId: candidate.videoId ?? link.videoId,
           }))
           .filter((candidate): candidate is PlayerLink => candidate.type !== undefined);
         if (resolved.length > 0) {

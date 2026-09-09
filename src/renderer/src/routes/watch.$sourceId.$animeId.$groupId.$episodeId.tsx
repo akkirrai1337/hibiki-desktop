@@ -82,6 +82,10 @@ function WatchPage() {
   // nothing - which is the whole point: skipping to the end of a film is not watching it.
   const playedMsRef = useRef(0);
   const lastTickPositionRef = useRef<number | null>(null);
+  // The individual seconds of this episode that actually played, not yet reported to the source's
+  // account. A count would not do: the account counts distinct seconds seen, so rewatching the
+  // same minute twice is one minute there, and only the offsets themselves can say that.
+  const unreportedSecondsRef = useRef(new Set<number>());
   const queryClient = useQueryClient();
 
   // Same query key as the profile page's own activity query - watching here and then checking the
@@ -155,6 +159,7 @@ function WatchPage() {
     // read the jump between them as either playback or a seek, and neither is true.
     playedMsRef.current = 0;
     lastTickPositionRef.current = null;
+    unreportedSecondsRef.current = new Set();
   }, [episodeId]);
 
   const selectLink = useCallback(async (selected: PlayerLink) => {
@@ -413,13 +418,21 @@ function WatchPage() {
   // identity feeds VideoPlayer's effects the exact same way theirs do.
   const linkTranslation = link?.translation ?? null;
   const linkPlayerName = link?.playerName ?? null;
+  // The source's own id for this episode's video, which is how an account is told what was
+  // watched. Absent for sources that do not report activity, and for links that never had one.
+  const linkVideoId = link?.videoId ?? null;
   const onProgress = useCallback(
     (positionMs: number, durationMs: number) => {
       const previousTickPosition = lastTickPositionRef.current;
       lastTickPositionRef.current = positionMs;
       if (previousTickPosition !== null) {
         const tickMs = positionMs - previousTickPosition;
-        if (tickMs > 0 && tickMs <= PLAYED_TICK_MAX_MS) playedMsRef.current += tickMs;
+        if (tickMs > 0 && tickMs <= PLAYED_TICK_MAX_MS) {
+          playedMsRef.current += tickMs;
+          for (let second = Math.floor(previousTickPosition / 1000); second <= Math.floor(positionMs / 1000); second++) {
+            unreportedSecondsRef.current.add(second);
+          }
+        }
       }
       lastPlaybackRef.current = { positionMs, durationMs };
       const watched = durationMs > 0 && positionMs / durationMs >= watchedThreshold;
@@ -444,6 +457,26 @@ function WatchPage() {
           watchedDeltaMs: playedMsRef.current,
         });
         playedMsRef.current = 0;
+
+        // The same seconds, told to the source's account: an episode counted and the minutes
+        // really spent in it, which is what fills the day squares on a YummyAnime profile. Fire
+        // and forget - a website being unreachable must not disturb playback, and the seconds are
+        // only cleared once they are actually accepted, so the next save carries them again.
+        const videoId = linkVideoId;
+        const pending = [...unreportedSecondsRef.current];
+        if (videoId && pending.length > 0) {
+          unreportedSecondsRef.current = new Set();
+          void hibiki.sources
+            .reportPlayback(sourceId, {
+              videoId,
+              positionSeconds: Math.floor(positionMs / 1000),
+              durationSeconds: Math.round(durationMs / 1000),
+              watchedSeconds: pending,
+            })
+            .catch(() => {
+              for (const second of pending) unreportedSecondsRef.current.add(second);
+            });
+        }
         // The streak-detection effect above reads straight from this same query's cache, so it
         // can't notice today's activity until this refetch actually lands. Every save, not just
         // the first one: on a resumed episode, the very first save's position can exactly match
@@ -467,7 +500,7 @@ function WatchPage() {
         });
       }
     },
-    [sourceId, animeId, episodeId, episodeNumber, groupId, linkTranslation, linkPlayerName, watchedThreshold, thumbnailCache],
+    [sourceId, animeId, episodeId, episodeNumber, groupId, linkTranslation, linkPlayerName, linkVideoId, watchedThreshold, thumbnailCache],
   );
 
   // timeupdate (the only thing that drives onProgress above) simply stops firing while paused, so

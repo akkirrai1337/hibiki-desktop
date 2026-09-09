@@ -184,7 +184,7 @@ app.whenReady().then(() => {
 
   registerSourceHandlers(runtime);
   registerMarketplaceHandlers(runtime);
-  registerLibraryHandlers();
+  registerLibraryHandlers(runtime);
   registerXpEventHandlers();
   // A lazy getter, not `mainWindow` itself - handlers are registered before createWindow() below
   // assigns it, and a download can still be running long after the window is recreated (e.g. after

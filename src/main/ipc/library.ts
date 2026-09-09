@@ -4,6 +4,8 @@ import { IPC } from "@shared/ipc";
 import type { DailyActivity, LibraryEntry, WatchProgress } from "@shared/types";
 import { getDb } from "../db";
 import { library, watchProgress, dailyActivity } from "../db/schema";
+import type { ExtensionRuntime } from "../extensions/runtime";
+import { logger } from "../logger";
 
 // A day's "date" key is the local calendar day (not UTC), so activity attributes to the day the
 // user actually watched it in their own timezone.
@@ -20,7 +22,31 @@ function localDateKey(epochMs: number): string {
 // forward would inflate watch-time stats by the size of the seek instead of time actually spent.
 const MAX_WATCHED_DELTA_MS = 30_000;
 
-export function registerLibraryHandlers(): void {
+/**
+ * Mirrors one library change to the source's account, when that source syncs.
+ *
+ * Here rather than in the screens that change the library: there are already four callers and
+ * every future one would have to remember. Deliberately not awaited and never allowed to throw -
+ * a library change is local and must succeed whether or not a website is reachable, and a failed
+ * push is a log line, not a refused edit. The next change to that title pushes the current state
+ * anyway, so nothing needs a retry queue to stay eventually correct.
+ */
+function pushToAccount(
+  runtime: ExtensionRuntime,
+  sourceId: string,
+  animeId: string,
+  category: string | null,
+): void {
+  if (!runtime.isLibrarySyncEnabled(sourceId)) return;
+  void runtime
+    .syncLibraryEntry(sourceId, { animeId, category })
+    .then(() => logger.debug("sync", `${sourceId}/${animeId} -> ${category ?? "removed"}`))
+    .catch((error: unknown) => {
+      logger.warn("sync", `${sourceId}/${animeId} not synced: ${error instanceof Error ? error.message : String(error)}`);
+    });
+}
+
+export function registerLibraryHandlers(runtime: ExtensionRuntime): void {
   ipcMain.handle(IPC.libraryList, (): LibraryEntry[] => {
     const rows = getDb().select().from(library).all();
     return rows.map((r) => ({
@@ -47,6 +73,7 @@ export function registerLibraryHandlers(): void {
         set: { category: entry.category, animeJson: JSON.stringify(entry.anime) },
       })
       .run();
+    pushToAccount(runtime, entry.sourceId, entry.animeId, entry.category);
   });
 
   ipcMain.handle(IPC.libraryRemove, (_e, sourceId: string, animeId: string) => {
@@ -54,6 +81,7 @@ export function registerLibraryHandlers(): void {
       .delete(library)
       .where(and(eq(library.sourceId, sourceId), eq(library.animeId, animeId)))
       .run();
+    pushToAccount(runtime, sourceId, animeId, null);
   });
 
   ipcMain.handle(IPC.progressGet, (_e, sourceId: string, titleId: string, episodeId: string): WatchProgress | null => {

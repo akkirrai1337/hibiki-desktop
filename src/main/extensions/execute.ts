@@ -39,7 +39,9 @@ export type ExtensionMethod =
   | "listReviews"
   | "postReview"
   | "syncLibraryEntry"
-  | "listLibrary";
+  | "listLibrary"
+  | "reportPlayback"
+  | "pingOnline";
 
 export interface ExtensionCall {
   extensionsDir: string;
@@ -150,7 +152,9 @@ export function executeExtensionCall(
     case "listReviews":
     case "postReview":
     case "syncLibraryEntry":
-    case "listLibrary": {
+    case "listLibrary":
+    case "reportPlayback":
+    case "pingOnline": {
       const fn = provider[call.method] as ((json?: string) => unknown) | undefined;
       if (typeof fn !== "function") {
         throw new Error(`Source "${call.sourceId}" declares ${call.method} but does not implement it`);

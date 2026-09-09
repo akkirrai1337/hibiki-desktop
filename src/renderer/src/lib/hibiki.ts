@@ -66,6 +66,8 @@ export interface HibikiApi {
       write(sourceId: string, key: string, value: string | null): Promise<void>;
     };
     listLibrary(sourceId: string): Promise<SourceLibraryEntry[]>;
+    reportPlayback(sourceId: string, request: { videoId: string; positionSeconds: number; durationSeconds: number; watchedSeconds: number[] }): Promise<boolean>;
+    pingOnline(sourceId: string): Promise<boolean>;
     syncLibraryEntry(sourceId: string, request: { animeId: string; category: string | null; rating?: number | null }): Promise<void>;
     repositories: {
       list(): Promise<string[]>;

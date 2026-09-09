@@ -228,7 +228,8 @@
       "account": "Аккаунт",
       "comments": "Комментарии",
       "reviews": "Отзывы",
-      "librarySync": "Синхронизация списков"
+      "librarySync": "Синхронизация списков",
+      "activitySync": "Активность просмотра"
     },
     "settings": "Настройки",
     "settingsTitle": "Настройки источника",
