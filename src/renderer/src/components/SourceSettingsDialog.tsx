@@ -3,7 +3,18 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LogOut, UserRound, X } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowDownToLine,
+  ArrowLeftRight,
+  ArrowUpFromLine,
+  Clock,
+  Library,
+  LogOut,
+  UserRound,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
 import { Switch } from "@/components/Switch";
 import { cn } from "@/lib/cn";
@@ -76,11 +87,28 @@ export function SourceSettingsDialog({ source, onClose }: { source: SourceInfo; 
   );
 }
 
+/**
+ * A source's own wording, in the app's language when the source offers it.
+ *
+ * Sources write their settings rows in one language; the app is translated into several, and a
+ * Russian screen with two English rows in the middle of it reads as broken. A source can supply
+ * per-language wording, and anything it has not translated falls back to what it wrote.
+ */
+function useSourceText(row: SourceSetting): { title: string; description: string | null } {
+  const { i18n } = useTranslation();
+  const language = i18n.language.split("-")[0];
+  return {
+    title: row.titleI18n?.[language] ?? row.title,
+    description: row.descriptionI18n?.[language] ?? row.description ?? null,
+  };
+}
+
 function RowHeader({ row }: { row: SourceSetting }) {
+  const { title, description } = useSourceText(row);
   return (
     <div className="min-w-0 flex-1">
-      <p className="text-sm font-semibold text-text">{row.title}</p>
-      {row.description && <p className="mt-0.5 text-xs text-muted">{row.description}</p>}
+      <p className="text-sm font-semibold text-text">{title}</p>
+      {description && <p className="mt-0.5 text-xs text-muted">{description}</p>}
     </div>
   );
 }
@@ -287,6 +315,7 @@ function LibrarySyncRow({ sourceId, row }: { sourceId: string; row: SourceSettin
   const [error, setError] = useState<string | null>(null);
   const cancelled = useRef(false);
 
+  const { title: rowTitle } = useSourceText(row);
   const stored = useQuery({
     queryKey: ["sourceSettings", sourceId],
     queryFn: () => hibiki.sources.settings.read(sourceId),
@@ -390,7 +419,7 @@ function LibrarySyncRow({ sourceId, row }: { sourceId: string; row: SourceSettin
 
       {choosing && (
         <SyncChoiceDialog
-          title={row.title}
+          title={rowTitle}
           // Only while nothing is being written: stopping half way through a first sync leaves
           // both libraries in a state nobody chose, so the way out during a run is Stop, not Esc.
           onDismiss={progress ? undefined : () => { setChoosing(false); setConfirmingPull(false); }}
@@ -400,15 +429,21 @@ function LibrarySyncRow({ sourceId, row }: { sourceId: string; row: SourceSettin
 
           {sides.data && plans && !progress && (
             <>
-              <p className="text-sm text-text">
-                {t("sources.syncCounts", { here: sides.data.local.length, there: sides.data.remote.length })}
-              </p>
+              <div className="flex items-center gap-2 rounded-lg bg-text/[.04] px-3 py-2">
+                <Library className="h-4 w-4 shrink-0 text-muted" strokeWidth={2} />
+                <p className="text-sm text-text">
+                  {t("sources.syncCounts", { here: sides.data.local.length, there: sides.data.remote.length })}
+                </p>
+              </div>
               {confirmingPull ? (
                 <>
                   {/* The only choice that deletes, so it says how many and asks again. */}
-                  <p className="text-sm text-rose-400">
-                    {t("sources.syncPullWarning", { count: plans.pull.removeLocal.length })}
-                  </p>
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" strokeWidth={2} />
+                    <p className="text-sm text-rose-400">
+                      {t("sources.syncPullWarning", { count: plans.pull.removeLocal.length })}
+                    </p>
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     <SyncButton label={t("sources.syncConfirmPull")} danger onClick={() => run("pull")} />
                     <SyncButton label={t("sources.syncBack")} onClick={() => setConfirmingPull(false)} />
@@ -416,17 +451,24 @@ function LibrarySyncRow({ sourceId, row }: { sourceId: string; row: SourceSettin
                 </>
               ) : (
                 <div className="flex flex-col gap-2">
+                  {/* An icon each, and the destructive one in red: the four differ by direction
+                      more than by wording, and an arrow says a direction faster than a sentence
+                      does. */}
                   <SyncChoice
+                    icon={ArrowUpFromLine}
                     title={t("sources.syncPushTitle")}
                     description={t("sources.syncPushDescription", { count: plans.push.push.length })}
                     onClick={() => run("push")}
                   />
                   <SyncChoice
+                    icon={ArrowDownToLine}
+                    danger={plans.pull.removeLocal.length > 0}
                     title={t("sources.syncPullTitle")}
                     description={t("sources.syncPullDescription", { count: plans.pull.pull.length })}
                     onClick={() => (plans.pull.removeLocal.length > 0 ? setConfirmingPull(true) : run("pull"))}
                   />
                   <SyncChoice
+                    icon={ArrowLeftRight}
                     title={t("sources.syncMergeTitle")}
                     description={t("sources.syncMergeDescription", {
                       up: plans.merge.push.length,
@@ -435,6 +477,7 @@ function LibrarySyncRow({ sourceId, row }: { sourceId: string; row: SourceSettin
                     onClick={() => run("merge")}
                   />
                   <SyncChoice
+                    icon={Clock}
                     title={t("sources.syncForwardTitle")}
                     description={t("sources.syncForwardDescription")}
                     onClick={() => run("forward")}
@@ -526,14 +569,36 @@ function SyncChoiceDialog({
   );
 }
 
-function SyncChoice({ title, description, onClick }: { title: string; description: string; onClick: () => void }) {
+function SyncChoice({
+  icon: Icon,
+  title,
+  description,
+  onClick,
+  danger = false,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  onClick: () => void;
+  danger?: boolean;
+}) {
   return (
     <button
       onClick={onClick}
-      className="rounded-lg border border-border px-3 py-2 text-left transition-colors hover:bg-text/[.06]"
+      className="flex items-start gap-3 rounded-lg border border-border px-3 py-2.5 text-left transition-colors hover:bg-text/[.06]"
     >
-      <p className="text-sm font-semibold text-text">{title}</p>
-      <p className="mt-0.5 text-xs text-muted">{description}</p>
+      <span
+        className={cn(
+          "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
+          danger ? "bg-rose-400/12 text-rose-400" : "bg-text/[.06] text-muted",
+        )}
+      >
+        <Icon className="h-4 w-4" strokeWidth={2} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-text">{title}</span>
+        <span className="mt-0.5 block text-xs text-muted">{description}</span>
+      </span>
     </button>
   );
 }

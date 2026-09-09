@@ -182,8 +182,16 @@ export type SourceSettingType =
 export interface SourceSetting {
   key: string;
   type: SourceSettingType;
+  /** The fallback wording, in whatever language the source author wrote it. */
   title: string;
   description?: string | null;
+  /**
+   * The same two, per language tag, so a source's own rows are not stuck in one language while
+   * the app around them is translated. Keyed by the tags the app uses ("ru", "uk", ...); a missing
+   * one falls back to `title`/`description` above, which is why those stay required.
+   */
+  titleI18n?: Record<string, string> | null;
+  descriptionI18n?: Record<string, string> | null;
   /** SELECT only. */
   options?: SearchFilterOption[];
   /** TOGGLE and TEXT. Absent means off / empty. */
