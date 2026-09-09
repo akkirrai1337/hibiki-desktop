@@ -318,6 +318,11 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
 
   const [playing, setPlaying] = useState(true);
   const [buffering, setBuffering] = useState(true);
+  // A source change is a deliberate loading transition, not ordinary buffering. Keep the old
+  // frame paused under the loading veil while an EMBED resolver works, then carry both the exact
+  // position and the user's play/pause intent over to the replacement stream.
+  const [switchingSource, setSwitchingSource] = useState(false);
+  const pendingSourceSwitchRef = useRef<{ fromUrl: string | null; position: number; resume: boolean } | null>(null);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -416,6 +421,21 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   const translationValues = translationOptions(links);
   const playerValues = playerOptions(links);
   const qualityValues = link ? qualityOptions(links, link) : [];
+  const beginSourceSwitch = useCallback((target?: PlayerLink): boolean => {
+    if (target && link && target.type === link.type && target.url === link.url) return false;
+
+    const video = videoRef.current;
+    pendingSourceSwitchRef.current = {
+      fromUrl: link?.url ?? null,
+      position: video && Number.isFinite(video.currentTime) ? video.currentTime : currentTime,
+      resume: video ? !video.paused : playing,
+    };
+    video?.pause();
+    setSettingsOpen(false);
+    setBuffering(true);
+    setSwitchingSource(true);
+    return true;
+  }, [currentTime, link, playing]);
   const selectDimension = (changed: Partial<Pick<PlayerLink, "translation" | "playerName" | "quality">>) => {
     // With no link resolved yet there is nothing to keep the other two dimensions *close* to, so
     // the pick is just "the first link carrying what was asked for" - which is exactly what this
@@ -425,13 +445,13 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       : links.find((candidate) =>
           (Object.entries(changed) as [keyof typeof changed, string | null | undefined][])
             .every(([key, value]) => candidate[key] === value));
-    if (next) onSelectLink?.(next);
+    if (next && beginSourceSwitch(next)) onSelectLink?.(next);
   };
   const selectTranslation = (translation: string) => { setPendingSelection({ translation }); selectDimension({ translation }); };
   const selectPlayerName = (playerName: string) => { setPendingSelection({ playerName }); selectDimension({ playerName }); };
   const selectQuality = (quality: string) => {
     const candidate = link ? pickLinkForQuality(links, link, quality) : undefined;
-    if (candidate) { setPendingSelection({ quality }); onSelectLink?.(candidate); }
+    if (candidate && beginSourceSwitch(candidate)) { setPendingSelection({ quality }); onSelectLink?.(candidate); }
   };
   // What the settings menu should *say* is selected. An EMBED pick isn't a `link` swap: the parent
   // has to resolve it over the network first (see the watch route's selectLink), so reading these
@@ -447,8 +467,8 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   // one. Both cases end with `link` being the source of truth again, including when resolution
   // failed and the pick simply didn't take.
   useEffect(() => {
-    if (!sourceSwitching) setPendingSelection(null);
-  }, [link, sourceSwitching]);
+    if (!sourceSwitching && !switchingSource) setPendingSelection(null);
+  }, [link, sourceSwitching, switchingSource]);
 
   // --- source setup (hls.js / direct mp4) ---
   useEffect(() => {
@@ -665,7 +685,12 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
 
     const onLoadedMetadata = () => {
       setDuration(video.duration);
-      if (startPositionMs && video.duration) {
+      const pendingSwitch = pendingSourceSwitchRef.current;
+      const isReplacementStream = !!pendingSwitch && pendingSwitch.fromUrl !== link?.url;
+      if (isReplacementStream && video.duration) {
+        video.currentTime = Math.min(pendingSwitch.position, Math.max(0, video.duration - 1));
+        if (!pendingSwitch.resume) video.pause();
+      } else if (startPositionMs && video.duration) {
         video.currentTime = Math.min(startPositionMs / 1000, video.duration - 1);
       }
       video.playbackRate = playbackSpeed;
@@ -698,7 +723,16 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     const onPlay = () => { setPlaying(true); onPlayStateChange?.(true); };
     const onPause = () => { setPlaying(false); onPlayStateChange?.(false); };
     const onWaiting = () => setBuffering(true);
-    const onCanPlay = () => setBuffering(false);
+    const onCanPlay = () => {
+      setBuffering(false);
+      const pendingSwitch = pendingSourceSwitchRef.current;
+      if (!pendingSwitch || pendingSwitch.fromUrl === link?.url) return;
+
+      if (pendingSwitch.resume) void video.play().catch(() => undefined);
+      else video.pause();
+      pendingSourceSwitchRef.current = null;
+      setSwitchingSource(false);
+    };
     const onVolumeChange = () => { setVolume(video.volume); setMuted(video.muted); setStoredVolume(video.volume, video.muted); };
     // Only meaningful for the direct-<video src> path (hls.js has its own error events, wired up
     // where the source is set up) - a dead/CORS-blocked direct MP4 link would otherwise leave the
@@ -1060,13 +1094,25 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
 
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
 
+  const finishEmbedSourceSwitch = () => {
+    if (!switchingSource) return;
+    pendingSourceSwitchRef.current = null;
+    setSwitchingSource(false);
+    setBuffering(false);
+  };
+
   // No custom controls here on purpose - this is the third-party site's own player UI running in
   // an iframe, not a media element we control (no seek bar/volume/etc. to wire up, same as
   // Android's BrowserPlaybackSurface fallback).
   if (isEmbed) {
     return (
       <div ref={containerRef} className="relative h-full w-full bg-black">
-        <iframe ref={embedRef} src={link.url} allow="autoplay; fullscreen" allowFullScreen className="h-full w-full border-0" />
+        <iframe ref={embedRef} src={link.url} onLoad={finishEmbedSourceSwitch} allow="autoplay; fullscreen" allowFullScreen className="h-full w-full border-0" />
+        {(sourceSwitching || switchingSource) && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-[1px]">
+            <Loader2 className="h-12 w-12 animate-spin text-white/80" strokeWidth={2} />
+          </div>
+        )}
         <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center gap-4 bg-gradient-to-b from-black/80 to-transparent px-6 pb-10 pt-5">
           <button onClick={onBack} className="pointer-events-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20">
             <ArrowLeft className="h-[18px] w-[18px]" strokeWidth={2} />
@@ -1226,15 +1272,15 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
           <TriangleAlert className="h-10 w-10 text-rose-400" strokeWidth={1.75} />
           <p className="select-text text-sm text-zinc-300">{t("common.loadFailed", { message: playbackError })}</p>
         </div>
-      ) : (sourceSwitching || buffering || !link) && (
+      ) : (sourceSwitching || switchingSource || buffering || !link) && (
         // `!link` is the "still deciding what to play" case - the spinner sits over the chrome
         // rather than replacing it, so the settings menu stays reachable throughout.
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/55 backdrop-blur-[1px]">
           <Loader2 className="h-12 w-12 animate-spin text-white/80" strokeWidth={2} />
         </div>
       )}
 
-      {link && !sourceSwitching && !buffering && activeSegment && dismissedSegmentKey !== segmentKey(activeSegment) && (
+      {link && !sourceSwitching && !switchingSource && !buffering && activeSegment && dismissedSegmentKey !== segmentKey(activeSegment) && (
         <div
           onClick={stop}
           className={cn("absolute right-6 z-10 flex items-center gap-2 transition-[bottom] duration-300", controlsVisible ? "bottom-[136px]" : "bottom-8")}
@@ -1357,7 +1403,12 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
                     onToggleAutoPlay={() => setAutoPlayNextEpisode(!autoPlayNextEpisode)}
                     dubOptions={dubOptions ?? []}
                     selectedDubId={selectedDubId}
-                    onSelectDub={(id) => { setSettingsOpen(false); onSelectDub?.(id); }}
+                    onSelectDub={(id) => {
+                      setSettingsOpen(false);
+                      if (id === selectedDubId) return;
+                      beginSourceSwitch();
+                      onSelectDub?.(id);
+                    }}
                     translationOptions={translationValues}
                     selectedTranslation={shownTranslation}
                     onSelectTranslation={selectTranslation}
