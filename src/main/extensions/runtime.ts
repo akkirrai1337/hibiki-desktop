@@ -13,6 +13,7 @@ import type {
   AnimeTitle,
   PlaybackGroup,
   PlayerLink,
+  PlayerLinkPreference,
   PlayerLinkType,
   SearchFilterCatalog,
   SearchRequest,
@@ -23,7 +24,7 @@ import type {
   SourceReview,
 } from "@shared/types";
 import type { ExtensionCall, ExtensionMethod } from "./execute";
-import type { WorkerCallMessage, WorkerResultMessage } from "./worker";
+import type { WorkerCallMessage, WorkerReadyMessage, WorkerResultMessage } from "./worker";
 import { performBrowserFetch, performChallenge } from "./browserFetchHost";
 import { performNetFetch, performNetFetchAll } from "./netFetchHost";
 import { logger } from "../logger";
@@ -210,10 +211,30 @@ export class ExtensionRuntime {
   // fresh one rather than queueing, since the calls are network-bound and serializing them behind
   // a fixed pool size would make a multi-source catalog load slower, not faster.
   private readonly idleWorkers: Worker[] = [];
+  private readonly warmingWorkers = new Set<Worker>();
   private nextCallId = 1;
   // Only ever grown back to this on release. Beyond it a worker is terminated: a handful of live
   // threads is the point, a thread per source the user has ever touched is not.
   private static readonly MAX_IDLE_WORKERS = 4;
+
+  /** Starts the expensive worker bundle parsing before the renderer's first source queries arrive.
+   * Only workers that have loaded the whole module and posted `ready` enter the idle pool; calls
+   * arriving earlier still take the normal fresh-worker path rather than waiting behind warm-up. */
+  warmWorkers(): void {
+    const missing = ExtensionRuntime.MAX_IDLE_WORKERS - this.idleWorkers.length - this.warmingWorkers.size;
+    for (let i = 0; i < missing; i++) {
+      const worker = new Worker(path.join(__dirname, "extensionWorker.js"));
+      this.warmingWorkers.add(worker);
+      worker.once("message", (_message: WorkerReadyMessage) => {
+        this.warmingWorkers.delete(worker);
+        this.releaseWorker(worker);
+      });
+      worker.once("error", (error) => {
+        this.warmingWorkers.delete(worker);
+        logger.warn("ext", `worker warm-up failed: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }
+  }
 
   private acquireWorker(call: ExtensionCall): { worker: Worker; fresh: boolean } {
     const idle = this.idleWorkers.pop();
@@ -318,6 +339,8 @@ export class ExtensionRuntime {
   /** Tears the pool down - called on app quit, so idle threads don't hold the process open. */
   dispose(): void {
     for (const worker of this.idleWorkers.splice(0)) void worker.terminate();
+    for (const worker of this.warmingWorkers) void worker.terminate();
+    this.warmingWorkers.clear();
   }
 
   search(sourceId: string, request: SearchRequest): Promise<AnimeTitle[]> {
@@ -431,9 +454,13 @@ export class ExtensionRuntime {
     return this.run("getPlaybackGroups", sourceId, [titleId]);
   }
 
-  async getPlayerLinks(sourceId: string, titleId: string, groupId: string, episodeId: string): Promise<PlayerLink[]> {
+  async getPlayerLinks(sourceId: string, titleId: string, groupId: string, episodeId: string, preference?: PlayerLinkPreference): Promise<PlayerLink[]> {
     const links = await this.run<PlayerLink[]>("getPlayerLinks", sourceId, [titleId, groupId, episodeId]);
-    return this.resolveEmbedLinks(links);
+    const preferredIndex = this.preferredLinkIndex(links, preference);
+    // A source-provided direct link needs no resolver at all. Let the renderer adopt the saved
+    // choice from the returned list instead of resolving an unrelated EMBED first.
+    if (preferredIndex >= 0 && links[preferredIndex].type !== "EMBED") return links;
+    return this.resolveEmbedLinks(links, preferredIndex);
   }
 
   async resolvePlayerLink(link: PlayerLink): Promise<PlayerLink[]> {
@@ -451,6 +478,22 @@ export class ExtensionRuntime {
       if (manifest.hosts.some((h) => host === h || host.endsWith(`.${h}`))) return manifest;
     }
     return null;
+  }
+
+  private preferredLinkIndex(links: PlayerLink[], preference?: PlayerLinkPreference): number {
+    if (!preference?.translation && !preference?.playerName) return -1;
+    let bestIndex = -1;
+    let bestScore = 0;
+    for (let i = 0; i < links.length; i++) {
+      const score =
+        (preference.translation && links[i].translation === preference.translation ? 1 : 0) +
+        (preference.playerName && links[i].playerName === preference.playerName ? 1 : 0);
+      if (score > bestScore) {
+        bestIndex = i;
+        bestScore = score;
+      }
+    }
+    return bestIndex;
   }
 
   // BROWSER-runtime resolvers (extractors/alloha.js and similar) expose Provider.browserScript()
@@ -485,14 +528,21 @@ export class ExtensionRuntime {
   // even though the very next Kodik mirror in the same list resolves fine. One retry on a
   // *different* mirror costs one extra request on the rare failing path and nothing at all on the
   // normal one (the first mirror succeeds and the loop returns immediately).
-  private async resolveEmbedLinks(links: PlayerLink[]): Promise<PlayerLink[]> {
+  private async resolveEmbedLinks(links: PlayerLink[], preferredIndex = -1): Promise<PlayerLink[]> {
     const MAX_ATTEMPTS = 5;
     const MAX_ATTEMPTS_PER_RESOLVER = 2;
     const attemptsByResolver = new Map<string, number>();
     let attempts = 0;
     const startedAt = Date.now();
 
-    for (let i = 0; i < links.length && attempts < MAX_ATTEMPTS; i++) {
+    const orderedIndexes = links.map((_link, index) => index);
+    if (preferredIndex >= 0) {
+      orderedIndexes.splice(preferredIndex, 1);
+      orderedIndexes.unshift(preferredIndex);
+    }
+
+    for (const i of orderedIndexes) {
+      if (attempts >= MAX_ATTEMPTS) break;
       const link = links[i];
       if (link.type !== "EMBED") continue;
       const resolver = this.findResolverForUrl(link.url);

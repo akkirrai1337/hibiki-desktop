@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Loader2, TriangleAlert } from "lucide-react";
 import type { PlayerLink } from "@shared/types";
 import { pickDefaultLink, pickPlaybackFallback, pickPreferredLink, pickResolvedLink } from "@/lib/playerLinks";
+import { usePlaybackGroups } from "@/lib/playbackGroups";
 import { hibiki, downloadFileUrl } from "@/lib/hibiki";
 import { log } from "@/lib/log";
 import { usePlayerPrefsStore } from "@/stores/playerPrefsStore";
@@ -128,7 +129,13 @@ function WatchPage() {
   // the whole hls.js (re)attach, snapping playback back near the last saved progress checkpoint.
   const linksQuery = useQuery({
     queryKey: ["playerLinks", sourceId, animeId, groupId, episodeId],
-    queryFn: () => hibiki.sources.playerLinks(sourceId, animeId, groupId, episodeId),
+    queryFn: () => hibiki.sources.playerLinks(
+      sourceId,
+      animeId,
+      groupId,
+      episodeId,
+      usePlayerSelectionStore.getState().get(sourceId, animeId, groupId),
+    ),
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
@@ -281,12 +288,7 @@ function WatchPage() {
   // props that VideoPlayer's own effects key off, so a background refetch here is just as capable
   // of resetting the player mid-episode as one on linksQuery/progressQuery was.
   const animeQuery = useQuery({ queryKey: ["anime", sourceId, animeId], queryFn: () => hibiki.sources.getById(sourceId, animeId), staleTime: Infinity, refetchOnWindowFocus: false });
-  const groupsQuery = useQuery({
-    queryKey: ["playbackGroups", sourceId, animeId],
-    queryFn: () => hibiki.sources.playbackGroups(sourceId, animeId),
-    staleTime: Infinity,
-    refetchOnWindowFocus: false,
-  });
+  const groupsQuery = usePlaybackGroups(sourceId, animeId, Infinity);
   const group = groupsQuery.data?.find((g) => g.id === groupId);
   const episodeIndex = group?.episodes.findIndex((e) => e.id === episodeId) ?? -1;
   const episode = episodeIndex >= 0 ? group!.episodes[episodeIndex] : undefined;

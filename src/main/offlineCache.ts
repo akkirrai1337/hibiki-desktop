@@ -1,5 +1,5 @@
 import { eq, and } from "drizzle-orm";
-import type { AnimeTitle, CachedAnimeEntry, DownloadedEpisode, PlaybackGroup } from "@shared/types";
+import type { AnimeTitle, CachedAnimeEntry, CachedPlaybackGroupsEntry, DownloadedEpisode, PlaybackGroup } from "@shared/types";
 import { getDb } from "./db";
 import { cachedAnime, cachedPlaybackGroups, downloadedEpisodes } from "./db/schema";
 
@@ -71,12 +71,16 @@ export function cachePlaybackGroups(sourceId: string, animeId: string, groups: P
 }
 
 export function getCachedPlaybackGroups(sourceId: string, animeId: string): PlaybackGroup[] | null {
+  return getCachedPlaybackGroupsEntry(sourceId, animeId)?.groups ?? null;
+}
+
+export function getCachedPlaybackGroupsEntry(sourceId: string, animeId: string): CachedPlaybackGroupsEntry | null {
   const row = getDb()
     .select()
     .from(cachedPlaybackGroups)
     .where(and(eq(cachedPlaybackGroups.sourceId, sourceId), eq(cachedPlaybackGroups.animeId, animeId)))
     .get();
-  return row ? (JSON.parse(row.groupsJson) as PlaybackGroup[]) : null;
+  return row ? { groups: JSON.parse(row.groupsJson) as PlaybackGroup[], cachedAt: row.cachedAt } : null;
 }
 
 export function recordDownloadedEpisode(entry: {

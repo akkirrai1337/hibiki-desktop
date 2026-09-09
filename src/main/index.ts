@@ -180,6 +180,7 @@ app.whenReady().then(() => {
 
   const runtime = new ExtensionRuntime(EXTENSIONS_DIR);
   runtime.reload();
+  runtime.warmWorkers();
   extensionRuntime = runtime;
 
   registerSourceHandlers(runtime);

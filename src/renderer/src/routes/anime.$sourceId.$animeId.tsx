@@ -9,6 +9,7 @@ import * as ContextMenu from "@radix-ui/react-context-menu";
 import { Play, Bookmark, Check, ChevronDown, Clock, Download, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
 import { findListedTitle } from "@/lib/listedTitles";
+import { usePlaybackGroups } from "@/lib/playbackGroups";
 import { AnimeCard, animeTitle } from "@/components/AnimeCard";
 import { GroupDropdown } from "@/components/GroupDropdown";
 import { HorizontalScrollRow } from "@/components/HorizontalScrollRow";
@@ -201,7 +202,7 @@ function AnimeDetailPage() {
         animeId,
       ),
   });
-  const groupsQuery = useQuery({ queryKey: ["playbackGroups", sourceId, animeId], queryFn: () => hibiki.sources.playbackGroups(sourceId, animeId) });
+  const groupsQuery = usePlaybackGroups(sourceId, animeId);
   const libraryQuery = useQuery({ queryKey: ["library"], queryFn: () => hibiki.library.list() });
   const progressQuery = useQuery({ queryKey: ["progress-all", sourceId, animeId], queryFn: () => hibiki.progress.listForAnime(sourceId, animeId) });
 

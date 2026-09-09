@@ -44,6 +44,10 @@ export interface WorkerResultMessage {
   storageWrites?: Record<string, string | null>;
 }
 
+export interface WorkerReadyMessage {
+  kind: "ready";
+}
+
 const providers = {
   challenge: hostChallengeProvider,
   browserFetch: hostBrowserFetchProvider,
@@ -79,3 +83,4 @@ parentPort?.on("message", (message: WorkerCallMessage) => {
 // A call handed over at spawn time, so the very first request a fresh worker serves doesn't have
 // to wait for a second event-loop turn to reach it.
 if (workerData) handle(0, workerData as ExtensionCall);
+else parentPort?.postMessage({ kind: "ready" } satisfies WorkerReadyMessage);

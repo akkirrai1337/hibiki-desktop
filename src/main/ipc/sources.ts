@@ -1,8 +1,8 @@
 import { ipcMain } from "electron";
 import { IPC } from "@shared/ipc";
-import type { AnimeTitle, PlaybackGroup, PlayerLink } from "@shared/types";
+import type { AnimeTitle, PlaybackGroup, PlayerLink, PlayerLinkPreference } from "@shared/types";
 import type { ExtensionRuntime } from "../extensions/runtime";
-import { cacheAnime, getCachedAnime, getCachedAnimeMany, getCachedPlaybackGroups } from "../offlineCache";
+import { cacheAnime, cachePlaybackGroups, getCachedAnime, getCachedAnimeMany, getCachedPlaybackGroups, getCachedPlaybackGroupsEntry } from "../offlineCache";
 
 export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   ipcMain.handle(IPC.sourcesList, () => runtime.list());
@@ -29,9 +29,14 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   ipcMain.handle(IPC.sourceCachedTitles, (_e, keys: Array<{ sourceId: string; animeId: string }>) =>
     getCachedAnimeMany(keys),
   );
+  ipcMain.handle(IPC.sourceCachedPlaybackGroups, (_e, sourceId: string, titleId: string) =>
+    getCachedPlaybackGroupsEntry(sourceId, titleId),
+  );
   ipcMain.handle(IPC.sourcePlaybackGroups, async (_e, sourceId: string, titleId: string): Promise<PlaybackGroup[]> => {
     try {
-      return await runtime.getPlaybackGroups(sourceId, titleId);
+      const groups = await runtime.getPlaybackGroups(sourceId, titleId);
+      cachePlaybackGroups(sourceId, titleId, groups);
+      return groups;
     } catch (err) {
       const cached = getCachedPlaybackGroups(sourceId, titleId);
       if (cached) return cached;
@@ -40,8 +45,8 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   });
   ipcMain.handle(
     IPC.sourcePlayerLinks,
-    (_e, sourceId: string, titleId: string, groupId: string, episodeId: string) =>
-      runtime.getPlayerLinks(sourceId, titleId, groupId, episodeId),
+    (_e, sourceId: string, titleId: string, groupId: string, episodeId: string, preference?: PlayerLinkPreference) =>
+      runtime.getPlayerLinks(sourceId, titleId, groupId, episodeId, preference),
   );
   ipcMain.handle(IPC.sourceResolvePlayerLink, (_e, link: PlayerLink) => runtime.resolvePlayerLink(link));
   ipcMain.handle(IPC.sourceFilterCatalog, (_e, sourceId: string) => runtime.getFilterCatalog(sourceId));

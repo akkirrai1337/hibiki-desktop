@@ -21,6 +21,7 @@ const PROBE_DELAY_MS = 500;
 const MAX_PROBES = 24;
 const TIMEOUT_MS = 25_000;
 const SETTLE_MS = 1_000;
+const MAX_VALIDATION_CONCURRENCY = 3;
 
 // Same net a bare <video src> or hls.js request would resolve to - not sniffing content-type,
 // because captures come from a network-request hook (see below) that only sees the URL, same as
@@ -33,6 +34,22 @@ const MEDIA_URL_PATTERN = /\.(m3u8|mpd|mp4)(\?|#|$)/i;
 // MEDIA_URL_PATTERN just as well as a real stream would (seen live: cdn.plyr.io/static/blank.mp4
 // captured as a "candidate" for an Alloha resolve, ahead of the two real streams it also found).
 const PLACEHOLDER_URL_PATTERN = /cdn\.plyr\.io\/static\/blank\.mp4/i;
+
+// Electron permits one onBeforeRequest listener per session. Keep one dispatcher installed and
+// route captures by webContents id; installing a new listener per resolve let two simultaneous
+// player/download requests overwrite each other, and either cleanup then removed the other's
+// listener as well.
+const networkCaptureByWebContents = new Map<number, (url: string) => void>();
+let networkCaptureHookInstalled = false;
+
+function ensureNetworkCaptureHook(session: Electron.Session): void {
+  if (networkCaptureHookInstalled) return;
+  networkCaptureHookInstalled = true;
+  session.webRequest.onBeforeRequest((details, callback) => {
+    if (details.webContentsId !== undefined) networkCaptureByWebContents.get(details.webContentsId)?.(details.url);
+    callback({});
+  });
+}
 
 type CaptureKind = "master" | "video" | "audio" | "stream" | "network";
 
@@ -165,16 +182,11 @@ export async function performBrowserResolve(link: PlayerLink, script: string): P
   const networkCaptures: Capture[] = [];
   let currentQuality: string | null = null;
 
-  // Electron allows only one onBeforeRequest handler per session, and this hidden window shares
-  // the app's default session (same as browserFetchHost.ts's pooled windows) rather than an
-  // isolated partition - safe here because nothing else in this app registers onBeforeRequest
-  // (only onBeforeSendHeaders/onHeadersReceived, see playerHeaders.ts, a different hook), and
-  // because resolveEmbedLinks (runtime.ts) only ever runs one resolve at a time.
-  ses.webRequest.onBeforeRequest((details, callback) => {
-    if (MEDIA_URL_PATTERN.test(details.url) && !PLACEHOLDER_URL_PATTERN.test(details.url)) {
-      networkCaptures.push({ url: details.url, kind: "network", quality: currentQuality });
+  ensureNetworkCaptureHook(ses);
+  networkCaptureByWebContents.set(win.webContents.id, (url) => {
+    if (MEDIA_URL_PATTERN.test(url) && !PLACEHOLDER_URL_PATTERN.test(url)) {
+      networkCaptures.push({ url, kind: "network", quality: currentQuality });
     }
-    callback({});
   });
 
   try {
@@ -269,8 +281,8 @@ export async function performBrowserResolve(link: PlayerLink, script: string): P
     const finalState = await readPageState(target);
     return await buildResult(finalState.captures, networkCaptures, link, win, target);
   } finally {
+    networkCaptureByWebContents.delete(win.webContents.id);
     if (!win.isDestroyed()) {
-      win.webContents.session.webRequest.onBeforeRequest(null);
       win.destroy();
     }
   }
@@ -337,11 +349,25 @@ async function buildResult(
   // captured it, see validateInBrowser - catches that; only survivors are returned, and if none
   // survive this throws like an outright resolve failure would, so the caller's existing fallback
   // chain (see runtime.ts) still applies.
-  const resolved: ResolvedStream[] = [];
-  for (const c of combined) {
-    if (!(await validateInBrowser(target, c.url))) continue;
-    resolved.push({ url: c.url, type: streamTypeForUrl(c.url), quality: c.quality, headers, segments: [] });
+  const reachable = new Array<boolean>(combined.length).fill(false);
+  let nextValidation = 0;
+  async function validateWorker(): Promise<void> {
+    for (;;) {
+      const index = nextValidation++;
+      if (index >= combined.length) return;
+      reachable[index] = await validateInBrowser(target, combined[index].url);
+    }
   }
+  await Promise.all(Array.from({ length: Math.min(MAX_VALIDATION_CONCURRENCY, combined.length) }, validateWorker));
+  const resolved = combined
+    .filter((_capture, index) => reachable[index])
+    .map((capture): ResolvedStream => ({
+      url: capture.url,
+      type: streamTypeForUrl(capture.url),
+      quality: capture.quality,
+      headers,
+      segments: [],
+    }));
   if (resolved.length > 0) return resolved;
   throw new Error("Browser resolver's captured stream(s) are not reachable");
 }

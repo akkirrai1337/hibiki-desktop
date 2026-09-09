@@ -4,6 +4,7 @@ import type {
   AnimeTitle,
   AppUpdate,
   CachedAnimeEntry,
+  CachedPlaybackGroupsEntry,
   DailyActivity,
   DiscordPresence,
   DownloadedEpisode,
@@ -14,6 +15,7 @@ import type {
   MarketplaceExtension,
   PlaybackGroup,
   PlayerLink,
+  PlayerLinkPreference,
   RepositoryFetchResult,
   SearchFilterCatalog,
   SearchRequest,
@@ -38,10 +40,12 @@ const api = {
       ipcRenderer.invoke(IPC.sourceGetById, sourceId, id),
     cachedTitles: (keys: Array<{ sourceId: string; animeId: string }>): Promise<Record<string, CachedAnimeEntry>> =>
       ipcRenderer.invoke(IPC.sourceCachedTitles, keys),
+    cachedPlaybackGroups: (sourceId: string, titleId: string): Promise<CachedPlaybackGroupsEntry | null> =>
+      ipcRenderer.invoke(IPC.sourceCachedPlaybackGroups, sourceId, titleId),
     playbackGroups: (sourceId: string, titleId: string): Promise<PlaybackGroup[]> =>
       ipcRenderer.invoke(IPC.sourcePlaybackGroups, sourceId, titleId),
-    playerLinks: (sourceId: string, titleId: string, groupId: string, episodeId: string): Promise<PlayerLink[]> =>
-      ipcRenderer.invoke(IPC.sourcePlayerLinks, sourceId, titleId, groupId, episodeId),
+    playerLinks: (sourceId: string, titleId: string, groupId: string, episodeId: string, preference?: PlayerLinkPreference): Promise<PlayerLink[]> =>
+      ipcRenderer.invoke(IPC.sourcePlayerLinks, sourceId, titleId, groupId, episodeId, preference),
     resolvePlayerLink: (link: PlayerLink): Promise<PlayerLink[]> =>
       ipcRenderer.invoke(IPC.sourceResolvePlayerLink, link),
     filterCatalog: (sourceId: string): Promise<SearchFilterCatalog> =>

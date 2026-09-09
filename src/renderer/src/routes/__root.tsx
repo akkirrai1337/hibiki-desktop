@@ -38,6 +38,10 @@ const PERSISTED_PAGES: Record<string, () => React.JSX.Element | null> = {
   "/search": SearchPage,
 };
 
+// Development StrictMode intentionally remounts effects once. This is a real account write, not
+// a disposable subscription, so keep it once-per-renderer-session in both dev and production.
+let activityPingStarted = false;
+
 export const Route = createRootRoute({ component: RootLayout });
 
 function RootLayout() {
@@ -57,6 +61,8 @@ function RootLayout() {
   // happened to be watched. Sources that report nothing, or are signed out, answer false and cost
   // one cheap check in the main process.
   useEffect(() => {
+    if (activityPingStarted) return;
+    activityPingStarted = true;
     void hibiki.sources
       .list()
       .then((sources) => Promise.all(sources.map((source) => hibiki.sources.pingOnline(source.id).catch(() => false))))

@@ -2,6 +2,7 @@ import type {
   AnimeTitle,
   AppUpdate,
   CachedAnimeEntry,
+  CachedPlaybackGroupsEntry,
   DailyActivity,
   DiscordPresence,
   DownloadedEpisode,
@@ -12,6 +13,7 @@ import type {
   MarketplaceExtension,
   PlaybackGroup,
   PlayerLink,
+  PlayerLinkPreference,
   RepositoryFetchResult,
   SearchFilterCatalog,
   SearchRequest,
@@ -39,8 +41,9 @@ export interface HibikiApi {
     latest(sourceId: string, limit: number): Promise<AnimeTitle[]>;
     getById(sourceId: string, id: string): Promise<AnimeTitle>;
     cachedTitles(keys: Array<{ sourceId: string; animeId: string }>): Promise<Record<string, CachedAnimeEntry>>;
+    cachedPlaybackGroups(sourceId: string, titleId: string): Promise<CachedPlaybackGroupsEntry | null>;
     playbackGroups(sourceId: string, titleId: string): Promise<PlaybackGroup[]>;
-    playerLinks(sourceId: string, titleId: string, groupId: string, episodeId: string): Promise<PlayerLink[]>;
+    playerLinks(sourceId: string, titleId: string, groupId: string, episodeId: string, preference?: PlayerLinkPreference): Promise<PlayerLink[]>;
     resolvePlayerLink(link: PlayerLink): Promise<PlayerLink[]>;
     filterCatalog(sourceId: string): Promise<SearchFilterCatalog>;
     // Account, and what an account unlocks. Answered only by sources declaring the matching

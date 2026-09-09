@@ -410,3 +410,15 @@ export interface CachedAnimeEntry {
   title: AnimeTitle;
   cachedAt: number;
 }
+
+/** The provider/dub the user last chose, used to order resolution before playback starts. */
+export interface PlayerLinkPreference {
+  translation?: string | null;
+  playerName?: string | null;
+}
+
+/** An episode-group list read from the on-disk cache, with when it was last refreshed. */
+export interface CachedPlaybackGroupsEntry {
+  groups: PlaybackGroup[];
+  cachedAt: number;
+}

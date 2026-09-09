@@ -6,6 +6,7 @@ export const IPC = {
   // Whatever is already on disk for a set of titles - lets a screen paint before the network
   // answers. See offlineCache.getCachedAnimeMany.
   sourceCachedTitles: "source:cachedTitles",
+  sourceCachedPlaybackGroups: "source:cachedPlaybackGroups",
   sourcePlaybackGroups: "source:playbackGroups",
   sourcePlayerLinks: "source:playerLinks",
   sourceResolvePlayerLink: "source:resolvePlayerLink",

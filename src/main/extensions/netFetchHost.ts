@@ -90,10 +90,13 @@ const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<NetFetchResult>>();
 
 function cacheKey(url: string, headers: Record<string, string>): string {
-  // Referer/Cookie change what some of these endpoints return, so they're part of the identity.
-  const referer = headers["Referer"] ?? headers["referer"] ?? "";
-  const cookie = headers["Cookie"] ?? headers["cookie"] ?? "";
-  return `${url}\n${referer}\n${cookie}`;
+  // Any request header may participate in Vary or application-level routing. In particular,
+  // Authorization and Lang distinguish accounts/locales in current sources; keying only on
+  // Referer/Cookie could serve a cached profile or translated payload to the wrong call.
+  const normalizedHeaders = Object.entries(headers)
+    .map(([key, value]) => [key.toLowerCase(), value] as const)
+    .sort(([a], [b]) => a.localeCompare(b));
+  return `${url}\n${JSON.stringify(normalizedHeaders)}`;
 }
 
 function readCache(key: string): NetFetchResult | null {

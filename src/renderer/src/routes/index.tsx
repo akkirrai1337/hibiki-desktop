@@ -55,8 +55,10 @@ export function CatalogPage() {
   const source = sources.data?.find((s) => s.id === activeSourceId) ?? sources.data?.[0];
   const sortMode = source?.supportedSorts.includes("RATING") ? "RATING" : undefined;
   const hero = useQuery({ queryKey: ["hero", source?.id], enabled: !!source, queryFn: () => hibiki.sources.search(source!.id, { limit: HERO_SLIDE_COUNT, sort: sortMode }) });
-  const [poolOffset, setPoolOffset] = useState(randomPoolOffset);
-  useEffect(() => { setPoolOffset(randomPoolOffset()); }, [source?.id]);
+  // Compute the source's window in the same render that enables the query. Keeping this in state
+  // and replacing it from an effect after `source` arrived let React Query start one request with
+  // the old offset and then immediately start a second with the new one.
+  const poolOffset = useMemo(randomPoolOffset, [source?.id]);
   const pool = useQuery({
     queryKey: ["popular-pool", source?.id, poolOffset],
     enabled: !!source,
