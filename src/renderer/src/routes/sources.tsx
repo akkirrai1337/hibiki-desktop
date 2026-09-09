@@ -156,6 +156,13 @@ export function SourcesPage() {
     try {
       const updated = await hibiki.sources.install(extension, originByExtensionId.get(extension.id) ?? "");
       queryClient.setQueryData(["sources"], updated);
+      // Installing a source also reinstalls its resolvers (see main/ipc/marketplace.ts), and this
+      // screen decides "is there an update" from their versions too - so leaving that query alone
+      // left it holding the versions from app start. The update genuinely applied, the files on
+      // disk were current, and the row stayed under "updates available" anyway, which reads as the
+      // button doing nothing. Awaited rather than invalidated so the two can't disagree even
+      // briefly.
+      queryClient.setQueryData(["resolverVersions"], await hibiki.sources.resolverVersions());
       if (hadNoSources) setActiveSourceId(extension.id);
     } catch (error) {
       setInstallErrors((prev) => ({ ...prev, [extension.id]: error instanceof Error ? error.message : String(error) }));
