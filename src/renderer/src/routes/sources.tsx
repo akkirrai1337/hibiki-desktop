@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -115,16 +115,29 @@ export function SourcesPage() {
 
   const sourceExtensions = useMemo(() => mergedExtensions.filter((e) => e.type === "source"), [mergedExtensions]);
   const languages = useMemo(() => [...new Set(sourceExtensions.map((e) => e.lang))].sort(), [sourceExtensions]);
-  // Resolvers never show up in the sources list, so their versions come separately - see
-  // isExtensionUpdateAvailable().
-  const installedResolverVersions = useQuery({
-    queryKey: ["resolverVersions"],
-    queryFn: () => hibiki.sources.resolverVersions(),
+  // One snapshot of everything installed, sources and resolvers together. They used to be two
+  // queries, and that is what let them drift: the resolver half was read once at app start and
+  // nothing refreshed it, so a source that had genuinely just updated stayed under "updates
+  // available" - the update applied, the screen kept saying it hadn't. Both halves now come from
+  // the same read of the same runtime state, and main tells us when to look again (below).
+  const installed = useQuery({
+    queryKey: ["installedVersions"],
+    queryFn: () => hibiki.sources.installedVersions(),
   });
   const installedVersions = useMemo(
-    () => new Map((installedSources.data ?? []).map((s) => [s.id, s.version])),
-    [installedSources.data],
+    () => new Map(Object.entries(installed.data?.sources ?? {})),
+    [installed.data],
   );
+
+  // Whatever changed what is installed - this screen's own install button, an uninstall, anything
+  // added later - main says so and both queries are re-read. Refreshing by hand at each call site
+  // is what went wrong before: the install path updated the sources list and left the resolver
+  // versions behind, and nothing about that was visible until a row refused to leave the updates
+  // section.
+  useEffect(() => hibiki.sources.onChanged(() => {
+    void queryClient.invalidateQueries({ queryKey: ["sources"] });
+    void queryClient.invalidateQueries({ queryKey: ["installedVersions"] });
+  }), [queryClient]);
 
   const trimmedQuery = query.trim().toLowerCase();
   const visibleExtensions = sourceExtensions.filter((extension) => {
@@ -137,7 +150,7 @@ export function SourcesPage() {
   });
   const installedExtensions = visibleExtensions.filter((e) => installedVersions.has(e.id));
   const updateAvailableExtensions = installedExtensions.filter((e) =>
-    isExtensionUpdateAvailable(e, installedVersions, installedResolverVersions.data ?? {}, mergedExtensions),
+    isExtensionUpdateAvailable(e, installedVersions, installed.data?.resolvers ?? {}, mergedExtensions),
   );
   const upToDateExtensions = installedExtensions.filter((e) => !updateAvailableExtensions.includes(e));
   const availableExtensions = visibleExtensions.filter((e) => !installedVersions.has(e.id));
@@ -156,13 +169,6 @@ export function SourcesPage() {
     try {
       const updated = await hibiki.sources.install(extension, originByExtensionId.get(extension.id) ?? "");
       queryClient.setQueryData(["sources"], updated);
-      // Installing a source also reinstalls its resolvers (see main/ipc/marketplace.ts), and this
-      // screen decides "is there an update" from their versions too - so leaving that query alone
-      // left it holding the versions from app start. The update genuinely applied, the files on
-      // disk were current, and the row stayed under "updates available" anyway, which reads as the
-      // button doing nothing. Awaited rather than invalidated so the two can't disagree even
-      // briefly.
-      queryClient.setQueryData(["resolverVersions"], await hibiki.sources.resolverVersions());
       if (hadNoSources) setActiveSourceId(extension.id);
     } catch (error) {
       setInstallErrors((prev) => ({ ...prev, [extension.id]: error instanceof Error ? error.message : String(error) }));

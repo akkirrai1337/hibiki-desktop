@@ -9,6 +9,7 @@ import type {
   DownloadedEpisode,
   DownloadProgress,
   DownloadRequest,
+  InstalledVersions,
   LibraryEntry,
   MarketplaceExtension,
   PlaybackGroup,
@@ -53,7 +54,12 @@ const api = {
     uninstall: (id: string): Promise<SourceInfo[]> => ipcRenderer.invoke(IPC.sourcesUninstall, id),
     // Installed player-resolver versions, keyed by id. Resolvers are hidden dependencies and
     // never appear in list(), but the Sources screen needs them to spot a resolver update.
-    resolverVersions: (): Promise<Record<string, string>> => ipcRenderer.invoke(IPC.sourcesResolverVersions),
+    installedVersions: (): Promise<InstalledVersions> => ipcRenderer.invoke(IPC.sourcesInstalledVersions),
+    onChanged: (callback: () => void): (() => void) => {
+      const listener = () => callback();
+      ipcRenderer.on(IPC.sourcesChanged, listener);
+      return () => ipcRenderer.removeListener(IPC.sourcesChanged, listener);
+    },
   },
   library: {
     list: (): Promise<LibraryEntry[]> => ipcRenderer.invoke(IPC.libraryList),

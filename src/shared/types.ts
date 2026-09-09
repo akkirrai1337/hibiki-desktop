@@ -292,6 +292,21 @@ export interface UpdateDownloadProgress {
   totalBytes: number;
 }
 
+/**
+ * Everything installed, read in one go.
+ *
+ * One snapshot rather than two queries because these two halves together answer a single question
+ * - "does this source have an update" - and asking for them separately let them drift: the
+ * resolver half was read once at app start and never refreshed, so a source stayed marked as
+ * updatable forever after its update had actually applied.
+ */
+export interface InstalledVersions {
+  /** Source id -> installed version. */
+  sources: Record<string, string>;
+  /** Player-resolver id -> installed version. Resolvers never appear in the sources list. */
+  resolvers: Record<string, string>;
+}
+
 /** A title read back out of the on-disk cache, with when it was last written. */
 export interface CachedAnimeEntry {
   title: AnimeTitle;

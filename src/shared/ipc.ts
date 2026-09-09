@@ -17,7 +17,10 @@ export const IPC = {
   sourcesMarketplaceFetch: "sources:marketplace:fetch",
   sourcesInstall: "sources:install",
   sourcesUninstall: "sources:uninstall",
-  sourcesResolverVersions: "sources:resolverVersions",
+  sourcesInstalledVersions: "sources:installedVersions",
+  // Pushed main -> renderer whenever anything is installed or uninstalled, so no caller has to
+  // remember to refresh what it just changed - which is exactly what went wrong before.
+  sourcesChanged: "sources:changed",
 
   libraryList: "library:list",
   libraryUpsert: "library:upsert",

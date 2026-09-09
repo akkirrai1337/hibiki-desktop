@@ -7,6 +7,7 @@ import type {
   DownloadedEpisode,
   DownloadProgress,
   DownloadRequest,
+  InstalledVersions,
   LibraryEntry,
   MarketplaceExtension,
   PlaybackGroup,
@@ -46,7 +47,8 @@ export interface HibikiApi {
     marketplace(urls: string[]): Promise<RepositoryFetchResult[]>;
     install(extension: MarketplaceExtension, originUrl: string): Promise<SourceInfo[]>;
     uninstall(id: string): Promise<SourceInfo[]>;
-    resolverVersions(): Promise<Record<string, string>>;
+    installedVersions(): Promise<InstalledVersions>;
+    onChanged(callback: () => void): () => void;
   };
   library: {
     list(): Promise<LibraryEntry[]>;

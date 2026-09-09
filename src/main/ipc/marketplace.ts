@@ -1,7 +1,7 @@
 import { ipcMain } from "electron";
 import { eq } from "drizzle-orm";
 import { IPC } from "@shared/ipc";
-import type { MarketplaceExtension, RepositoryFetchResult, SourceInfo } from "@shared/types";
+import type { InstalledVersions, MarketplaceExtension, RepositoryFetchResult, SourceInfo } from "@shared/types";
 import { getDb } from "../db";
 import { sourceRepositories } from "../db/schema";
 import { DEFAULT_REPOSITORY_URL, fetchExtensionFiles, fetchRepositoryIndex, fetchRepositoryResult, isHttpsRepositoryUrl } from "../marketplace";
@@ -46,6 +46,13 @@ function listRepositoryUrls(): string[] {
   return rows.map((r) => r.url);
 }
 
+/** Tells the renderer its picture of what's installed is out of date. Sent after every mutation
+ * rather than left to each caller, since forgetting one is invisible until someone notices a
+ * screen showing an update that has already been applied. */
+function notifyChanged(sender: Electron.WebContents): void {
+  if (!sender.isDestroyed()) sender.send(IPC.sourcesChanged);
+}
+
 export function registerMarketplaceHandlers(runtime: ExtensionRuntime): void {
   ipcMain.handle(IPC.sourcesRepositoriesList, (): string[] => listRepositoryUrls());
 
@@ -67,18 +74,24 @@ export function registerMarketplaceHandlers(runtime: ExtensionRuntime): void {
 
   ipcMain.handle(
     IPC.sourcesInstall,
-    async (_e, extension: MarketplaceExtension, originUrl: string): Promise<SourceInfo[]> => {
+    async (event, extension: MarketplaceExtension, originUrl: string): Promise<SourceInfo[]> => {
       const { manifestJson, jsPayload } = await fetchExtensionFiles(extension);
       runtime.install(extension.id, manifestJson, jsPayload, originUrl);
       await installResolverDependencies(extension.resolverDependencies, originUrl, runtime);
+      notifyChanged(event.sender);
       return runtime.list();
     },
   );
 
-  ipcMain.handle(IPC.sourcesResolverVersions, (): Record<string, string> => runtime.installedResolverVersions());
+  // Both halves read from the same runtime state in the same tick, so they cannot disagree.
+  ipcMain.handle(IPC.sourcesInstalledVersions, (): InstalledVersions => ({
+    sources: Object.fromEntries(runtime.installedVersions()),
+    resolvers: runtime.installedResolverVersions(),
+  }));
 
-  ipcMain.handle(IPC.sourcesUninstall, (_e, id: string): SourceInfo[] => {
+  ipcMain.handle(IPC.sourcesUninstall, (event, id: string): SourceInfo[] => {
     runtime.uninstall(id);
+    notifyChanged(event.sender);
     return runtime.list();
   });
 }
