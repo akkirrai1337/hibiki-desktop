@@ -34,6 +34,11 @@ const MAX_VALIDATION_CONCURRENCY = 3;
 // because captures come from a network-request hook (see below) that only sees the URL, same as
 // Android's shouldInterceptRequest-based capture.
 const MEDIA_URL_PATTERN = /\.(m3u8|mpd|mp4)(\?|#|$)/i;
+const PLAYLIST_URL_PATTERN = /\.m3u8(\?|#|$)/i;
+const PLAYLIST_HEAD_BYTES = 2048;
+// An HLS master playlist lists every rendition, which is exactly what the resolver script spends
+// its time collecting one quality at a time. Finding one means the collecting is already done.
+const MASTER_PLAYLIST_MARKER = "#EXT-X-STREAM-INF";
 
 // Not every matching request is real content - a JS video-player library (Plyr, Video.js, ...)
 // commonly has its <video> element point at a tiny placeholder/poster asset on its own CDN before
@@ -472,6 +477,30 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
     let done = false;
     let lastCount = 0;
     let lastChangeAt = Date.now();
+    // One reachability check per URL for the whole resolve, shared between the master-playlist
+    // check below and the final validation in buildResult.
+    const probes = new Map<string, Promise<StreamProbe>>();
+    const checkedPlaylists = new Set<string>();
+
+    /**
+     * Returns the first captured URL that turns out to be an HLS master playlist.
+     *
+     * The resolver script's job is to enumerate renditions, which for Alloha means driving the
+     * player through its quality menu a step at a time and waiting between steps. A master
+     * playlist already lists every one of them, so the moment one is captured there is nothing
+     * left to collect: the wait for the script to finish, and the idle settle after it, are both
+     * spent on renditions the player will read out of that manifest anyway.
+     */
+    const findMasterPlaylist = async (captures: Capture[]): Promise<Capture | null> => {
+      for (const capture of captures) {
+        if (!PLAYLIST_URL_PATTERN.test(capture.url) || PLACEHOLDER_URL_PATTERN.test(capture.url)) continue;
+        if (checkedPlaylists.has(capture.url)) continue;
+        checkedPlaylists.add(capture.url);
+        const checked = await probeStream(target, capture.url, deadline, probes);
+        if (checked.reachable && checked.head.includes(MASTER_PLAYLIST_MARKER)) return capture;
+      }
+      return null;
+    };
     for (let probe = 0; probe < MAX_PROBES && !done && Date.now() < deadline; probe++) {
       if (!started) {
         // The script is expected to drive its own state machine forward (see alloha.js's
@@ -502,6 +531,12 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
       currentQuality = state.lastQuality; // tags network captures made before the *next* tick
       done = state.done;
 
+      const master = await findMasterPlaylist([...state.captures, ...networkCaptures]);
+      if (master) {
+        logger.debug("resolve", `master playlist captured on probe ${probe + 1}, stopping early`);
+        return await buildResult([master], [], link, win, target, deadline, probes);
+      }
+
       const totalCount = state.captures.length + networkCaptures.length;
       if (totalCount !== lastCount) {
         lastCount = totalCount;
@@ -511,12 +546,12 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
       }
 
       if (done) {
-        return await buildResult(state.captures, networkCaptures, link, win, target, deadline);
+        return await buildResult(state.captures, networkCaptures, link, win, target, deadline, probes);
       }
     }
 
     const finalState = await readPageState(target, deadline);
-    return await buildResult(finalState.captures, networkCaptures, link, win, target, deadline);
+    return await buildResult(finalState.captures, networkCaptures, link, win, target, deadline, probes);
   } finally {
     removeNetworkCapture(ses, webContentsId);
     void releaseResolverWindow(win, heldRefererUrl);
@@ -533,23 +568,56 @@ const CAPTURE_KIND_RANK: Record<CaptureKind, number> = { master: 0, video: 1, au
 // fetch/XHR) while rejecting a validation check made from Node, producing a false negative that
 // throws away a URL that would actually have played fine. Running the check through the same
 // engine the eventual player uses removes that mismatch.
-async function validateInBrowser(target: ScriptTarget, url: string, deadline: number): Promise<boolean> {
-  try {
-    const timeoutMs = Math.min(VALIDATION_TIMEOUT_MS, deadline - Date.now());
-    const result = (await withTimeout(target.executeJavaScript(`
-      (function () {
-        var controller = new AbortController();
-        var timer = setTimeout(function () { controller.abort(); }, ${VALIDATION_TIMEOUT_MS});
-        return fetch(${JSON.stringify(url)}, { method: "GET", headers: { Range: "bytes=0-0" }, signal: controller.signal })
-          .then(function (r) { return { ok: r.ok, status: r.status }; })
-          .catch(function () { return { ok: false, status: 0 }; })
-          .finally(function () { clearTimeout(timer); });
-      })();
-    `), timeoutMs, `Stream validation timed out for ${url}`)) as { ok: boolean; status: number };
-    return result.ok || result.status === 206;
-  } catch {
-    return false;
-  }
+interface StreamProbe {
+  reachable: boolean;
+  /** First bytes of the response, for playlists only - empty for everything else. */
+  head: string;
+}
+
+/**
+ * One reachability check per captured URL, cached for the whole resolve.
+ *
+ * For an HLS playlist the first couple of kilobytes come back with it, which is what tells a master
+ * playlist (an index of every rendition) apart from a media playlist (one rendition's segments) -
+ * see the probe loop, which stops the moment it has a master. Everything else asks for a single
+ * byte, because a CDN that ignores Range would otherwise start sending a whole video file.
+ */
+async function probeStream(
+  target: ScriptTarget,
+  url: string,
+  deadline: number,
+  cache: Map<string, Promise<StreamProbe>>,
+): Promise<StreamProbe> {
+  const existing = cache.get(url);
+  if (existing) return existing;
+
+  const wantsHead = PLAYLIST_URL_PATTERN.test(url);
+  const range = wantsHead ? `bytes=0-${PLAYLIST_HEAD_BYTES - 1}` : "bytes=0-0";
+  const probe = (async (): Promise<StreamProbe> => {
+    try {
+      const timeoutMs = Math.min(VALIDATION_TIMEOUT_MS, deadline - Date.now());
+      const result = (await withTimeout(target.executeJavaScript(`
+        (function () {
+          var controller = new AbortController();
+          var timer = setTimeout(function () { controller.abort(); }, ${VALIDATION_TIMEOUT_MS});
+          return fetch(${JSON.stringify(url)}, { method: "GET", headers: { Range: ${JSON.stringify(range)} }, signal: controller.signal })
+            .then(function (r) {
+              if (!${JSON.stringify(wantsHead)}) return { ok: r.ok, status: r.status, head: "" };
+              return r.text().then(function (text) {
+                return { ok: r.ok, status: r.status, head: String(text).slice(0, ${PLAYLIST_HEAD_BYTES}) };
+              });
+            })
+            .catch(function () { return { ok: false, status: 0, head: "" }; })
+            .finally(function () { clearTimeout(timer); });
+        })();
+      `), timeoutMs, `Stream validation timed out for ${url}`)) as { ok: boolean; status: number; head: string };
+      return { reachable: result.ok || result.status === 206, head: result.head ?? "" };
+    } catch {
+      return { reachable: false, head: "" };
+    }
+  })();
+  cache.set(url, probe);
+  return probe;
 }
 
 async function buildResult(
@@ -559,6 +627,7 @@ async function buildResult(
   win: BrowserWindow,
   target: ScriptTarget,
   deadline: number,
+  probes: Map<string, Promise<StreamProbe>>,
 ): Promise<ResolvedStream[]> {
   const seen = new Set<string>();
   const combined = [...pageCaptures, ...networkCaptures]
@@ -597,9 +666,11 @@ async function buildResult(
     for (;;) {
       const index = nextValidation++;
       if (index >= combined.length) return;
-      reachable[index] = await validateInBrowser(target, combined[index].url, deadline);
+      reachable[index] = (await probeStream(target, combined[index].url, deadline, probes)).reachable;
     }
   }
+  // URLs the probe loop already checked answer from the cache, so this is usually far less work
+  // than it looks - most often none at all.
   await Promise.all(Array.from({ length: Math.min(MAX_VALIDATION_CONCURRENCY, combined.length) }, validateWorker));
   const resolved = combined
     .filter((_capture, index) => reachable[index])
