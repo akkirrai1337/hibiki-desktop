@@ -13,7 +13,7 @@ import type { AnimeTitle, PlaybackGroup, PlayerLink, PlayerLinkType, SearchFilte
 import type { ExtensionCall, ExtensionMethod } from "./execute";
 import type { WorkerCallMessage, WorkerResultMessage } from "./worker";
 import { performBrowserFetch, performChallenge } from "./browserFetchHost";
-import { performNetFetch } from "./netFetchHost";
+import { performNetFetch, performNetFetchAll } from "./netFetchHost";
 import { logger } from "../logger";
 import { performBrowserResolve } from "./browserResolveHost";
 import type { BridgeRequestMessage } from "./syncHostBridge";
@@ -124,6 +124,10 @@ export class ExtensionRuntime {
           message.payload.url as string,
           (message.payload.cookieNames as string[]) ?? [],
           Boolean(message.payload.forceRefresh),
+        );
+      } else if (message.bridgeKind === "netFetchAll") {
+        result = await performNetFetchAll(
+          (message.payload.requests as Array<{ url: string; options?: Record<string, unknown> }>) ?? [],
         );
       } else if (message.bridgeKind === "netFetch") {
         result = await performNetFetch(

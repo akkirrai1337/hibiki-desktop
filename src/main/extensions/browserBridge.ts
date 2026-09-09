@@ -30,11 +30,19 @@ export interface BrowserFetchResult {
 /** Plain HTTP for extension scripts' `fetch()` global. Implemented on the main thread (see
  * netFetchHost.ts) and reached synchronously from the worker over the Atomics bridge - the
  * fallback below is what runs when there is no host to bridge to (unit tests, tooling). */
+export interface NetFetchRequest {
+  url: string;
+  options?: { method?: string; headers?: Record<string, string>; body?: string };
+}
+
 export interface NetFetchProvider {
   fetch(
     url: string,
     options?: { method?: string; headers?: Record<string, string>; body?: string },
   ): BrowserFetchResult;
+  /** All of them at once, answers in the order asked. One bridge round trip for the batch - doing
+   * it per request would give back most of what the concurrency wins. */
+  fetchAll(requests: NetFetchRequest[]): BrowserFetchResult[];
 }
 
 export interface BrowserFetchProvider {

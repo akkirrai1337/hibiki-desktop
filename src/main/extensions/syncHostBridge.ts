@@ -11,11 +11,11 @@
 // with no need to wait for the port's own (async) "message" event to fire.
 // https://nodejs.org/api/worker_threads.html#synchronous-blocking-of-messageports
 import { parentPort, MessageChannel, receiveMessageOnPort } from "node:worker_threads";
-import type { ChallengeProvider, BrowserFetchProvider, NetFetchProvider, ChallengeSession, BrowserFetchResult } from "./browserBridge";
+import type { ChallengeProvider, BrowserFetchProvider, NetFetchProvider, NetFetchRequest, ChallengeSession, BrowserFetchResult } from "./browserBridge";
 
 export interface BridgeRequestMessage {
   kind: "bridge";
-  bridgeKind: "challenge" | "browserFetch" | "netFetch";
+  bridgeKind: "challenge" | "browserFetch" | "netFetch" | "netFetchAll";
   payload: Record<string, unknown>;
   sab: SharedArrayBuffer;
   port: MessagePort;
@@ -46,6 +46,9 @@ function callHostSync<TResponse>(bridgeKind: BridgeRequestMessage["bridgeKind"],
 export const hostNetFetchProvider: NetFetchProvider = {
   fetch(url, options) {
     return callHostSync<BrowserFetchResult>("netFetch", { url, options });
+  },
+  fetchAll(requests: NetFetchRequest[]) {
+    return callHostSync<BrowserFetchResult[]>("netFetchAll", { requests });
   },
 };
 

@@ -4,7 +4,7 @@
 import zlib from "node:zlib";
 import syncFetch from "sync-fetch";
 import { JsoupBinding } from "./jsoupShim";
-import type { ChallengeProvider, BrowserFetchProvider, NetFetchProvider } from "./browserBridge";
+import type { ChallengeProvider, BrowserFetchProvider, NetFetchProvider, NetFetchRequest } from "./browserBridge";
 
 export interface FetchOptions {
   method?: string;
@@ -213,6 +213,26 @@ export function buildExtensionGlobals(options: BuildGlobalsOptions) {
       if (!options.netFetch) return syncFetchFallback(url, fetchOptions);
       const { method, headers, body } = normalizeRequest(fetchOptions);
       return options.netFetch.fetch(url, { method, headers, body });
+    },
+    // Several requests concurrently, answers in the order asked. Extension scripts are synchronous
+    // by design (see the note on fetch above), which makes every request serial even when they are
+    // independent of one another - this is the way out of that without changing what a script
+    // looks like. A request that never got an answer comes back as { ok: false, status: 0, error },
+    // rather than throwing and taking the rest of the batch with it.
+    //
+    // Accepts a plain url string or { url, method, headers, form, body } per entry, so the common
+    // case reads as fetchAll([a, b, c]).
+    fetchAll: (requests: Array<string | ({ url: string } & FetchOptions)>): FetchResult[] => {
+      const entries = (requests ?? []).map((request) => (typeof request === "string" ? { url: request } : request));
+      if (!options.netFetch) {
+        // No host to batch through (unit tests, tooling): correctness over concurrency.
+        return entries.map((entry) => syncFetchFallback(entry.url, entry));
+      }
+      const payload: NetFetchRequest[] = entries.map((entry) => {
+        const { method, headers, body } = normalizeRequest(entry);
+        return { url: entry.url, options: { method, headers, body } };
+      });
+      return options.netFetch.fetchAll(payload);
     },
     challenge: (url: string, cookieNames: string[], forceRefresh?: boolean) =>
       options.challenge.acquire(url, cookieNames ?? [], Boolean(forceRefresh)),
