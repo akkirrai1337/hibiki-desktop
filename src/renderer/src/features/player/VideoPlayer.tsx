@@ -517,6 +517,9 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
           video.src = link.url;
           return;
         }
+        // Which stream this player instance is about to own. A switch that silently kept the old
+        // stream, or a torn-down instance still loading, is otherwise invisible in an exported log.
+        log.info("player", `attaching hls: ${link.translation ?? "?"}/${link.playerName ?? "?"} ${link.quality ?? "?"} ${link.url}`);
         hls = new HlsEngine();
         // Without this, a failed manifest/segment load (CORS, a dead CDN host, ...) just leaves
         // the "buffering" spinner turning forever with nothing in the console to explain why -
@@ -559,7 +562,11 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
           mediaRetries = 0;
         });
         hls.on(HlsEngine.Events.ERROR, (_event, data) => {
-          log.error("player", `hls.js ${data.fatal ? "fatal" : "non-fatal"} error:`, data.type, data.details, data.reason ?? "", data.response ? `http ${data.response.code}` : "");
+          // Non-fatal is hls.js saying it has handled this itself. Recording it is worth doing,
+          // reporting it as an error is not - a single dub switch produces a burst of them as the
+          // segments in flight are cancelled, which buried the one line that mattered.
+          const write = data.fatal ? log.error : log.debug;
+          write("player", `hls.js ${data.fatal ? "fatal" : "non-fatal"} error:`, data.type, data.details, data.reason ?? "", data.response ? `http ${data.response.code}` : "");
           if (!data.fatal) return;
           switch (data.type) {
             case HlsEngine.ErrorTypes.NETWORK_ERROR: {
@@ -659,6 +666,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     return () => {
       cancelled = true;
       if (networkRetryTimer !== null) window.clearTimeout(networkRetryTimer);
+      if (hls) log.info("player", `detaching hls: ${link.url}`);
       hls?.destroy();
       dash?.destroy();
       if (headerSessionId) void hibiki.player.unregisterHeaders(headerSessionId);

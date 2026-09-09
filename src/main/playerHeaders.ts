@@ -73,9 +73,12 @@ export function installPlayerHeaderInjector(): void {
   // users already attach for playback failures. Limit this to media/XHR requests to avoid noise
   // from unrelated images or API calls.
   session.defaultSession.webRequest.onErrorOccurred((details) => {
-    if (details.resourceType === "xhr" || details.resourceType === "media") {
-      logger.error("player", `${details.resourceType} request failed: ${details.error} ${details.url}`);
-    }
+    if (details.resourceType !== "xhr" && details.resourceType !== "media") return;
+    // An aborted request is this app cancelling it - switching dub or quality, seeking, tearing a
+    // player down - not a failure. hls.js has a dozen segments in flight at any moment, so one
+    // switch used to write twenty ERROR lines about requests that were meant to stop.
+    const level = details.error === "net::ERR_ABORTED" ? "debug" : "error";
+    logger[level]("player", `${details.resourceType} request failed: ${details.error} ${details.url}`);
   });
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
