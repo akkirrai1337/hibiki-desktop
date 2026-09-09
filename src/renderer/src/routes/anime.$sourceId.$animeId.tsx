@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from "motion/react";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import { Play, Bookmark, Check, ChevronDown, Clock, Download, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
+import { findListedTitle } from "@/lib/listedTitles";
 import { AnimeCard, animeTitle } from "@/components/AnimeCard";
 import { GroupDropdown } from "@/components/GroupDropdown";
 import { HorizontalScrollRow } from "@/components/HorizontalScrollRow";
@@ -181,11 +182,28 @@ function AnimeDetailPage() {
   // uses, letting the app-wide gradient bleed through consistently instead.
   const backgroundTheme = useUiStore((s) => s.backgroundTheme);
   const [downloadEpisode, setDownloadEpisode] = useState<Episode | null>(null);
-  const animeQuery = useQuery({ queryKey: ["anime", sourceId, animeId], queryFn: () => hibiki.sources.getById(sourceId, animeId) });
+  const queryClient = useQueryClient();
+  // Arriving here almost always means a card was clicked, and that card's list already carried
+  // this title - the same AnimeTitle shape getById returns, with fewer fields filled in and none
+  // contradicting it (see lib/listedTitles). Drawing it while getById is in flight replaces a
+  // skeleton with the real poster, name, description and genres immediately.
+  //
+  // placeholderData, not setQueryData: a placeholder is never mistaken for fetched data, so
+  // getById still runs and fills in the episode list, studios and related titles. Seeding the
+  // cache instead would leave the page permanently missing the very things it exists to show.
+  const animeQuery = useQuery({
+    queryKey: ["anime", sourceId, animeId],
+    queryFn: () => hibiki.sources.getById(sourceId, animeId),
+    placeholderData: () =>
+      findListedTitle(
+        queryClient.getQueryCache().getAll().map((entry) => entry.state.data),
+        sourceId,
+        animeId,
+      ),
+  });
   const groupsQuery = useQuery({ queryKey: ["playbackGroups", sourceId, animeId], queryFn: () => hibiki.sources.playbackGroups(sourceId, animeId) });
   const libraryQuery = useQuery({ queryKey: ["library"], queryFn: () => hibiki.library.list() });
   const progressQuery = useQuery({ queryKey: ["progress-all", sourceId, animeId], queryFn: () => hibiki.progress.listForAnime(sourceId, animeId) });
-  const queryClient = useQueryClient();
 
   // Same query key as the "Downloaded episodes" screen's own list - so this page's own view of
   // what's already downloaded and that screen's are always the same cache entry, not two
