@@ -81,6 +81,7 @@ export class ExtensionRuntime {
   private readonly extensions = new Map<string, LoadedExtension>();
   private readonly resolvers = new Map<string, ResolverManifest>();
   private readonly resolverHealth = new Map<string, ResolverHealth>();
+  private readonly inFlightReads = new Map<string, Promise<unknown>>();
   private readonly resolversDir: string;
 
   private readonly storage: ExtensionStorage;
@@ -124,6 +125,9 @@ export class ExtensionRuntime {
   }
 
   reload(): void {
+    // New source files/settings must not adopt a request that started against the previous loaded
+    // extension. The old work may still finish for its original caller, but no new call shares it.
+    this.inFlightReads.clear();
     this.extensions.clear();
     if (fs.existsSync(this.extensionsDir)) {
       for (const file of fs.readdirSync(this.extensionsDir)) {
@@ -348,12 +352,31 @@ export class ExtensionRuntime {
     this.warmingWorkers.clear();
   }
 
+  /**
+   * Shares only an identical read that is currently running. This is deliberately not a result
+   * cache: source data and signed URLs retain their existing freshness rules, while two screens
+   * arriving in the same tick no longer spawn duplicate workers and duplicate network requests.
+   */
+  private shareRead<T>(method: string, sourceId: string, args: unknown[], read: () => Promise<T>): Promise<T> {
+    const key = JSON.stringify([method, sourceId, ...args]);
+    const existing = this.inFlightReads.get(key);
+    if (existing) return existing as Promise<T>;
+
+    const pending = read();
+    this.inFlightReads.set(key, pending);
+    const clear = () => {
+      if (this.inFlightReads.get(key) === pending) this.inFlightReads.delete(key);
+    };
+    void pending.then(clear, clear);
+    return pending;
+  }
+
   search(sourceId: string, request: SearchRequest): Promise<AnimeTitle[]> {
-    return this.run("search", sourceId, [request]);
+    return this.shareRead("search", sourceId, [request], () => this.run("search", sourceId, [request]));
   }
 
   latest(sourceId: string, limit: number): Promise<AnimeTitle[]> {
-    return this.run("latest", sourceId, [limit]);
+    return this.shareRead("latest", sourceId, [limit], () => this.run("latest", sourceId, [limit]));
   }
 
   /**
@@ -452,20 +475,22 @@ export class ExtensionRuntime {
   }
 
   getById(sourceId: string, id: string): Promise<AnimeTitle> {
-    return this.run("getById", sourceId, [id]);
+    return this.shareRead("getById", sourceId, [id], () => this.run("getById", sourceId, [id]));
   }
 
   getPlaybackGroups(sourceId: string, titleId: string): Promise<PlaybackGroup[]> {
-    return this.run("getPlaybackGroups", sourceId, [titleId]);
+    return this.shareRead("getPlaybackGroups", sourceId, [titleId], () => this.run("getPlaybackGroups", sourceId, [titleId]));
   }
 
-  async getPlayerLinks(sourceId: string, titleId: string, groupId: string, episodeId: string, preference?: PlayerLinkPreference): Promise<PlayerLink[]> {
-    const links = await this.run<PlayerLink[]>("getPlayerLinks", sourceId, [titleId, groupId, episodeId]);
-    const preferredIndex = this.preferredLinkIndex(links, preference);
-    // A source-provided direct link needs no resolver at all. Let the renderer adopt the saved
-    // choice from the returned list instead of resolving an unrelated EMBED first.
-    if (preferredIndex >= 0 && links[preferredIndex].type !== "EMBED") return links;
-    return this.resolveEmbedLinks(links, preferredIndex);
+  getPlayerLinks(sourceId: string, titleId: string, groupId: string, episodeId: string, preference?: PlayerLinkPreference): Promise<PlayerLink[]> {
+    return this.shareRead("getPlayerLinks", sourceId, [titleId, groupId, episodeId, preference ?? null], async () => {
+      const links = await this.run<PlayerLink[]>("getPlayerLinks", sourceId, [titleId, groupId, episodeId]);
+      const preferredIndex = this.preferredLinkIndex(links, preference);
+      // A source-provided direct link needs no resolver at all. Let the renderer adopt the saved
+      // choice from the returned list instead of resolving an unrelated EMBED first.
+      if (preferredIndex >= 0 && links[preferredIndex].type !== "EMBED") return links;
+      return this.resolveEmbedLinks(links, preferredIndex);
+    });
   }
 
   async resolvePlayerLink(link: PlayerLink): Promise<PlayerLink[]> {

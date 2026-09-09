@@ -61,14 +61,34 @@ function findScriptPath(extensionsDir: string, sourceId: string): string {
   return scriptPath;
 }
 
+interface CompiledExtension {
+  mtimeMs: number;
+  size: number;
+  script: vm.Script;
+}
+
+// execute.ts lives for the lifetime of a pooled worker. vm.Script is compiled code and can run in
+// any number of fresh contexts, so keep that expensive, source-independent part while rebuilding
+// the sandbox/provider below for every call (storage and bridge bindings remain call-specific).
+// mtime + size makes an installed source update visible without having to restart the workers.
+const compiledExtensions = new Map<string, CompiledExtension>();
+
+function loadCompiledExtension(scriptPath: string): vm.Script {
+  const stat = fs.statSync(scriptPath);
+  const cached = compiledExtensions.get(scriptPath);
+  if (cached?.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached.script;
+
+  const script = new vm.Script(fs.readFileSync(scriptPath, "utf-8"), { filename: scriptPath });
+  compiledExtensions.set(scriptPath, { mtimeMs: stat.mtimeMs, size: stat.size, script });
+  return script;
+}
+
 function loadProvider(
   scriptPath: string,
   sourceId: string,
   providers: ExtensionBridgeProviders,
   storage?: ExtensionStorageBinding,
 ): Record<string, unknown> {
-  const source = fs.readFileSync(scriptPath, "utf-8");
-
   const globals = buildExtensionGlobals({
     logger: {
       log: (m) => console.log(`[${sourceId}]`, m),
@@ -84,7 +104,7 @@ function loadProvider(
 
   const sandbox: Record<string, unknown> = { ...globals, Provider: undefined };
   const context = vm.createContext(sandbox);
-  const script = new vm.Script(source, { filename: scriptPath });
+  const script = loadCompiledExtension(scriptPath);
   script.runInContext(context, { timeout: 30_000 });
 
   const provider = sandbox.Provider as Record<string, unknown> | undefined;
