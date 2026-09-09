@@ -7,6 +7,7 @@
 import { session } from "electron";
 import { randomUUID } from "node:crypto";
 import { PlayerHeaderRegistry } from "@shared/playerHeaderRegistry";
+import { headersForImageRequest } from "@shared/imageRequestHeaders";
 import { logger } from "./logger";
 
 const headerRegistry = new PlayerHeaderRegistry();
@@ -46,7 +47,11 @@ const CORS_RESPONSE_HEADER_NAMES = [
 export function installPlayerHeaderInjector(): void {
   session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
     const extra = headerRegistry.headersFor(details.url);
-    callback({ requestHeaders: extra ? { ...details.requestHeaders, ...extra } : details.requestHeaders });
+    if (extra) {
+      callback({ requestHeaders: { ...details.requestHeaders, ...extra } });
+      return;
+    }
+    callback({ requestHeaders: headersForImageRequest(details.resourceType, details.requestHeaders) });
   });
 
   // Playback CDNs commonly redirect between numbered edge hosts (Kodik currently does
