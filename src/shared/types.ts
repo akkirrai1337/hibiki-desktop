@@ -244,6 +244,10 @@ export interface WatchProgress {
   // episode) - see VideoPlayer's onCaptureThumbnail. Null until the first capture happens for this
   // episode, and always null for EMBED playback (no <video> element of our own to draw from).
   thumbnailDataUrl?: string | null;
+  // How much of this save actually played, measured by the player rather than inferred from how
+  // far the position moved. Absent for callers that only move the position (marking an episode
+  // watched from a list), which fall back to that distance - see progressUpsert.
+  watchedDeltaMs?: number;
 }
 
 export interface DailyActivity {

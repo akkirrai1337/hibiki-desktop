@@ -71,7 +71,10 @@ export function registerLibraryHandlers(): void {
     return row ?? null;
   });
 
-  ipcMain.handle(IPC.progressUpsert, (_e, progress: WatchProgress) => {
+  ipcMain.handle(IPC.progressUpsert, (_e, incoming: WatchProgress) => {
+    // Split off before the row is written: it describes this save, not the episode, and there is
+    // no column for it.
+    const { watchedDeltaMs: measuredWatchedMs, ...progress } = incoming;
     const db = getDb();
     const previous = db
       .select()
@@ -108,7 +111,15 @@ export function registerLibraryHandlers(): void {
       .run();
 
     // Attribute this save to the local day it happened on, for the profile's activity stats.
-    const watchedDeltaMs = Math.max(0, Math.min(progress.positionMs - (previous?.positionMs ?? 0), MAX_WATCHED_DELTA_MS));
+    //
+    // How far the position moved is only a stand-in for time watched, and a poor one: seeking
+    // across a film books the whole jump as watched, capped at MAX_WATCHED_DELTA_MS per save but
+    // still wrong every time. The player counts what actually played and sends it, so use that
+    // whenever it is there; the fallback is for callers that only move the position.
+    const watchedDeltaMs =
+      measuredWatchedMs !== undefined
+        ? Math.max(0, measuredWatchedMs)
+        : Math.max(0, Math.min(progress.positionMs - (previous?.positionMs ?? 0), MAX_WATCHED_DELTA_MS));
     const newlyCompleted = progress.watched && !(previous?.watched ?? false);
     if (watchedDeltaMs > 0 || newlyCompleted) {
       const date = localDateKey(progress.updatedAt);

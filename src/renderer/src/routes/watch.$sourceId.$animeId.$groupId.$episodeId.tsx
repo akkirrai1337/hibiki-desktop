@@ -24,6 +24,9 @@ export const Route = createFileRoute("/watch/$sourceId/$animeId/$groupId/$episod
 });
 
 const SAVE_INTERVAL_MS = 5000;
+// Progress ticks arrive several times a second while playing, so anything past a couple of seconds
+// is a jump rather than elapsed playback.
+const PLAYED_TICK_MAX_MS = 2500;
 // Matches Android's own DiscordRpcManager.MIN_PUBLISH_INTERVAL_MS - no need to hit the local
 // Discord IPC socket every progress tick, timestamps already convey a moving playhead on their own.
 const DISCORD_UPDATE_INTERVAL_MS = 16_000;
@@ -74,6 +77,11 @@ function WatchPage() {
   const watchedSentRef = useRef(false);
   const lastDiscordUpdateRef = useRef(0);
   const lastPlaybackRef = useRef({ positionMs: 0, durationMs: 0 });
+  // Time that actually played since the last save, and the position the previous progress tick
+  // reported. A tick that moved further than PLAYED_TICK_MAX_MS is a seek, not playback, and adds
+  // nothing - which is the whole point: skipping to the end of a film is not watching it.
+  const playedMsRef = useRef(0);
+  const lastTickPositionRef = useRef<number | null>(null);
   const queryClient = useQueryClient();
 
   // Same query key as the profile page's own activity query - watching here and then checking the
@@ -143,6 +151,10 @@ function WatchPage() {
     failedPlaybackUrlsRef.current.clear();
     setManualLink(null);
     setSourceSwitching(false);
+    // The new episode starts wherever it starts; carrying the previous one's last tick over would
+    // read the jump between them as either playback or a seek, and neither is true.
+    playedMsRef.current = 0;
+    lastTickPositionRef.current = null;
   }, [episodeId]);
 
   const selectLink = useCallback(async (selected: PlayerLink) => {
@@ -403,6 +415,12 @@ function WatchPage() {
   const linkPlayerName = link?.playerName ?? null;
   const onProgress = useCallback(
     (positionMs: number, durationMs: number) => {
+      const previousTickPosition = lastTickPositionRef.current;
+      lastTickPositionRef.current = positionMs;
+      if (previousTickPosition !== null) {
+        const tickMs = positionMs - previousTickPosition;
+        if (tickMs > 0 && tickMs <= PLAYED_TICK_MAX_MS) playedMsRef.current += tickMs;
+      }
       lastPlaybackRef.current = { positionMs, durationMs };
       const watched = durationMs > 0 && positionMs / durationMs >= watchedThreshold;
       const justFinished = watched && !watchedSentRef.current;
@@ -423,7 +441,9 @@ function WatchPage() {
           durationMs,
           watched,
           updatedAt: now,
+          watchedDeltaMs: playedMsRef.current,
         });
+        playedMsRef.current = 0;
         // The streak-detection effect above reads straight from this same query's cache, so it
         // can't notice today's activity until this refetch actually lands. Every save, not just
         // the first one: on a resumed episode, the very first save's position can exactly match
