@@ -122,7 +122,8 @@
       "dub": "Dub",
       "player": "Player",
       "quality": "Quality"
-    }
+    },
+    "toggleTimeDisplay": "Switch between elapsed and remaining"
   },
   "search": {
     "prompt": "Start typing an anime title",

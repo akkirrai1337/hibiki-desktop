@@ -300,6 +300,8 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   const autoPlayNextEpisode = usePlayerPrefsStore((s) => s.autoPlayNextEpisode);
   const setAutoPlayNextEpisode = usePlayerPrefsStore((s) => s.setAutoPlayNextEpisode);
   const playbackSpeed = usePlayerPrefsStore((s) => s.playbackSpeed);
+  const showRemainingTime = usePlayerPrefsStore((s) => s.showRemainingTime);
+  const toggleRemainingTime = usePlayerPrefsStore((s) => s.toggleRemainingTime);
   const setPlaybackSpeed = usePlayerPrefsStore((s) => s.setPlaybackSpeed);
   const autoSkipDelaySeconds = usePlayerPrefsStore((s) => s.autoSkipDelaySeconds);
   const skipButtonTimeoutSeconds = usePlayerPrefsStore((s) => s.skipButtonTimeoutSeconds);
@@ -1325,12 +1327,19 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
             onPointerDown={onSeekPointerDown}
             className="group/seek relative flex h-4 cursor-pointer items-center"
           >
-            <div className="relative h-[3px] w-full overflow-hidden rounded-full bg-white/15 transition-[height] group-hover/seek:h-[5px]">
-              <div className="absolute inset-y-0 left-0 bg-white/40" style={{ width: `${bufferedPercent}%` }} />
-              <div className="absolute inset-y-0 left-0 bg-red-600" style={{ width: `${playedPercent}%` }} />
+            {/* The bar sits on top of the video itself, so its own contrast cannot be assumed:
+                over a bright scene a thin red line on a translucent track disappears. The track
+                gets a dark edge beneath it and the played part a faint glow of its own colour,
+                which reads on light and dark frames alike without making the bar heavier. */}
+            <div className="relative h-[3px] w-full overflow-hidden rounded-full bg-white/20 shadow-[0_1px_3px_rgba(0,0,0,0.7)] transition-[height] group-hover/seek:h-[5px]">
+              <div className="absolute inset-y-0 left-0 bg-white/45" style={{ width: `${bufferedPercent}%` }} />
+              <div
+                className="absolute inset-y-0 left-0 bg-red-600 shadow-[0_0_8px_rgba(239,68,68,0.75)]"
+                style={{ width: `${playedPercent}%` }}
+              />
             </div>
             <div
-              className="absolute h-3 w-3 -translate-x-1/2 rounded-full bg-red-600 opacity-0 shadow transition-opacity group-hover/seek:opacity-100"
+              className="absolute h-3 w-3 -translate-x-1/2 rounded-full bg-red-600 opacity-0 shadow-[0_1px_4px_rgba(0,0,0,0.8)] ring-2 ring-black/25 transition-opacity group-hover/seek:opacity-100"
               style={{ left: `${playedPercent}%` }}
             />
           </div>
@@ -1338,7 +1347,18 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
 
         <div className="mt-1 flex items-center">
           <div className="flex flex-1 items-center">
-            <span className="shrink-0 text-xs font-medium tabular-nums text-zinc-300">{formatTime(currentTime)} / {formatTime(duration)}</span>
+            {/* Click to switch between elapsed and what is left. Both readings answer different
+                questions - how far in am I, and can I finish this before I have to go - and which
+                one someone wants is a habit, so the choice is remembered. */}
+            <button
+              onClick={(e) => { stop(e); toggleRemainingTime(); }}
+              title={t("watch.toggleTimeDisplay")}
+              className="shrink-0 rounded px-1 py-0.5 text-xs font-medium tabular-nums text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              {showRemainingTime
+                ? `-${formatTime(Math.max(0, duration - currentTime))}`
+                : `${formatTime(currentTime)} / ${formatTime(duration)}`}
+            </button>
           </div>
 
           <div className="flex items-center justify-center gap-3">
@@ -1364,12 +1384,19 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
           <div className="flex flex-1 items-center justify-end gap-1">
             {/* Fixed-size box so the slider expands via absolute positioning — hovering it must
                 never reflow the mute button or the settings/fullscreen buttons next to it. */}
+            {/* 48px of hover zone around a 32px button, the negative margin giving the extra
+                back to the layout - crossing the gap between the button and the slider must not
+                count as leaving, or the slider collapses on the way to it. */}
             <div
-              className="relative flex h-8 w-8 shrink-0 items-center justify-center"
+              className="relative -m-2 flex h-12 w-12 shrink-0 items-center justify-center"
               onMouseEnter={() => setVolumeHover(true)}
               onMouseLeave={() => setVolumeHover(false)}
             >
-              <div className={cn("absolute right-full top-1/2 mr-1 flex -translate-y-1/2 items-center overflow-hidden transition-[width] duration-200 ease-out", volumeHover ? "w-20" : "w-0")}>
+              {/* h-8, not the input's own height: a range input is a ~16px band, and aiming at
+                  16px of a track that only appears on hover means the slightest vertical drift
+                  collapses it mid-drag. The taller box is transparent, so nothing looks different
+                  - there is just somewhere to be. */}
+              <div className={cn("absolute right-full top-1/2 mr-1 flex h-8 -translate-y-1/2 items-center overflow-hidden transition-[width] duration-200 ease-out", volumeHover ? "w-20" : "w-0")}>
                 <input
                   type="range"
                   min={0}
@@ -1378,7 +1405,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
                   value={muted ? 0 : volume}
                   onChange={onVolumeInput}
                   onClick={stop}
-                  className="w-20 shrink-0 cursor-pointer accent-red-600"
+                  className="h-6 w-20 shrink-0 cursor-pointer accent-red-600"
                 />
               </div>
               <button onClick={onMuteButtonClick} className="relative z-10 flex h-8 w-8 items-center justify-center text-white/80 transition-colors hover:text-white">

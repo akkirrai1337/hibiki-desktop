@@ -49,6 +49,9 @@ interface PlayerPrefsState {
   // 1.0, so without persisting it every episode reset whatever the user had set.
   volume: number;
   muted: boolean;
+  // Whether the time label counts down to the end instead of up from the start. A preference about
+  // how someone reads a player, not about one episode, so it outlives both.
+  showRemainingTime: boolean;
   setAutoSkipSegments: (enabled: boolean) => void;
   setAutoPlayNextEpisode: (enabled: boolean) => void;
   setPlaybackSpeed: (speed: PlaybackSpeed) => void;
@@ -56,6 +59,7 @@ interface PlayerPrefsState {
   setSkipButtonTimeoutSeconds: (seconds: number) => void;
   setWatchedThresholdPercent: (percent: number) => void;
   setVolume: (volume: number, muted: boolean) => void;
+  toggleRemainingTime: () => void;
 }
 
 export const usePlayerPrefsStore = create<PlayerPrefsState>()(
@@ -69,6 +73,7 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       watchedThresholdPercent: 85,
       volume: 1,
       muted: false,
+      showRemainingTime: false,
       setAutoSkipSegments: (autoSkipSegments) => set({ autoSkipSegments }),
       setAutoPlayNextEpisode: (autoPlayNextEpisode) => set({ autoPlayNextEpisode }),
       setPlaybackSpeed: (playbackSpeed) => set({ playbackSpeed }),
@@ -76,6 +81,7 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       setSkipButtonTimeoutSeconds: (seconds) => set({ skipButtonTimeoutSeconds: clampSkipTimer(seconds) }),
       setWatchedThresholdPercent: (percent) => set({ watchedThresholdPercent: clampWatchedThreshold(percent) }),
       setVolume: (volume, muted) => set({ volume: Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : 1, muted }),
+      toggleRemainingTime: () => set((state) => ({ showRemainingTime: !state.showRemainingTime })),
     }),
     { name: "hibiki-player-prefs" },
   ),
