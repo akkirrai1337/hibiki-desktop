@@ -1,7 +1,7 @@
-import { eq, and, or } from "drizzle-orm";
-import type { AnimeTitle, CachedAnimeEntry, CachedPlaybackGroupsEntry, DownloadedEpisode, PlaybackGroup } from "@shared/types";
+import { eq, and, or, notInArray, desc } from "drizzle-orm";
+import type { AnimeTitle, CachedAnimeEntry, CachedPlaybackGroupsEntry, CachedTitleListEntry, DownloadedEpisode, PlaybackGroup } from "@shared/types";
 import { getDb } from "./db";
-import { cachedAnime, cachedPlaybackGroups, downloadedEpisodes } from "./db/schema";
+import { cachedAnime, cachedPlaybackGroups, cachedSourceQueries, downloadedEpisodes } from "./db/schema";
 
 /** Strips the parts of an AnimeTitle that are only useful for navigating to *other* titles
  * (related/franchise/similar anime) before it goes into cachedAnime - offline, there's nothing to
@@ -166,4 +166,39 @@ export function deleteDownloadedEpisodeRow(sourceId: string, animeId: string, ep
     .delete(downloadedEpisodes)
     .where(and(eq(downloadedEpisodes.sourceId, sourceId), eq(downloadedEpisodes.animeId, animeId), eq(downloadedEpisodes.episodeId, episodeId)))
     .run();
+}
+
+/** One row per screen section per source, so this stays in the low tens even for someone with
+ * every source installed. The bound is here to keep a renaming or a bug from growing the table
+ * without limit, not because normal use approaches it. */
+const MAX_CACHED_QUERIES = 200;
+
+/** Stores the list a source screen was last built from. Fire-and-forget: a failure here costs a
+ * slower first paint next launch and nothing else, so it must never fail the call it came from. */
+export function cacheSourceQuery(queryKey: string, titles: AnimeTitle[]): void {
+  if (titles.length === 0) return;
+  const db = getDb();
+  db.insert(cachedSourceQueries)
+    .values({ queryKey, titlesJson: JSON.stringify(titles), cachedAt: Date.now() })
+    .onConflictDoUpdate({
+      target: cachedSourceQueries.queryKey,
+      set: { titlesJson: JSON.stringify(titles), cachedAt: Date.now() },
+    })
+    .run();
+
+  const keep = db
+    .select({ queryKey: cachedSourceQueries.queryKey })
+    .from(cachedSourceQueries)
+    .orderBy(desc(cachedSourceQueries.cachedAt))
+    .limit(MAX_CACHED_QUERIES)
+    .all()
+    .map((row) => row.queryKey);
+  if (keep.length >= MAX_CACHED_QUERIES) {
+    db.delete(cachedSourceQueries).where(notInArray(cachedSourceQueries.queryKey, keep)).run();
+  }
+}
+
+export function getCachedSourceQuery(queryKey: string): CachedTitleListEntry | null {
+  const row = getDb().select().from(cachedSourceQueries).where(eq(cachedSourceQueries.queryKey, queryKey)).get();
+  return row ? { titles: JSON.parse(row.titlesJson) as AnimeTitle[], cachedAt: row.cachedAt } : null;
 }

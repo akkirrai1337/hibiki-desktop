@@ -2,7 +2,7 @@ import { ipcMain } from "electron";
 import { IPC } from "@shared/ipc";
 import type { AnimeTitle, PlaybackGroup, PlayerLink, PlayerLinkPreference } from "@shared/types";
 import type { ExtensionRuntime } from "../extensions/runtime";
-import { cacheAnime, cachePlaybackGroups, getCachedAnime, getCachedAnimeMany, getCachedPlaybackGroups, getCachedPlaybackGroupsEntry } from "../offlineCache";
+import { cacheAnime, cachePlaybackGroups, cacheSourceQuery, getCachedAnime, getCachedAnimeMany, getCachedPlaybackGroups, getCachedPlaybackGroupsEntry, getCachedSourceQuery } from "../offlineCache";
 
 export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   ipcMain.handle(IPC.sourcesList, () => runtime.list());
@@ -33,6 +33,16 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   ipcMain.handle(IPC.sourceCachedPlaybackGroups, (_e, sourceId: string, titleId: string) =>
     getCachedPlaybackGroupsEntry(sourceId, titleId),
   );
+  ipcMain.handle(IPC.sourceCachedQuery, (_e, queryKey: string) => getCachedSourceQuery(queryKey));
+  // `on`, not `handle`: the renderer has already rendered these titles, and nothing it does next
+  // depends on the write landing.
+  ipcMain.on(IPC.sourceCacheQuery, (_e, queryKey: string, titles: AnimeTitle[]) => {
+    try {
+      cacheSourceQuery(queryKey, titles);
+    } catch {
+      // A first paint that is one round trip slower next launch, and nothing worse.
+    }
+  });
   ipcMain.handle(IPC.sourcePlaybackGroups, async (_e, sourceId: string, titleId: string): Promise<PlaybackGroup[]> => {
     try {
       const groups = await runtime.getPlaybackGroups(sourceId, titleId);

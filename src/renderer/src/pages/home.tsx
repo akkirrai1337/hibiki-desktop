@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
 import { ChevronDown, Radio, Play } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
+import { useCachedTitleList } from "@/lib/cachedTitleList";
 import { AnimeCard, SkeletonCard, animeTitle } from "@/components/AnimeCard";
 import { ContinueWatchingFrameRow } from "@/components/ContinueWatchingRow";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -45,13 +46,21 @@ export function CatalogPage() {
   const activeSourceId = useUiStore((s) => s.activeSourceId);
   const source = sources.data?.find((s) => s.id === activeSourceId) ?? sources.data?.[0];
   const sortMode = source?.supportedSorts.includes("RATING") ? "RATING" : undefined;
-  const hero = useQuery({ queryKey: ["hero", source?.id], enabled: !!source, queryFn: () => hibiki.sources.search(source!.id, { limit: HERO_SLIDE_COUNT, sort: sortMode }) });
+  const hero = useCachedTitleList({
+    queryKey: ["hero", source?.id],
+    cacheKey: source ? `hero:${source.id}` : null,
+    enabled: !!source,
+    queryFn: () => hibiki.sources.search(source!.id, { limit: HERO_SLIDE_COUNT, sort: sortMode }),
+  });
   // Compute the source's window in the same render that enables the query. Keeping this in state
   // and replacing it from an effect after `source` arrived let React Query start one request with
   // the old offset and then immediately start a second with the new one.
   const poolOffset = useMemo(randomPoolOffset, [source?.id]);
-  const pool = useQuery({
+  const pool = useCachedTitleList({
     queryKey: ["popular-pool", source?.id, poolOffset],
+    // Deliberately without the offset: this visit's slice is meant to be a different one, so the
+    // useful thing to paint while it loads is the slice from last time.
+    cacheKey: source ? `popular-pool:${source.id}` : null,
     enabled: !!source,
     queryFn: async () => {
       const window = await hibiki.sources.search(source!.id, { offset: poolOffset, limit: POOL_WINDOW, sort: sortMode });

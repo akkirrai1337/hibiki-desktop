@@ -422,3 +422,10 @@ export interface CachedPlaybackGroupsEntry {
   groups: PlaybackGroup[];
   cachedAt: number;
 }
+
+/** A whole title list read from the on-disk cache, with when it was last refreshed. Lets a source
+ * screen paint its rows before the source itself has answered. */
+export interface CachedTitleListEntry {
+  titles: AnimeTitle[];
+  cachedAt: number;
+}

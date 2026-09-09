@@ -3,6 +3,7 @@ import type {
   AppUpdate,
   CachedAnimeEntry,
   CachedPlaybackGroupsEntry,
+  CachedTitleListEntry,
   DailyActivity,
   DiscordPresence,
   DownloadedEpisode,
@@ -43,6 +44,8 @@ export interface HibikiApi {
     getById(sourceId: string, id: string): Promise<AnimeTitle>;
     cachedTitles(keys: Array<{ sourceId: string; animeId: string }>): Promise<Record<string, CachedAnimeEntry>>;
     cachedPlaybackGroups(sourceId: string, titleId: string): Promise<CachedPlaybackGroupsEntry | null>;
+    cachedQuery(queryKey: string): Promise<CachedTitleListEntry | null>;
+    cacheQuery(queryKey: string, titles: AnimeTitle[]): void;
     playbackGroups(sourceId: string, titleId: string): Promise<PlaybackGroup[]>;
     playerLinks(sourceId: string, titleId: string, groupId: string, episodeId: string, preference?: PlayerLinkPreference): Promise<PlayerLink[]>;
     resolvePlayerLink(link: PlayerLink): Promise<PlayerLink[]>;

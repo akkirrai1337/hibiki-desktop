@@ -8,6 +8,10 @@ export const IPC = {
   // answers. See offlineCache.getCachedAnimeMany.
   sourceCachedTitles: "source:cachedTitles",
   sourceCachedPlaybackGroups: "source:cachedPlaybackGroups",
+  // The last title list a source screen was built from, and the write that records it. See
+  // offlineCache.cacheSourceQuery.
+  sourceCachedQuery: "source:cachedQuery",
+  sourceCacheQuery: "source:cacheQuery",
   sourcePlaybackGroups: "source:playbackGroups",
   sourcePlayerLinks: "source:playerLinks",
   sourceResolvePlayerLink: "source:resolvePlayerLink",

@@ -5,6 +5,7 @@ import type {
   AppUpdate,
   CachedAnimeEntry,
   CachedPlaybackGroupsEntry,
+  CachedTitleListEntry,
   DailyActivity,
   DiscordPresence,
   DownloadedEpisode,
@@ -43,6 +44,10 @@ const api = {
       ipcRenderer.invoke(IPC.sourceCachedTitles, keys),
     cachedPlaybackGroups: (sourceId: string, titleId: string): Promise<CachedPlaybackGroupsEntry | null> =>
       ipcRenderer.invoke(IPC.sourceCachedPlaybackGroups, sourceId, titleId),
+    cachedQuery: (queryKey: string): Promise<CachedTitleListEntry | null> =>
+      ipcRenderer.invoke(IPC.sourceCachedQuery, queryKey),
+    cacheQuery: (queryKey: string, titles: AnimeTitle[]): void =>
+      ipcRenderer.send(IPC.sourceCacheQuery, queryKey, titles),
     playbackGroups: (sourceId: string, titleId: string): Promise<PlaybackGroup[]> =>
       ipcRenderer.invoke(IPC.sourcePlaybackGroups, sourceId, titleId),
     playerLinks: (sourceId: string, titleId: string, groupId: string, episodeId: string, preference?: PlayerLinkPreference): Promise<PlayerLink[]> =>

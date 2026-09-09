@@ -124,3 +124,16 @@ export const cachedPlaybackGroups = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.sourceId, t.animeId] })],
 );
+
+// Whole *result lists* a source screen was last built from - the home page's hero row and its
+// "popular" pool, a source's latest feed. cachedAnime above answers "what is this one title",
+// which is not enough to paint a screen that doesn't yet know which titles it is about.
+//
+// Keyed by a caller-chosen string rather than by the request shape, on purpose: the home pool is
+// fetched at a random offset every visit, and the point is to paint the *previous* visit's slice
+// while the new one loads, not to look for an exact match that will never be there.
+export const cachedSourceQueries = sqliteTable("cached_source_queries", {
+  queryKey: text("query_key").primaryKey(),
+  titlesJson: text("titles_json").notNull(),
+  cachedAt: integer("cached_at").notNull(),
+});
