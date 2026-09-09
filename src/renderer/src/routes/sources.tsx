@@ -59,6 +59,29 @@ const CAPABILITY_ICONS: Record<SourceCapability, typeof Sparkles> = {
   ACTIVITY_SYNC: Activity,
 };
 
+/*
+ * Which capabilities are worth a row's scarce horizontal space, most telling first.
+ *
+ * Playback is the one that decides whether a source is usable at all; an account and what it
+ * unlocks is the next thing anyone looks for. The relationship graph capabilities are last: they
+ * are nice, and nobody picks a source for them. Everything past the first few becomes a "+n", so
+ * the language and version - which were being truncated to "RU…" by a row of eight icons - keep
+ * their room.
+ */
+const CAPABILITY_PRIORITY: SourceCapability[] = [
+  "PLAYBACK",
+  "ACCOUNT",
+  "LATEST_RELEASES",
+  "LIBRARY_SYNC",
+  "ACTIVITY_SYNC",
+  "COMMENTS",
+  "REVIEWS",
+  "RELATED_TITLES",
+  "SIMILAR_TITLES",
+];
+
+const MAX_VISIBLE_CAPABILITIES = 3;
+
 const CAPABILITY_LABEL_KEYS: Record<SourceCapability, string> = {
   LATEST_RELEASES: "sources.capability.latest",
   PLAYBACK: "sources.capability.playback",
@@ -575,6 +598,13 @@ function ExtensionCard({
     : installedVersion ?? extension.version;
   const [menuOpen, setMenuOpen] = useState(false);
   const clickable = installedVersion !== null && !installing;
+  // Ordered by what a person actually chooses a source on, then cut - see CAPABILITY_PRIORITY.
+  const orderedCapabilities = useMemo(
+    () => [...extension.capabilities].sort((a, b) => CAPABILITY_PRIORITY.indexOf(a) - CAPABILITY_PRIORITY.indexOf(b)),
+    [extension.capabilities],
+  );
+  const shownCapabilities = orderedCapabilities.slice(0, MAX_VISIBLE_CAPABILITIES);
+  const hiddenCapabilities = orderedCapabilities.slice(MAX_VISIBLE_CAPABILITIES);
 
   return (
     <motion.div
@@ -618,7 +648,7 @@ function ExtensionCard({
               </p>
               {extension.capabilities.length > 0 && (
                 <div className="flex shrink-0 items-center gap-1">
-                  {extension.capabilities.map((capability) => {
+                  {shownCapabilities.map((capability) => {
                     const CapabilityIcon = CAPABILITY_ICONS[capability];
                     return (
                       <span key={capability} title={t(CAPABILITY_LABEL_KEYS[capability])} className="flex items-center">
@@ -626,6 +656,16 @@ function ExtensionCard({
                       </span>
                     );
                   })}
+                  {hiddenCapabilities.length > 0 && (
+                    // The rest are still readable, just on hover rather than as eight identical
+                    // grey glyphs nobody can tell apart at 12px anyway.
+                    <span
+                      title={hiddenCapabilities.map((capability) => t(CAPABILITY_LABEL_KEYS[capability])).join(", ")}
+                      className="text-[10px] font-bold text-muted"
+                    >
+                      +{hiddenCapabilities.length}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
