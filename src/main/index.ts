@@ -7,6 +7,7 @@ import { app, BrowserWindow, ipcMain, Menu, protocol, shell } from "electron";
 import { IPC } from "@shared/ipc";
 import { ExtensionRuntime } from "./extensions/runtime";
 import { destroyAllPooledWindows } from "./extensions/browserFetchHost";
+import { destroyIdleResolverWindows } from "./extensions/browserResolveHost";
 import { registerSourceHandlers } from "./ipc/sources";
 import { registerLibraryHandlers } from "./ipc/library";
 import { registerXpEventHandlers } from "./ipc/xpEvents";
@@ -323,6 +324,7 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   destroyAllPooledWindows();
+  destroyIdleResolverWindows();
   // Idle extension worker threads would otherwise keep the process alive past the last window.
   extensionRuntime?.dispose();
   shutdownDiscordRpc();

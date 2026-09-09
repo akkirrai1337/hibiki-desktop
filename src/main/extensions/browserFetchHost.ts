@@ -8,9 +8,15 @@ import type { BrowserFetchResult, ChallengeSession } from "./browserBridge";
 
 // Cloudflare-style interstitials run a few seconds of JS (proof-of-work / redirect chain) before
 // the real page or cookies are ready - loadURL's own promise resolves once the *interstitial*
-// finishes loading, not once it's done solving itself, so there's no better signal than a fixed
-// settle delay to wait on here.
-const CHALLENGE_SETTLE_MS = 4000;
+// finishes loading, not once it's done solving itself. So the page is polled for the interstitial's
+// own markers instead, and the wait ends as soon as they are gone; this is the ceiling on that
+// wait, not the wait itself. Most sources put up no interstitial at all and used to pay the full
+// four seconds anyway, once per pooled window.
+const CHALLENGE_SETTLE_MAX_MS = 4000;
+const CHALLENGE_POLL_MS = 150;
+// Even an unchallenged page gets this much: a site that sets its session cookie from its own JS
+// has not necessarily done so by the time readyState reaches "complete".
+const CHALLENGE_SETTLE_MIN_MS = 250;
 const NAVIGATION_TIMEOUT_MS = 15_000;
 const FETCH_TIMEOUT_MS = 12_000;
 const FETCH_TOTAL_TIMEOUT_MS = 25_000;
@@ -38,6 +44,38 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: s
     ]);
   } finally {
     if (timer) clearTimeout(timer);
+  }
+}
+
+// Markers of an interstitial still running, rather than of the real page: title text Cloudflare
+// and its lookalikes use, plus the containers their widget mounts into. Deliberately a "still
+// challenged?" test and not a "real page?" test - the app cannot know what any given source's real
+// page looks like, but it does know what a challenge looks like.
+const CHALLENGE_PROBE_SCRIPT = `
+  (function () {
+    var title = (document.title || "").toLowerCase();
+    var challenged = /just a moment|attention required|checking your browser|verifying you are human|один момент/.test(title)
+      || !!document.querySelector("#challenge-running, #challenge-form, #cf-chl-widget, .cf-browser-verification, #turnstile-wrapper");
+    return { challenged: challenged, ready: document.readyState === "complete" };
+  })();
+`;
+
+async function waitForChallengeSettle(win: BrowserWindow): Promise<void> {
+  const startedAt = Date.now();
+  await new Promise((resolve) => setTimeout(resolve, CHALLENGE_SETTLE_MIN_MS));
+  while (Date.now() - startedAt < CHALLENGE_SETTLE_MAX_MS) {
+    if (win.isDestroyed()) return;
+    let state: { challenged: boolean; ready: boolean };
+    try {
+      state = (await win.webContents.executeJavaScript(CHALLENGE_PROBE_SCRIPT)) as { challenged: boolean; ready: boolean };
+    } catch {
+      // Thrown while the interstitial is navigating to the real page - which is progress, not a
+      // failure. Keep waiting.
+      await new Promise((resolve) => setTimeout(resolve, CHALLENGE_POLL_MS));
+      continue;
+    }
+    if (!state.challenged && state.ready) return;
+    await new Promise((resolve) => setTimeout(resolve, CHALLENGE_POLL_MS));
   }
 }
 
@@ -83,7 +121,7 @@ async function createLoadedWindow(key: string, url: string, forceReload: boolean
   try {
     if (forceReload) await win.webContents.session.clearStorageData({ origin: new URL(url).origin });
     await withTimeout(win.loadURL(url), NAVIGATION_TIMEOUT_MS, `Browser page navigation timed out for ${url}`);
-    await new Promise((resolve) => setTimeout(resolve, CHALLENGE_SETTLE_MS));
+    await waitForChallengeSettle(win);
     pool.set(key, { window: win, loadedAt: Date.now() });
     return win;
   } catch (error) {

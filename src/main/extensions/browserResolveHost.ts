@@ -17,8 +17,12 @@ interface ScriptTarget {
   executeJavaScript(code: string): Promise<unknown>;
 }
 
+// Probing starts fast and backs off to PROBE_DELAY_MS. A resolver whose page already has its
+// stream URL - the common case for a healthy embed - used to sit through a flat 500ms before
+// anyone looked; the tail of the loop is unchanged, so a slow page costs exactly what it did.
+const FIRST_PROBE_DELAY_MS = 100;
 const PROBE_DELAY_MS = 500;
-const MAX_PROBES = 24;
+const MAX_PROBES = 30;
 const TIMEOUT_MS = 25_000;
 const NAVIGATION_TIMEOUT_MS = 10_000;
 const VALIDATION_TIMEOUT_MS = 5_000;
@@ -85,6 +89,60 @@ export interface ResolvedStream {
   quality: string | null;
   headers: Record<string, string>;
   segments: [];
+}
+
+// Every resolve used to build and tear down its own hidden window, which means a full Chromium
+// renderer process spawn per embed - paid again for each mirror the fallback chain tries. The
+// windows are interchangeable (nothing about one is tied to a particular embed), so they are kept
+// for a short while and handed to the next resolve instead.
+//
+// A released window is navigated to about:blank first, so a reused one starts from exactly the
+// state a fresh one is in. That is not cosmetic: the iframe path below decides whether it has a
+// usable referer document by asking whether anything is loaded, and a reused window still showing
+// the *previous* embed's page would answer yes and then embed into a stranger's document.
+const RESOLVER_WINDOW_IDLE_TTL_MS = 60_000;
+const RESOLVER_WINDOW_RESET_TIMEOUT_MS = 2_000;
+const MAX_IDLE_RESOLVER_WINDOWS = 2;
+const idleResolverWindows: Array<{ window: BrowserWindow; timer: ReturnType<typeof setTimeout> }> = [];
+
+function acquireResolverWindow(): BrowserWindow {
+  for (let entry = idleResolverWindows.pop(); entry; entry = idleResolverWindows.pop()) {
+    clearTimeout(entry.timer);
+    if (!entry.window.isDestroyed()) return entry.window;
+  }
+  return new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, images: false } });
+}
+
+async function releaseResolverWindow(win: BrowserWindow): Promise<void> {
+  if (win.isDestroyed()) return;
+  if (idleResolverWindows.length >= MAX_IDLE_RESOLVER_WINDOWS) {
+    win.destroy();
+    return;
+  }
+  try {
+    // Also how a page that is still running scripts of its own gets stopped: the document, and
+    // every timer it started, goes away with the navigation.
+    await withTimeout(win.loadURL("about:blank"), RESOLVER_WINDOW_RESET_TIMEOUT_MS, "reset timed out");
+  } catch {
+    if (!win.isDestroyed()) win.destroy();
+    return;
+  }
+  if (win.isDestroyed()) return;
+  const timer = setTimeout(() => {
+    const index = idleResolverWindows.findIndex((entry) => entry.window === win);
+    if (index >= 0) idleResolverWindows.splice(index, 1);
+    if (!win.isDestroyed()) win.destroy();
+  }, RESOLVER_WINDOW_IDLE_TTL_MS);
+  timer.unref?.();
+  idleResolverWindows.push({ window: win, timer });
+}
+
+/** Releases every idle resolver window - called on app quit, alongside browserFetchHost's own. */
+export function destroyIdleResolverWindows(): void {
+  for (const entry of idleResolverWindows.splice(0)) {
+    clearTimeout(entry.timer);
+    if (!entry.window.isDestroyed()) entry.window.destroy();
+  }
 }
 
 function sleep(ms: number): Promise<void> {
@@ -229,7 +287,7 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
   // Covers navigation, iframe setup, probing and validation. Previously the clock started only
   // after all navigation had completed, allowing a dead embed page to hang well beyond 25s.
   const deadline = Date.now() + Math.min(TIMEOUT_MS, timeoutMs);
-  const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, images: false } });
+  const win = acquireResolverWindow();
   const ses = win.webContents.session;
   const networkCaptures: Capture[] = [];
   let currentQuality: string | null = null;
@@ -316,7 +374,8 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
         started = result !== "no-player";
       }
 
-      await sleep(Math.min(PROBE_DELAY_MS, Math.max(0, deadline - Date.now())));
+      const probeDelay = Math.min(PROBE_DELAY_MS, FIRST_PROBE_DELAY_MS * 2 ** probe);
+      await sleep(Math.min(probeDelay, Math.max(0, deadline - Date.now())));
       const state = await readPageState(target, deadline);
       currentQuality = state.lastQuality; // tags network captures made before the *next* tick
       done = state.done;
@@ -338,9 +397,7 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
     return await buildResult(finalState.captures, networkCaptures, link, win, target, deadline);
   } finally {
     removeNetworkCapture(ses, webContentsId);
-    if (!win.isDestroyed()) {
-      win.destroy();
-    }
+    void releaseResolverWindow(win);
   }
 }
 
