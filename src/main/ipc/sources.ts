@@ -66,6 +66,7 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   ipcMain.handle(IPC.sourcePostReview, (_e, sourceId: string, request: Parameters<typeof runtime.postReview>[1]) =>
     runtime.postReview(sourceId, request),
   );
+  ipcMain.handle(IPC.sourceListLibrary, (_e, sourceId: string) => runtime.listLibrary(sourceId));
   ipcMain.handle(IPC.sourceSettingsRead, (_e, sourceId: string) => runtime.readSettings(sourceId));
   ipcMain.handle(IPC.sourceSettingsWrite, (_e, sourceId: string, key: string, value: string | null) =>
     runtime.writeSetting(sourceId, key, value),

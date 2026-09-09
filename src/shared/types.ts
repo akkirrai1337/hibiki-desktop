@@ -162,7 +162,15 @@ export type SourceCapability =
  * types, not source names. "ACCOUNT" is the one that is not a value at all: it stands for the
  * sign-in block, which the app draws itself from the source's login/logout/getAccount methods.
  */
-export type SourceSettingType = "ACCOUNT" | "TOGGLE" | "TEXT" | "SELECT";
+export type SourceSettingType =
+  | "ACCOUNT"
+  // Like TOGGLE, but the app knows what it means: turning it on is the moment two libraries that
+  // already disagree have to be reconciled, and that is a question only the person can answer. A
+  // type rather than a well-known key, so the screen still knows nothing about any one source.
+  | "LIBRARY_SYNC"
+  | "TOGGLE"
+  | "TEXT"
+  | "SELECT";
 
 export interface SourceSetting {
   key: string;
@@ -181,6 +189,15 @@ export interface SourceAccount {
   name: string;
   avatarUrl?: string | null;
   profileUrl?: string | null;
+}
+
+/** One row of a source account's own library, as the source reports it. */
+export interface SourceLibraryEntry {
+  animeId: string;
+  title?: string | null;
+  posterUrl?: string | null;
+  category: LibraryCategory;
+  rating?: number | null;
 }
 
 export interface SourceComment {

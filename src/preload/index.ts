@@ -20,6 +20,7 @@ import type {
   SourceAccount,
   SourceComment,
   SourceInfo,
+  SourceLibraryEntry,
   SourceReview,
   UpdateDownloadProgress,
   WatchProgress,
@@ -69,6 +70,8 @@ const api = {
       write: (sourceId: string, key: string, value: string | null): Promise<void> =>
         ipcRenderer.invoke(IPC.sourceSettingsWrite, sourceId, key, value),
     },
+    listLibrary: (sourceId: string): Promise<SourceLibraryEntry[]> =>
+      ipcRenderer.invoke(IPC.sourceListLibrary, sourceId),
     syncLibraryEntry: (
       sourceId: string,
       request: { animeId: string; category: string | null; rating?: number | null },

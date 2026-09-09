@@ -237,7 +237,22 @@
     "accountSignOut": "Выйти",
     "accountLogin": "Логин или почта",
     "accountPassword": "Пароль",
-    "accountOpenProfile": "Открыть профиль"
+    "accountOpenProfile": "Открыть профиль",
+    "syncCounting": "Считаю обе библиотеки…",
+    "syncCounts": "Здесь {{here}} тайтлов, в аккаунте {{there}}.",
+    "syncPushTitle": "Залить мои",
+    "syncPushDescription": "Отправит {{count}} тайтлов в аккаунт. Здесь ничего не изменится.",
+    "syncPullTitle": "Забрать из аккаунта",
+    "syncPullDescription": "Заменит эту библиотеку на {{count}} тайтлов из аккаунта.",
+    "syncMergeTitle": "Объединить",
+    "syncMergeDescription": "Отправит {{up}} и заберёт {{down}}. Ничего не удалится.",
+    "syncForwardTitle": "Только с этого момента",
+    "syncForwardDescription": "Оставит обе как есть и будет синхронизировать дальнейшие изменения.",
+    "syncPullWarning": "{{count}} тайтлов есть здесь, но нет в аккаунте. Они будут удалены из этой библиотеки.",
+    "syncConfirmPull": "Удалить и продолжить",
+    "syncBack": "Назад",
+    "syncProgress": "{{done}} из {{total}}",
+    "syncCancel": "Остановить"
   },
   "achievements": {
     "unlockedToast": "Достижение открыто"

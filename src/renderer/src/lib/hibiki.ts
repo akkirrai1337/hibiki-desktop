@@ -18,6 +18,7 @@ import type {
   SourceAccount,
   SourceComment,
   SourceInfo,
+  SourceLibraryEntry,
   SourceReview,
   UpdateDownloadProgress,
   WatchProgress,
@@ -64,6 +65,7 @@ export interface HibikiApi {
       read(sourceId: string): Promise<Record<string, string>>;
       write(sourceId: string, key: string, value: string | null): Promise<void>;
     };
+    listLibrary(sourceId: string): Promise<SourceLibraryEntry[]>;
     syncLibraryEntry(sourceId: string, request: { animeId: string; category: string | null; rating?: number | null }): Promise<void>;
     repositories: {
       list(): Promise<string[]>;

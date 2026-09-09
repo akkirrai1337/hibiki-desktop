@@ -19,6 +19,7 @@ import type {
   SourceAccount,
   SourceComment,
   SourceInfo,
+  SourceLibraryEntry,
   SourceReview,
 } from "@shared/types";
 import type { ExtensionCall, ExtensionMethod } from "./execute";
@@ -361,6 +362,12 @@ export class ExtensionRuntime {
 
   postReview(sourceId: string, request: { animeId: string; text: string; rating?: number | null }): Promise<SourceReview> {
     return this.run("postReview", sourceId, [request]);
+  }
+
+  /** Everything in the signed-in account's own lists - what the first-run reconciliation needs in
+   * order to say "3 there, 50 here" rather than asking blind. */
+  listLibrary(sourceId: string): Promise<SourceLibraryEntry[]> {
+    return this.run("listLibrary", sourceId, []);
   }
 
   /** Pushes one library row's status (and rating, when there is one) to the account. */

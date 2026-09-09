@@ -21,6 +21,7 @@ export const IPC = {
   sourceReviews: "source:reviews:list",
   sourcePostReview: "source:reviews:post",
   sourceSyncLibraryEntry: "source:library:sync",
+  sourceListLibrary: "source:library:list",
   // Values for the settings rows a source declares. The same store the script reads, so a toggle
   // flipped here is a value the source can act on.
   sourceSettingsRead: "source:settings:read",

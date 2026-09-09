@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
@@ -7,6 +7,7 @@ import { LogOut, UserRound, X } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
 import { Switch } from "@/components/Switch";
 import { cn } from "@/lib/cn";
+import { planSize, planSync, type SyncDirection } from "@/lib/librarySync";
 import type { SourceInfo, SourceSetting } from "@shared/types";
 
 /**
@@ -61,6 +62,8 @@ export function SourceSettingsDialog({ source, onClose }: { source: SourceInfo; 
             {rows.map((row) =>
               row.type === "ACCOUNT" ? (
                 <AccountRow key={row.key} sourceId={source.id} row={row} />
+              ) : row.type === "LIBRARY_SYNC" ? (
+                <LibrarySyncRow key={row.key} sourceId={source.id} row={row} />
               ) : (
                 <ValueRow key={row.key} sourceId={source.id} row={row} />
               ),
@@ -263,6 +266,230 @@ function AccountRow({ sourceId, row }: { sourceId: string; row: SourceSetting })
     </div>
   );
 }
+
+/**
+ * The library-sync switch, and the one question it has to ask.
+ *
+ * Turning it on is the only moment where both libraries already hold things and disagree. Someone
+ * with fifty titles here and three in their account wants the fifty pushed; someone with ten here
+ * and a hundred there wants the hundred pulled. Neither is the right default, so the switch stops
+ * and asks - with the real counts, because a choice between "push" and "pull" is meaningless
+ * without knowing which side is bigger.
+ *
+ * Turning it off asks nothing: stopping is never destructive.
+ */
+function LibrarySyncRow({ sourceId, row }: { sourceId: string; row: SourceSetting }) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const [choosing, setChoosing] = useState(false);
+  const [confirmingPull, setConfirmingPull] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const cancelled = useRef(false);
+
+  const stored = useQuery({
+    queryKey: ["sourceSettings", sourceId],
+    queryFn: () => hibiki.sources.settings.read(sourceId),
+  });
+  const enabled = stored.data?.[row.key] === undefined ? row.default === true : stored.data?.[row.key] === "true";
+
+  const save = useMutation({
+    mutationFn: (next: boolean) => hibiki.sources.settings.write(sourceId, row.key, String(next)),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["sourceSettings", sourceId] }),
+  });
+
+  // Both sides, fetched only once the switch is actually being turned on - listLibrary is a real
+  // network walk through the account's pages, not something to do on every settings visit.
+  const sides = useQuery({
+    queryKey: ["librarySyncSides", sourceId],
+    enabled: choosing,
+    queryFn: async () => {
+      const [localAll, remote] = await Promise.all([hibiki.library.list(), hibiki.sources.listLibrary(sourceId)]);
+      return { local: localAll.filter((entry) => entry.sourceId === sourceId), remote };
+    },
+    staleTime: 0,
+    gcTime: 0,
+  });
+
+  async function run(direction: SyncDirection) {
+    if (!sides.data) return;
+    const plan = planSync(direction, sides.data.local, sides.data.remote);
+    const total = planSize(plan);
+    cancelled.current = false;
+    setError(null);
+    setProgress({ done: 0, total });
+
+    try {
+      let done = 0;
+      // One write at a time with a pause between them: this API rate limits, and fifty requests
+      // fired at once is how a first sync turns into a wall of failures.
+      for (const entry of plan.push) {
+        if (cancelled.current) break;
+        await hibiki.sources.syncLibraryEntry(sourceId, { animeId: entry.animeId, category: entry.category });
+        setProgress({ done: ++done, total });
+        await sleep(SYNC_WRITE_GAP_MS);
+      }
+      for (const entry of plan.pull) {
+        if (cancelled.current) break;
+        // Enough of a title to store and to draw a card from; opening it fills in the rest from
+        // the source, the same way a title added from search does.
+        await hibiki.library.upsert({
+          animeId: entry.animeId,
+          sourceId,
+          category: entry.category,
+          addedAt: Date.now(),
+          anime: { id: entry.animeId, sourceId, russianName: entry.title ?? null, posterUrl: entry.posterUrl ?? null },
+        });
+        setProgress({ done: ++done, total });
+      }
+      for (const entry of plan.removeLocal) {
+        if (cancelled.current) break;
+        await hibiki.library.remove(sourceId, entry.animeId);
+        setProgress({ done: ++done, total });
+      }
+
+      if (!cancelled.current) {
+        save.mutate(true);
+        setChoosing(false);
+      }
+    } catch (failure) {
+      setError(messageOf(failure));
+    } finally {
+      setProgress(null);
+      setConfirmingPull(false);
+      queryClient.invalidateQueries({ queryKey: ["library"] });
+    }
+  }
+
+  const plans = sides.data
+    ? {
+        push: planSync("push", sides.data.local, sides.data.remote),
+        pull: planSync("pull", sides.data.local, sides.data.remote),
+        merge: planSync("merge", sides.data.local, sides.data.remote),
+      }
+    : null;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-start gap-4">
+        <RowHeader row={row} />
+        <Switch
+          checked={enabled || choosing}
+          onChange={(next) => {
+            setError(null);
+            if (next) setChoosing(true);
+            else {
+              setChoosing(false);
+              save.mutate(false);
+            }
+          }}
+        />
+      </div>
+
+      {choosing && (
+        <div className="flex flex-col gap-3 rounded-xl border border-border p-4">
+          {sides.isLoading && <p className="text-sm text-muted">{t("sources.syncCounting")}</p>}
+          {sides.isError && <p className="select-text text-xs text-rose-400">{messageOf(sides.error)}</p>}
+
+          {sides.data && plans && !progress && (
+            <>
+              <p className="text-sm text-text">
+                {t("sources.syncCounts", { here: sides.data.local.length, there: sides.data.remote.length })}
+              </p>
+              {confirmingPull ? (
+                <>
+                  {/* The only choice that deletes, so it says how many and asks again. */}
+                  <p className="text-sm text-rose-400">
+                    {t("sources.syncPullWarning", { count: plans.pull.removeLocal.length })}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <SyncButton label={t("sources.syncConfirmPull")} danger onClick={() => run("pull")} />
+                    <SyncButton label={t("sources.syncBack")} onClick={() => setConfirmingPull(false)} />
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <SyncChoice
+                    title={t("sources.syncPushTitle")}
+                    description={t("sources.syncPushDescription", { count: plans.push.push.length })}
+                    onClick={() => run("push")}
+                  />
+                  <SyncChoice
+                    title={t("sources.syncPullTitle")}
+                    description={t("sources.syncPullDescription", { count: plans.pull.pull.length })}
+                    onClick={() => (plans.pull.removeLocal.length > 0 ? setConfirmingPull(true) : run("pull"))}
+                  />
+                  <SyncChoice
+                    title={t("sources.syncMergeTitle")}
+                    description={t("sources.syncMergeDescription", {
+                      up: plans.merge.push.length,
+                      down: plans.merge.pull.length,
+                    })}
+                    onClick={() => run("merge")}
+                  />
+                  <SyncChoice
+                    title={t("sources.syncForwardTitle")}
+                    description={t("sources.syncForwardDescription")}
+                    onClick={() => run("forward")}
+                  />
+                </div>
+              )}
+            </>
+          )}
+
+          {progress && (
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-text">{t("sources.syncProgress", { done: progress.done, total: progress.total })}</p>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-text/[.10]">
+                <div
+                  className="h-full rounded-full bg-accent transition-[width]"
+                  style={{ width: `${progress.total === 0 ? 100 : (progress.done / progress.total) * 100}%` }}
+                />
+              </div>
+              <SyncButton label={t("sources.syncCancel")} onClick={() => { cancelled.current = true; }} />
+            </div>
+          )}
+
+          {error && <p className="select-text text-xs text-rose-400">{error}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SyncChoice({ title, description, onClick }: { title: string; description: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="rounded-lg border border-border px-3 py-2 text-left transition-colors hover:bg-text/[.06]"
+    >
+      <p className="text-sm font-semibold text-text">{title}</p>
+      <p className="mt-0.5 text-xs text-muted">{description}</p>
+    </button>
+  );
+}
+
+function SyncButton({ label, onClick, danger = false }: { label: string; onClick: () => void; danger?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "self-start rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors",
+        danger ? "border-rose-400/40 text-rose-400 hover:bg-rose-400/10" : "border-border text-text/80 hover:bg-text/[.06]",
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Enough of a gap that a first sync of a large library reads as steady work rather than a burst
+// the API will start refusing.
+const SYNC_WRITE_GAP_MS = 350;
 
 function messageOf(failure: unknown): string {
   const raw = failure instanceof Error ? failure.message : String(failure);

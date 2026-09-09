@@ -237,7 +237,22 @@
     "accountSignOut": "Sign out",
     "accountLogin": "Login or email",
     "accountPassword": "Password",
-    "accountOpenProfile": "Open profile"
+    "accountOpenProfile": "Open profile",
+    "syncCounting": "Checking both libraries…",
+    "syncCounts": "{{here}} titles here, {{there}} in your account.",
+    "syncPushTitle": "Upload mine",
+    "syncPushDescription": "Sends {{count}} titles to your account. Nothing here changes.",
+    "syncPullTitle": "Take the account's",
+    "syncPullDescription": "Replaces this library with the account's {{count}} titles.",
+    "syncMergeTitle": "Merge both",
+    "syncMergeDescription": "Sends {{up}} up and brings {{down}} down. Nothing is deleted.",
+    "syncForwardTitle": "Only from now on",
+    "syncForwardDescription": "Leaves both as they are and syncs changes you make from here.",
+    "syncPullWarning": "{{count}} titles are here but not in the account. They will be removed from this library.",
+    "syncConfirmPull": "Remove them and continue",
+    "syncBack": "Back",
+    "syncProgress": "{{done}} of {{total}}",
+    "syncCancel": "Stop"
   },
   "achievements": {
     "unlockedToast": "Achievement unlocked"

@@ -237,7 +237,22 @@
     "accountSignOut": "Вийти",
     "accountLogin": "Логін або пошта",
     "accountPassword": "Пароль",
-    "accountOpenProfile": "Відкрити профіль"
+    "accountOpenProfile": "Відкрити профіль",
+    "syncCounting": "Рахую обидві бібліотеки…",
+    "syncCounts": "Тут {{here}} тайтлів, в акаунті {{there}}.",
+    "syncPushTitle": "Залити мої",
+    "syncPushDescription": "Надішле {{count}} тайтлів до акаунта. Тут нічого не зміниться.",
+    "syncPullTitle": "Забрати з акаунта",
+    "syncPullDescription": "Замінить цю бібліотеку на {{count}} тайтлів з акаунта.",
+    "syncMergeTitle": "Об'єднати",
+    "syncMergeDescription": "Надішле {{up}} і забере {{down}}. Нічого не видалиться.",
+    "syncForwardTitle": "Лише з цього моменту",
+    "syncForwardDescription": "Залишить обидві як є і синхронізуватиме подальші зміни.",
+    "syncPullWarning": "{{count}} тайтлів є тут, але немає в акаунті. Їх буде видалено з цієї бібліотеки.",
+    "syncConfirmPull": "Видалити та продовжити",
+    "syncBack": "Назад",
+    "syncProgress": "{{done}} з {{total}}",
+    "syncCancel": "Зупинити"
   },
   "achievements": {
     "unlockedToast": "Досягнення відкрито"
