@@ -41,6 +41,9 @@ export interface AnimeTitle {
   episodeCount?: number | null;
   availableEpisodeCount?: number | null;
   posterUrl?: string | null;
+  /** This title's own page on the source's website, when the source supplies one. Only it can: an
+   * id here is whatever that source identifies titles by, which is often not what its URLs use. */
+  pageUrl?: string | null;
   status?: AnimeStatus | null;
   description?: string | null;
   nextEpisodeAt?: number | null;

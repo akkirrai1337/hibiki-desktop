@@ -148,7 +148,7 @@ const UrlBinding = {
 
 const NULL_DEFAULT_KEYS = [
   "russianName", "englishName", "japaneseName", "year", "type", "episodeCount",
-  "posterUrl", "status", "description", "nextEpisodeAt", "ageRating", "viewCount",
+  "posterUrl", "pageUrl", "status", "description", "nextEpisodeAt", "ageRating", "viewCount",
   "trailer", "sourceMaterial", "season", "availableEpisodeCount", "posterFallbackUrl",
 ];
 const EMPTY_LIST_DEFAULT_KEYS = [

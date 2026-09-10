@@ -89,6 +89,7 @@
     "relatedTitles": "Related titles",
     "relatedCurrentTitle": "You're currently here",
     "similarTitles": "Similar titles",
+    "openOnSite": "Open on the site",
     "episodeMenu": {
       "download": "Download episode",
       "downloading": "Downloading… {{percent}}%",

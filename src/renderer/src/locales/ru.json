@@ -89,6 +89,7 @@
     "relatedTitles": "Связанные тайтлы",
     "relatedCurrentTitle": "Вы сейчас здесь",
     "similarTitles": "Похожие тайтлы",
+    "openOnSite": "Открыть на сайте",
     "episodeMenu": {
       "download": "Скачать серию",
       "downloading": "Скачивание… {{percent}}%",

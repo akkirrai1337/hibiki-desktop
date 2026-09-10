@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { AnimatePresence, motion } from "motion/react";
 import * as ContextMenu from "@radix-ui/react-context-menu";
-import { Play, Bookmark, Check, ChevronDown, Clock, Download, Eraser, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
+import { Play, Bookmark, Check, ChevronDown, Clock, Download, Eraser, ExternalLink, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
 import { metadataProviderOrder } from "@shared/externalMetadata";
 import { CommentsSection } from "@/components/CommentsSection";
 import { RatingButton, SourceRatings } from "@/components/RatingButton";
@@ -684,6 +684,21 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
             : <span className="inline-flex items-center gap-2 rounded-xl bg-text/10 px-5 py-3 text-sm font-bold text-muted">{t("detail.noEpisodes")}</span>}
           <LibraryButton category={libraryCategory} onSelect={onSetLibraryCategory} onRemove={onRemoveFromLibrary} />
           <RatingButton sourceId={sourceId} animeId={animeId} />
+          {/* Only when the source supplied one: an id here is whatever that site identifies titles
+              by, which is often not what its URLs use, so nothing outside the source can build this.
+              Opens in the browser - see the window-open handler in main/index.ts. */}
+          {anime.pageUrl && (
+            <a
+              href={anime.pageUrl}
+              target="_blank"
+              rel="noreferrer"
+              title={t("detail.openOnSite")}
+              aria-label={t("detail.openOnSite")}
+              className="inline-flex h-[46px] w-[46px] items-center justify-center rounded-xl border border-border bg-text/[.05] text-muted transition-colors hover:bg-text/[.09] hover:text-text"
+            >
+              <ExternalLink className="h-[18px] w-[18px]" strokeWidth={2} />
+            </a>
+          )}
         </div>
       </div>
     </div>

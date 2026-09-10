@@ -89,6 +89,7 @@
     "relatedTitles": "Пов'язані тайтли",
     "relatedCurrentTitle": "Ви зараз тут",
     "similarTitles": "Схожі тайтли",
+    "openOnSite": "Відкрити на сайті",
     "episodeMenu": {
       "download": "Завантажити серію",
       "downloading": "Завантаження… {{percent}}%",
