@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { AnimeTitle } from "@shared/types";
 import { hibiki } from "@/lib/hibiki";
 
@@ -19,8 +20,15 @@ import { hibiki } from "@/lib/hibiki";
  * providers' pace, in the background); every visit after that is answered from disk. Returns the
  * input untouched for a source that does not use external metadata, or when the user has it off -
  * the main process decides that, not this hook.
+ *
+ * `describing` is what a screen shows a skeleton for. Watching posters and names change under the
+ * cursor is what read as unfinished, so a screen waits behind its own loading state instead - the
+ * same thing the Android title page does while its banner resolves.
  */
-export function useDescribedTitles(sourceId: string | null | undefined, titles: AnimeTitle[] | undefined): AnimeTitle[] {
+export function useDescribedTitles(
+  sourceId: string | null | undefined,
+  titles: AnimeTitle[] | undefined,
+): { titles: AnimeTitle[]; describing: boolean; refreshing: boolean } {
   const ids = (titles ?? []).map((title) => title.id).join(",");
   const described = useQuery({
     // Keyed by the exact set of titles on screen: a different slice is a different question, and
@@ -31,6 +39,30 @@ export function useDescribedTitles(sourceId: string | null | undefined, titles: 
     // The answer is as durable as the cache behind it, and re-asking on every remount would put
     // this screen back at the start of the provider's queue for nothing.
     staleTime: 5 * 60_000,
+    // A catalog page appended to the bottom is a new question about a longer list, and answering it
+    // from scratch would blank the grid someone is in the middle of scrolling. Holding the previous
+    // answer keeps the screen still until the longer one is ready.
+    placeholderData: keepPreviousData,
   });
-  return described.data ?? titles ?? [];
+  // An already-described screen answers from disk in a millisecond or two, and flashing a skeleton
+  // for that reads as a stutter rather than as loading - so the flag only turns on once the wait is
+  // long enough to be worth acknowledging. Mirrors PosterImage's own placeholder guard on Android.
+  const describing = useDelayed(described.isPending && described.fetchStatus !== "idle", SKELETON_FLASH_GUARD_MS);
+  return { titles: described.data ?? titles ?? [], describing, refreshing: described.isFetching };
+}
+
+/** Loading states shorter than this never raise the flag, so a cached screen never flashes one. */
+const SKELETON_FLASH_GUARD_MS = 120;
+
+function useDelayed(active: boolean, delayMs: number): boolean {
+  const [delayed, setDelayed] = useState(false);
+  useEffect(() => {
+    if (!active) {
+      setDelayed(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setDelayed(true), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [active, delayMs]);
+  return delayed;
 }

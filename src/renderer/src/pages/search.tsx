@@ -45,16 +45,16 @@ export function SearchPage() {
     queryFn: ({ signal }) => searchSource(source!.id, { query: trimmedQuery, limit: 30, ...toSearchRequestFilters(filters, filterCatalog.data) }, signal),
   });
 
-  const items = useDescribedTitles(source?.id, results.data);
+  const { titles: items, describing } = useDescribedTitles(source?.id, results.data);
 
   return <div className="min-h-full bg-app-bg px-8 py-8 pb-12">
     {!trimmedQuery && <EmptyState text={t("search.prompt")} />}
     {trimmedQuery && <>
       <h1 className="mb-5 select-text text-lg font-bold text-text">{t("search.resultsFor", { query: trimmedQuery })}</h1>
-      {results.isLoading && <ResultsSkeleton />}
+      {(results.isLoading || describing) && <ResultsSkeleton />}
       {results.isError && <ErrorBanner message={(results.error as Error).message} />}
-      {results.data && results.data.length === 0 && <EmptyState text={t("search.empty", { query: trimmedQuery })} />}
-      {items.length > 0 && <div className="grid grid-cols-[repeat(auto-fit,minmax(460px,1fr))] gap-x-4 gap-y-1">
+      {results.data && results.data.length === 0 && !describing && <EmptyState text={t("search.empty", { query: trimmedQuery })} />}
+      {items.length > 0 && !describing && <div className="grid grid-cols-[repeat(auto-fit,minmax(460px,1fr))] gap-x-4 gap-y-1">
         {items.map((item) => <ResultRow key={`${item.sourceId}:${item.id}`} anime={item} />)}
       </div>}
     </>}

@@ -77,8 +77,9 @@ export function CatalogPage() {
   const { hasHistory } = useContinueWatching();
   // Both rows are described by the metadata provider once the whole row is - see
   // useDescribedTitles for why it is all at once rather than card by card.
-  const heroSlides = useDescribedTitles(source?.id, hero.data); const isNew = !hasHistory;
-  const poolTitles = useDescribedTitles(source?.id, pool.data);
+  const { titles: heroSlides, describing: describingHero } = useDescribedTitles(source?.id, hero.data);
+  const { titles: poolTitles, describing: describingPool } = useDescribedTitles(source?.id, pool.data);
+  const isNew = !hasHistory;
   const sourceById = useMemo(() => new Map((sources.data ?? []).map((s) => [s.id, s])), [sources.data]);
   // Re-shuffled each time a fresh pool comes in (new source, new random offset, ...) so this
   // section doesn't always show the same titles in the same order.
@@ -97,7 +98,7 @@ export function CatalogPage() {
   return <div className="min-h-full bg-app-bg pb-12">
     {sources.isLoading && <HeroSkeleton />}{sources.data?.length === 0 && <EmptySources />}{sources.isError && <ErrorBanner message={(sources.error as Error).message} className="m-8" />}
     {source && <>
-      {heroSlides.length > 0 ? <HeroCarousel slides={heroSlides} sourceName={source.name} /> : hero.isLoading && <HeroSkeleton />}
+      {heroSlides.length > 0 && !describingHero ? <HeroCarousel slides={heroSlides} sourceName={source.name} /> : (hero.isLoading || describingHero) && <HeroSkeleton />}
       <div className="space-y-12 px-8 pt-10">
         {pool.isError && <ErrorBanner message={(pool.error as Error).message} />}
         {/* Always the frame row: swapping to poster cards below a threshold meant the section
@@ -107,9 +108,9 @@ export function CatalogPage() {
           <ContinueWatchingFrameRow sourceById={sourceById} />
         </Section>}
         <Section title={isNew ? t("catalog.popularNow") : t("catalog.becauseYouWatched")} action={t("catalog.openCatalog")} to="/catalog">
-          {pool.isLoading ? <GridSkeleton /> : <Grid>{recommended.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</Grid>}
+          {pool.isLoading || describingPool ? <GridSkeleton /> : <Grid>{recommended.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</Grid>}
         </Section>
-        {genreSection && <Section title={t("catalog.genreSection", { genre: genreSection.genre })} action={t("catalog.openCatalog")} to="/catalog">
+        {genreSection && !describingPool && <Section title={t("catalog.genreSection", { genre: genreSection.genre })} action={t("catalog.openCatalog")} to="/catalog">
           <Grid>{genreSection.items.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</Grid>
         </Section>}
       </div>

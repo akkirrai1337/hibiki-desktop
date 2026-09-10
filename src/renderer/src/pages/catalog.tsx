@@ -80,7 +80,7 @@ export function CatalogBrowsePage() {
   // Described as a whole, including every page loaded so far: a newly appended page that named its
   // titles differently from the ones above it would be the same mixed-list problem, one scroll
   // further down.
-  const items = useDescribedTitles(source?.id, sourceItems);
+  const { titles: items, describing, refreshing: describingMore } = useDescribedTitles(source?.id, sourceItems);
   const isLoading = mode === "recent" ? recent.isLoading : browse.isLoading;
   const isError = mode === "recent" ? recent.isError : browse.isError;
   const error = mode === "recent" ? recent.error : browse.error;
@@ -97,12 +97,14 @@ export function CatalogBrowsePage() {
     const el = loadMoreRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) fetchNextPage(); },
+      // Not while the page just added is still being described: `items` has not grown yet, so the
+      // sentinel is still on screen and would ask for page after page in a loop.
+      ([entry]) => { if (entry.isIntersecting && hasNextPage && !isFetchingNextPage && !describingMore) fetchNextPage(); },
       { rootMargin: "300px" },
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [catalogAutoLoad, mode, hasNextPage, isFetchingNextPage, fetchNextPage, items.length]);
+  }, [catalogAutoLoad, mode, hasNextPage, isFetchingNextPage, describingMore, fetchNextPage, items.length]);
 
   return (
     <div className="min-h-full bg-app-bg px-8 py-8 pb-16">
@@ -117,7 +119,7 @@ export function CatalogBrowsePage() {
             </div>
           )}
 
-          {isLoading ? (
+          {isLoading || describing ? (
             <GridSkeleton />
           ) : items.length === 0 ? (
             <EmptyState text={t("catalogPage.empty")} />
