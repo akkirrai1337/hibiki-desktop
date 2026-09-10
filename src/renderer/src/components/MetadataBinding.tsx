@@ -24,12 +24,16 @@ import { cn } from "@/lib/cn";
  * that some titles land on the wrong entry. Without a way to correct that, the only recourse is
  * turning the whole feature off.
  */
-export function MetadataBinding({ sourceId, animeId }: { sourceId: string; animeId: string }) {
+export function MetadataBinding({ sourceId, animeId, titleLoadedAt }: { sourceId: string; animeId: string; titleLoadedAt: number }) {
   const { t } = useTranslation();
   const [picking, setPicking] = useState(false);
+  // Keyed on when the title itself last arrived, because the match is made *by* that fetch: asking
+  // first (they run in parallel) answers "not matched" for a title that is about to be matched, and
+  // the answer would otherwise stand until something else invalidated it.
   const binding = useQuery({
-    queryKey: ["metadataMatch", sourceId, animeId],
+    queryKey: ["metadataMatch", sourceId, animeId, titleLoadedAt],
     queryFn: () => hibiki.metadata.match(sourceId, animeId),
+    enabled: titleLoadedAt > 0,
   });
 
   // No provider may describe this title at all: either the source does not use external metadata,

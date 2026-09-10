@@ -338,7 +338,7 @@ function AnimeDetailPage() {
     {animeQuery.isLoading && <DetailSkeleton />}
     {animeQuery.isError && <div className="p-8"><ErrorBanner message={(animeQuery.error as Error).message} /></div>}
     {anime && <>
-      <Overview anime={anime} libraryCategory={libraryEntry?.category ?? null} onSetLibraryCategory={setLibraryCategory} onRemoveFromLibrary={removeFromLibrary} continueTarget={continueTarget ? { groupId: activeGroup!.id, episodeId: continueTarget.episode.id, label: continueTarget.label } : undefined} sourceId={sourceId} animeId={animeId} related={related} />
+      <Overview anime={anime} libraryCategory={libraryEntry?.category ?? null} onSetLibraryCategory={setLibraryCategory} onRemoveFromLibrary={removeFromLibrary} continueTarget={continueTarget ? { groupId: activeGroup!.id, episodeId: continueTarget.episode.id, label: continueTarget.label } : undefined} sourceId={sourceId} animeId={animeId} related={related} titleLoadedAt={animeQuery.dataUpdatedAt} />
       <div className="px-8 pt-6">
         <h2 className="mb-4 text-xl font-bold tracking-[-.02em] text-text">{t("detail.episodes")}</h2>
         {groupsQuery.isLoading && <div className="text-sm text-muted">{t("detail.loadingEpisodes")}</div>}
@@ -606,7 +606,7 @@ function EpisodeChip({
   );
 }
 
-function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLibrary, continueTarget, sourceId, animeId, related }: { anime: AnimeTitle; libraryCategory: LibraryCategory | null; onSetLibraryCategory: (category: LibraryCategory) => void; onRemoveFromLibrary: () => void; continueTarget?: { groupId: string; episodeId: string; label: string }; sourceId: string; animeId: string; related: RelatedAnimeTitle[] }) {
+function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLibrary, continueTarget, sourceId, animeId, related, titleLoadedAt }: { anime: AnimeTitle; libraryCategory: LibraryCategory | null; onSetLibraryCategory: (category: LibraryCategory) => void; onRemoveFromLibrary: () => void; continueTarget?: { groupId: string; episodeId: string; label: string }; sourceId: string; animeId: string; related: RelatedAnimeTitle[]; titleLoadedAt: number }) {
   const { t, i18n } = useTranslation();
   const title = animeTitle(anime);
   const [descriptionOpen, setDescriptionOpen] = useState(false);
@@ -663,7 +663,7 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
         {/* Where the description came from, and the way to correct a wrong match - below the
             description it explains, above the actions, since it is a note about this page rather
             than something to do on it. */}
-        <MetadataBinding sourceId={sourceId} animeId={animeId} />
+        <MetadataBinding sourceId={sourceId} animeId={animeId} titleLoadedAt={titleLoadedAt} />
         <div className="mt-6 flex items-center gap-3">
           {continueTarget ? <Link to="/watch/$sourceId/$animeId/$groupId/$episodeId" params={{ sourceId, animeId, groupId: continueTarget.groupId, episodeId: continueTarget.episodeId }} className="inline-flex items-center gap-2 rounded-xl bg-text px-5 py-3 text-sm font-bold text-bg transition-transform hover:scale-[1.02] active:scale-[0.98]"><Play className="h-4 w-4 fill-current" strokeWidth={0} />{continueTarget.label}</Link>
             : <span className="inline-flex items-center gap-2 rounded-xl bg-text/10 px-5 py-3 text-sm font-bold text-muted">{t("detail.noEpisodes")}</span>}
