@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from "motion/react";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import { Play, Bookmark, Check, ChevronDown, Clock, Download, Eraser, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
 import { metadataProviderOrder } from "@shared/externalMetadata";
+import { CommentsSection } from "@/components/CommentsSection";
 import { MetadataBinding } from "@/components/MetadataBinding";
 import { hibiki } from "@/lib/hibiki";
 import { findListedTitle } from "@/lib/listedTitles";
@@ -186,6 +187,9 @@ function AnimeDetailPage() {
   // then is steadier than watching the page rewrite itself. The same three inputs the main process
   // uses, so the two never disagree about it.
   const sourcesQuery = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });
+  // This page's own source, for the two things that are about the site rather than the title:
+  // whether a provider describes it, and whether it has comments.
+  const source = sourcesQuery.data?.find((candidate) => candidate.id === sourceId);
   const externalMetadataEnabled = useUiStore((s) => s.externalMetadataEnabled);
   const externalMetadataOverrides = useUiStore((s) => s.externalMetadataOverrides);
   const externalMetadataProvider = useUiStore((s) => s.externalMetadataProvider);
@@ -193,7 +197,7 @@ function AnimeDetailPage() {
   const describesTitles = metadataProviderOrder(
     { enabled: externalMetadataEnabled, overrides: externalMetadataOverrides, provider: externalMetadataProvider, fallbackEnabled: externalMetadataFallback },
     sourceId,
-    sourcesQuery.data?.find((source) => source.id === sourceId)?.useExternalMetadata === true,
+    source?.useExternalMetadata === true,
   ).length > 0;
   // dataUpdatedAt stays 0 for placeholder data, so this is "the real fetch has not landed yet".
   const describing = describesTitles && animeQuery.dataUpdatedAt === 0 && !animeQuery.isError;
@@ -395,6 +399,9 @@ function AnimeDetailPage() {
           heading={<h2 className="mb-4 text-xl font-bold tracking-[-.02em] text-text">{t("detail.similarTitles")}</h2>}
         />
       </div>
+      {/* Last on the page, and only for a source that has them: comments are the one section here
+          that is about the site rather than about the title. */}
+      {source && <CommentsSection source={source} animeId={animeId} />}
       <AnimatePresence>
         {downloadEpisode && (
           <DownloadDialog

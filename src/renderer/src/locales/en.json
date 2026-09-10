@@ -121,6 +121,20 @@
       "noneFound": "Nothing found.",
       "reset": "Match automatically again",
       "idsRead": "A bare id is read as {{provider}}"
+    },
+    "comments": {
+      "title": "Comments",
+      "empty": "No comments yet.",
+      "signInHint": "Sign in to this source to leave a comment:",
+      "placeholder": "Write a comment…",
+      "replyPlaceholder": "Write a reply…",
+      "post": "Post",
+      "posting": "Posting…",
+      "loading": "Loading…",
+      "loadMore": "Show more",
+      "reply": "Reply",
+      "showReplies": "Show replies ({{count}})",
+      "hideReplies": "Hide replies"
     }
   },
   "entry": {
