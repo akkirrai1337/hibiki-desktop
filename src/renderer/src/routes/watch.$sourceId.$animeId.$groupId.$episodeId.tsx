@@ -21,8 +21,32 @@ import { ACTIVITY_DAYS, buildActivitySeries, computeStreaks } from "@/components
 const STREAK_TOAST_HOLD_MS = 2000;
 
 export const Route = createFileRoute("/watch/$sourceId/$animeId/$groupId/$episodeId")({
-  component: WatchPage,
+  component: WatchRoute,
 });
+
+/**
+ * Opening a different episode or dub is a fresh visit to the player, not a re-render of the one
+ * already open.
+ *
+ * Arriving from the title page is a route change, so this page mounts clean. Switching dub from
+ * inside the player only changes the route's params, so the same instance stayed mounted and had
+ * to unwind itself: a request counter, a resolve in flight, a preference gate and several refs all
+ * had to agree, in effect order, about which episode they now belonged to. When they disagreed the
+ * player waited forever - visible only as a spinner, and only when switching from inside, never
+ * when coming from the title page.
+ *
+ * Keying on the episode makes the two paths the same thing. React unmounts and remounts, so every
+ * piece of that state starts where it starts on a first visit, and the ordering it depended on
+ * stops existing rather than being reasoned about.
+ */
+function WatchRoute() {
+  const { groupId, episodeId } = Route.useParams();
+  // Above the key on purpose: leaving the player should stop announcing an episode, but moving to
+  // the next one should not blink the presence off and straight back on. This unmounts only when
+  // the route itself is left.
+  useEffect(() => () => { hibiki.discord.clearPresence(); }, []);
+  return <WatchPage key={`${groupId}/${episodeId}`} />;
+}
 
 const SAVE_INTERVAL_MS = 5000;
 // Progress ticks arrive several times a second while playing, so anything past a couple of seconds
@@ -563,10 +587,6 @@ function WatchPage() {
   useEffect(() => {
     lastDiscordUpdateRef.current = 0;
   }, [episodeId]);
-
-  // Leaving the player (back to the detail page, another episode, closing the app mid-watch) -
-  // nothing should keep announcing an episode that's no longer playing.
-  useEffect(() => () => { hibiki.discord.clearPresence(); }, []);
 
   return (
     <div className="relative h-full w-full bg-black">
