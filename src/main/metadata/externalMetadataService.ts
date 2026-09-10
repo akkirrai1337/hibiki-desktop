@@ -4,7 +4,7 @@
 // The two clients (anilistClient.ts, malClient.ts) only make requests. The rules for scoring a
 // match and merging fields are pure and live in shared/externalMetadata.ts. This file owns
 // everything stateful in between.
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   MATCH_CONFIDENCE_THRESHOLD,
   METADATA_PROVIDER_IDS,
@@ -319,54 +319,4 @@ export function clearMatch(sourceId: string, animeId: string): void {
     .delete(externalMetadataMatches)
     .where(and(eq(externalMetadataMatches.sourceId, sourceId), eq(externalMetadataMatches.animeId, animeId)))
     .run();
-}
-
-/**
- * Cached-only lookup for the several titles a list screen is about - it draws from disk without
- * ever waiting on a provider, and lets the per-title path above fill the gaps in the background.
- *
- * Keyed "sourceId:animeId", carrying whichever provider's entry is stored for it; a title matched
- * to both is reported from the first provider in `order` that has one, so a list and the title page
- * it leads to agree.
- */
-export function getCachedExternalMetadataMany(
-  keys: Array<{ sourceId: string; animeId: string }>,
-  order: MetadataProviderId[],
-): Record<string, ExternalMetadata> {
-  if (keys.length === 0 || order.length === 0) return {};
-  const db = getDb();
-  const result: Record<string, ExternalMetadata> = {};
-  const unique = [...new Map(keys.map((key) => [`${key.sourceId}:${key.animeId}`, key])).values()];
-  const BATCH_SIZE = 400;
-  for (let offset = 0; offset < unique.length; offset += BATCH_SIZE) {
-    const batch = unique.slice(offset, offset + BATCH_SIZE);
-    const matches = db
-      .select()
-      .from(externalMetadataMatches)
-      // One bound value per title (well below SQLite's 999-variable limit) rather than a
-      // (sourceId, animeId, provider) triple each: ids collide across sources rarely enough that
-      // fetching the few extra rows and dropping them below beats tripling the variable count.
-      .where(inArray(externalMetadataMatches.animeId, batch.map((key) => key.animeId)))
-      .all()
-      .filter((row) => batch.some((key) => key.sourceId === row.sourceId && key.animeId === row.animeId));
-    const ids = matches.map((row) => row.externalId).filter((id): id is number => id != null);
-    if (ids.length === 0) continue;
-    const media = new Map(
-      db
-        .select()
-        .from(externalMetadataMedia)
-        .where(inArray(externalMetadataMedia.externalId, ids))
-        .all()
-        .map((row) => [`${row.provider}:${row.externalId}`, JSON.parse(row.mediaJson) as ExternalMetadata]),
-    );
-    for (const row of matches) {
-      const key = `${row.sourceId}:${row.animeId}`;
-      const stored = row.externalId != null ? media.get(`${row.provider}:${row.externalId}`) : undefined;
-      if (!stored) continue;
-      const existing = result[key];
-      // Ranked by the caller's provider order, not by which row SQLite happened to return first.
-      if (!existing || order.indexOf(stored.provider) < order.indexOf(existing.provider)) result[key] = stored;
-    }
-  }
-  return result;
 }

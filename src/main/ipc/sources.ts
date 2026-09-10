@@ -7,7 +7,6 @@ import {
   clearMatch,
   currentMatch,
   fetchEntry,
-  getCachedExternalMetadataMany,
   getExternalMetadata,
   searchProviders,
   setManualMatch,
@@ -39,25 +38,12 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
     }
   };
 
-  /**
-   * The same merge for a whole list, but strictly from what is already cached - no requests.
-   *
-   * Lists exist to be scrolled: matching a screenful of unseen titles would mean a dozen searches
-   * against a provider that allows about one a second, and the screen would finish painting long
-   * before they returned. What this does buy is consistency - once a title has been opened, its
-   * card and its page describe it the same way instead of disagreeing about its own name.
-   */
-  const describeAllFromCache = (sourceId: string, titles: AnimeTitle[]): AnimeTitle[] => {
-    const order = orderFor(sourceId);
-    if (order.length === 0 || titles.length === 0) return titles;
-    try {
-      const cached = getCachedExternalMetadataMany(titles.map((title) => ({ sourceId, animeId: title.id })), order);
-      return titles.map((title) => mergeExternalMetadata(title, cached[`${sourceId}:${title.id}`] ?? null));
-    } catch {
-      return titles;
-    }
-  };
-
+  // Lists are deliberately *not* described from a provider, not even from the cache. Enriching only
+  // the titles that happen to be cached leaves a screen where some cards are named by the provider
+  // and some by the source, and the two disagree - which reads as a broken list even when every
+  // entry in it is correct. Describing all of them instead would mean a match per unseen title, at
+  // roughly one request a second, on a screen built to be scrolled. So a card shows what its source
+  // called the title, and the provider's version starts at the title page.
   ipcMain.handle(IPC.metadataSetPreferences, (_e, preferences: ExternalMetadataPreferences) =>
     setExternalMetadataPreferences(preferences),
   );
@@ -78,13 +64,9 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   );
   ipcMain.handle(IPC.metadataClearMatch, (_e, sourceId: string, animeId: string) => clearMatch(sourceId, animeId));
   ipcMain.handle(IPC.sourcesList, () => runtime.list());
-  ipcMain.handle(IPC.sourceSearch, async (_e, sourceId: string, request, requestId?: string) =>
-    describeAllFromCache(sourceId, await runtime.search(sourceId, request, requestId)),
-  );
+  ipcMain.handle(IPC.sourceSearch, (_e, sourceId: string, request, requestId?: string) => runtime.search(sourceId, request, requestId));
   ipcMain.on(IPC.sourceSearchCancel, (_e, requestId: string) => runtime.cancelRequest(requestId));
-  ipcMain.handle(IPC.sourceLatest, async (_e, sourceId: string, limit: number) =>
-    describeAllFromCache(sourceId, await runtime.latest(sourceId, limit)),
-  );
+  ipcMain.handle(IPC.sourceLatest, (_e, sourceId: string, limit: number) => runtime.latest(sourceId, limit));
   // Falls back to whatever's cached (either from a previous successful fetch below, or from one of
   // this title's episodes finishing a download - see downloads.ts's cacheForOffline) - the source
   // itself being unreachable (offline, taken down, extension uninstalled, ...) shouldn't also take
