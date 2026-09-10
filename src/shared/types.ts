@@ -251,6 +251,17 @@ export interface SourceInfo {
   supportedSorts: string[];
   supportedFilters: SearchFilterKind[];
   runtime?: "NODE" | "BROWSER";
+  /**
+   * The source admits its own metadata is the weaker half of what it returns, and asks the app to
+   * describe its titles from AniList instead (see shared/anilistMetadata.ts for exactly which
+   * fields that covers - never the episode list, which only the source knows).
+   *
+   * A plain top-level manifest key rather than a new SourceCapability on purpose: unknown *keys*
+   * have always been ignored by both clients, while an unknown capability *value* is only skipped
+   * by Android builds carrying LenientEnumSerializers - which most users do not have installed
+   * yet. Publishing this as a capability today would make the manifest invalid for them.
+   */
+  useExternalMetadata?: boolean;
   /** Empty for every source that does not declare any - which is all of them until one does. */
   settings: SourceSetting[];
 }

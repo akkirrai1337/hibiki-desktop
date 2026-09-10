@@ -49,6 +49,7 @@ interface Manifest {
   iconUrl?: string;
   lang?: string;
   capabilities?: string[];
+  useExternalMetadata?: boolean;
   supportedSorts?: string[];
   supportedFilters?: string[];
   settings?: SourceInfo["settings"];
@@ -174,6 +175,7 @@ export class ExtensionRuntime {
       iconUrl: manifest.iconUrl ?? null,
       lang: manifest.lang ?? null,
       capabilities: (manifest.capabilities ?? []) as SourceInfo["capabilities"],
+      useExternalMetadata: manifest.useExternalMetadata === true,
       supportedSorts: manifest.supportedSorts ?? [],
       supportedFilters: (manifest.supportedFilters ?? []) as SourceInfo["supportedFilters"],
       runtime: "NODE",
