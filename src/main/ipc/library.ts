@@ -3,7 +3,7 @@ import { eq, and, gte, desc, sql } from "drizzle-orm";
 import { IPC } from "@shared/ipc";
 import type { DailyActivity, LibraryEntry, WatchProgress } from "@shared/types";
 import { getDb } from "../db";
-import { library, watchProgress, dailyActivity } from "../db/schema";
+import { library, watchProgress, dailyActivity, titleRatings } from "../db/schema";
 import type { ExtensionRuntime } from "../extensions/runtime";
 import { logger } from "../logger";
 
@@ -46,7 +46,61 @@ function pushToAccount(
     });
 }
 
+/**
+ * Mirrors a rating to the source's account, carrying the category the title already has there.
+ *
+ * The category matters: a source reads `syncLibraryEntry` as one statement about a title, and
+ * YummyAnime removes it from its lists when that statement carries no category. So a rating sent
+ * without one would quietly un-list a title the user only meant to score. The local library answers
+ * that for anything in it, and for anything else the source's own list is asked once - and if that
+ * cannot be reached, nothing is sent at all rather than something wrong.
+ */
+async function pushRating(runtime: ExtensionRuntime, sourceId: string, animeId: string, rating: number): Promise<void> {
+  if (!runtime.isLibrarySyncEnabled(sourceId)) return;
+  const local = getDb()
+    .select()
+    .from(library)
+    .where(and(eq(library.sourceId, sourceId), eq(library.animeId, animeId)))
+    .get();
+  let category = local?.category ?? null;
+  if (!category) {
+    const remote = await runtime.listLibrary(sourceId);
+    category = remote.find((entry) => entry.animeId === animeId)?.category ?? null;
+  }
+  await runtime.syncLibraryEntry(sourceId, { animeId, category, rating });
+}
+
 export function registerLibraryHandlers(runtime: ExtensionRuntime): void {
+  ipcMain.handle(IPC.ratingGet, (_e, sourceId: string, animeId: string): number | null => {
+    const row = getDb()
+      .select()
+      .from(titleRatings)
+      .where(and(eq(titleRatings.sourceId, sourceId), eq(titleRatings.animeId, animeId)))
+      .get();
+    return row?.rating ?? null;
+  });
+
+  ipcMain.handle(IPC.ratingSet, async (_e, sourceId: string, animeId: string, rating: number | null) => {
+    const db = getDb();
+    if (rating == null) {
+      db.delete(titleRatings).where(and(eq(titleRatings.sourceId, sourceId), eq(titleRatings.animeId, animeId))).run();
+    } else {
+      const values = { sourceId, animeId, rating, ratedAt: Date.now() };
+      db.insert(titleRatings)
+        .values(values)
+        .onConflictDoUpdate({ target: [titleRatings.sourceId, titleRatings.animeId], set: { rating, ratedAt: values.ratedAt } })
+        .run();
+    }
+    // Kept local first and pushed after: a rating is this app's own record, and a source that is
+    // unreachable, signed out, or simply slow must not cost the user their answer. Awaited, unlike
+    // the library push, so the screen can say whether the account got it.
+    if (rating != null) {
+      await pushRating(runtime, sourceId, animeId, rating).catch((error: unknown) => {
+        logger.warn("sync", `${sourceId}/${animeId} rating not synced: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }
+  });
+
   ipcMain.handle(IPC.libraryList, (): LibraryEntry[] => {
     const rows = getDb().select().from(library).all();
     return rows.map((r) => ({

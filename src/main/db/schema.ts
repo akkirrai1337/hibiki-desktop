@@ -138,6 +138,23 @@ export const cachedSourceQueries = sqliteTable("cached_source_queries", {
   cachedAt: integer("cached_at").notNull(),
 });
 
+// What the user rated a title, on the source's own scale (YummyAnime and every other site here
+// rate out of 10).
+//
+// Its own table rather than a column on `library`, because rating a title and keeping it in a list
+// are separate acts on every source that has both: rating something is not a reason to add it to a
+// library, and removing it from the library is not a reason to forget what it was rated.
+export const titleRatings = sqliteTable(
+  "title_ratings",
+  {
+    sourceId: text("source_id").notNull(),
+    animeId: text("anime_id").notNull(),
+    rating: integer("rating").notNull(),
+    ratedAt: integer("rated_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.sourceId, t.animeId] })],
+);
+
 // Which entry of which metadata provider a given source title was matched to. Separate from
 // externalMetadataMedia below on purpose: a match is expensive to establish (a search request plus
 // scoring) and worth keeping, while the entry it points at is merely a cache line that can be

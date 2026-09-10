@@ -9,6 +9,7 @@ import * as ContextMenu from "@radix-ui/react-context-menu";
 import { Play, Bookmark, Check, ChevronDown, Clock, Download, Eraser, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
 import { metadataProviderOrder } from "@shared/externalMetadata";
 import { CommentsSection } from "@/components/CommentsSection";
+import { RatingButton, SourceRatings } from "@/components/RatingButton";
 import { MetadataBinding } from "@/components/MetadataBinding";
 import { hibiki } from "@/lib/hibiki";
 import { findListedTitle } from "@/lib/listedTitles";
@@ -665,6 +666,9 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
           {/* Fixed emerald, not the app's own accent color - mirrors Android's "next episode"
               pill, which is deliberately always green regardless of the current theme. */}
           {nextEpisodeLabel && <><Dot /><span className="flex items-center gap-1 rounded-md bg-emerald-400/15 px-1.5 py-0.5 font-semibold text-emerald-500 dark:text-emerald-400"><Clock className="h-3 w-3" strokeWidth={2.5} />{nextEpisodeLabel}</span></>}
+          {/* The scores a card in any list already shows - the page that a card leads to was the
+              one place they were missing. */}
+          {(anime.ratings?.length ?? 0) > 0 && <><Dot /><SourceRatings ratings={anime.ratings ?? []} /></>}
         </div>
         {anime.genres && anime.genres.length > 0 && <div className="mt-3 flex flex-wrap gap-1.5">{anime.genres.map((g) => <span key={g} className="rounded-md bg-text/[.07] px-2 py-1 text-xs text-muted">{g}</span>)}</div>}
         {anime.description && <div className="mt-4 max-w-2xl overflow-hidden transition-[max-height] duration-300 ease-in-out" style={{ maxHeight }}>
@@ -679,6 +683,7 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
           {continueTarget ? <Link to="/watch/$sourceId/$animeId/$groupId/$episodeId" params={{ sourceId, animeId, groupId: continueTarget.groupId, episodeId: continueTarget.episodeId }} className="inline-flex items-center gap-2 rounded-xl bg-text px-5 py-3 text-sm font-bold text-bg transition-transform hover:scale-[1.02] active:scale-[0.98]"><Play className="h-4 w-4 fill-current" strokeWidth={0} />{continueTarget.label}</Link>
             : <span className="inline-flex items-center gap-2 rounded-xl bg-text/10 px-5 py-3 text-sm font-bold text-muted">{t("detail.noEpisodes")}</span>}
           <LibraryButton category={libraryCategory} onSelect={onSetLibraryCategory} onRemove={onRemoveFromLibrary} />
+          <RatingButton sourceId={sourceId} animeId={animeId} />
         </div>
       </div>
     </div>

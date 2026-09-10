@@ -115,6 +115,12 @@ const api = {
       return () => ipcRenderer.removeListener(IPC.sourcesChanged, listener);
     },
   },
+  ratings: {
+    get: (sourceId: string, animeId: string): Promise<number | null> => ipcRenderer.invoke(IPC.ratingGet, sourceId, animeId),
+    /** null clears it. Resolves once the source's account has been told, when it can be. */
+    set: (sourceId: string, animeId: string, rating: number | null): Promise<void> =>
+      ipcRenderer.invoke(IPC.ratingSet, sourceId, animeId, rating),
+  },
   library: {
     list: (): Promise<LibraryEntry[]> => ipcRenderer.invoke(IPC.libraryList),
     upsert: (entry: LibraryEntry): Promise<void> => ipcRenderer.invoke(IPC.libraryUpsert, entry),

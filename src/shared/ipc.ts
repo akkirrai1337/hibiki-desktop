@@ -49,6 +49,10 @@ export const IPC = {
   libraryList: "library:list",
   libraryUpsert: "library:upsert",
   libraryRemove: "library:remove",
+  // A title's own rating, kept apart from the library for the same reason the table is (see
+  // db/schema.ts): scoring a title and listing it are separate acts.
+  ratingGet: "rating:get",
+  ratingSet: "rating:set",
 
   progressGet: "progress:get",
   progressUpsert: "progress:upsert",

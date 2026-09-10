@@ -92,6 +92,10 @@ export interface HibikiApi {
     installedVersions(): Promise<InstalledVersions>;
     onChanged(callback: () => void): () => void;
   };
+  ratings: {
+    get(sourceId: string, animeId: string): Promise<number | null>;
+    set(sourceId: string, animeId: string, rating: number | null): Promise<void>;
+  };
   library: {
     list(): Promise<LibraryEntry[]>;
     upsert(entry: LibraryEntry): Promise<void>;
