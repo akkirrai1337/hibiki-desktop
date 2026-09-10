@@ -27,3 +27,7 @@ tests
 Thumbs.db
 .vscode/
 .idea/
+
+.codex*
+
+docs/*.md
