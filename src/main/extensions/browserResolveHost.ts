@@ -27,7 +27,7 @@ const MAX_PROBES = 30;
 const TIMEOUT_MS = 25_000;
 const NAVIGATION_TIMEOUT_MS = 10_000;
 const VALIDATION_TIMEOUT_MS = 5_000;
-const SETTLE_MS = 1_000;
+const SETTLE_MS = 600;
 const MAX_VALIDATION_CONCURRENCY = 3;
 
 // Same net a bare <video src> or hls.js request would resolve to - not sniffing content-type,
@@ -38,7 +38,6 @@ const PLAYLIST_URL_PATTERN = /\.m3u8(\?|#|$)/i;
 const PLAYLIST_HEAD_BYTES = 2048;
 // An HLS master playlist lists every rendition, which is exactly what the resolver script spends
 // its time collecting one quality at a time. Finding one means the collecting is already done.
-const MASTER_PLAYLIST_MARKER = "#EXT-X-STREAM-INF";
 
 // Not every matching request is real content - a JS video-player library (Plyr, Video.js, ...)
 // commonly has its <video> element point at a tiny placeholder/poster asset on its own CDN before
@@ -63,22 +62,41 @@ const PLACEHOLDER_URL_PATTERN = /cdn\.plyr\.io\/static\/blank\.mp4/i;
 // The handler also decides whether a request is allowed to go out at all, which is what makes the
 // referring-page load below cheap - see loadRefererDocument.
 type RequestHandler = (details: Electron.OnBeforeRequestListenerDetails) => { cancel: boolean };
+type SentHeadersHandler = (details: Electron.OnSendHeadersListenerDetails) => void;
 
 const networkCaptureByWebContents = new Map<number, RequestHandler>();
+const sentHeadersCaptureByWebContents = new Map<number, SentHeadersHandler>();
 const hookedSessions = new WeakSet<Electron.Session>();
 
-function addNetworkCapture(session: Electron.Session, webContentsId: number, handler: RequestHandler): void {
+function addNetworkCapture(
+  session: Electron.Session,
+  webContentsId: number,
+  handler: RequestHandler,
+  sentHeadersHandler: SentHeadersHandler,
+): void {
   networkCaptureByWebContents.set(webContentsId, handler);
+  sentHeadersCaptureByWebContents.set(webContentsId, sentHeadersHandler);
   if (hookedSessions.has(session)) return;
   hookedSessions.add(session);
   session.webRequest.onBeforeRequest((details, callback) => {
     const handle = details.webContentsId !== undefined ? networkCaptureByWebContents.get(details.webContentsId) : undefined;
     callback(handle ? handle(details) : {});
   });
+  // onBeforeRequest only tells us the URL. By onSendHeaders Chromium has added the Client Hints,
+  // Fetch Metadata, cookies and referrer that made the provider page's own request acceptable to
+  // its CDN. Preserve that exact successful request identity for the renderer instead of trying
+  // to reconstruct an ever-changing browser fingerprint by hand.
+  session.webRequest.onSendHeaders((details) => {
+    const handle = details.webContentsId !== undefined
+      ? sentHeadersCaptureByWebContents.get(details.webContentsId)
+      : undefined;
+    handle?.(details);
+  });
 }
 
 function removeNetworkCapture(webContentsId: number): void {
   networkCaptureByWebContents.delete(webContentsId);
+  sentHeadersCaptureByWebContents.delete(webContentsId);
 }
 
 type CaptureKind = "master" | "video" | "audio" | "stream" | "network";
@@ -376,6 +394,7 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
   const { window: win, hasReferer } = acquireResolverWindow(refererUrl);
   const ses = win.webContents.session;
   const networkCaptures: Capture[] = [];
+  const capturedRequestHeaders = new Map<string, Record<string, string>>();
   let currentQuality: string | null = null;
   // Only ever true while the referring page itself is loading - see loadRefererDocument.
   let documentOnly = false;
@@ -386,12 +405,21 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
   // Read once, up front: `win.webContents` throws on a destroyed window, and the cleanup below
   // runs on exactly the paths where the window may already be gone.
   const webContentsId = win.webContents.id;
-  addNetworkCapture(ses, webContentsId, (details) => {
-    if (MEDIA_URL_PATTERN.test(details.url) && !PLACEHOLDER_URL_PATTERN.test(details.url)) {
-      networkCaptures.push({ url: details.url, kind: "network", quality: currentQuality });
-    }
-    return { cancel: documentOnly && details.resourceType !== "mainFrame" };
-  });
+  addNetworkCapture(
+    ses,
+    webContentsId,
+    (details) => {
+      if (MEDIA_URL_PATTERN.test(details.url) && !PLACEHOLDER_URL_PATTERN.test(details.url)) {
+        networkCaptures.push({ url: details.url, kind: "network", quality: currentQuality });
+      }
+      return { cancel: documentOnly && details.resourceType !== "mainFrame" };
+    },
+    (details) => {
+      if (MEDIA_URL_PATTERN.test(details.url) && !PLACEHOLDER_URL_PATTERN.test(details.url)) {
+        capturedRequestHeaders.set(details.url, { ...details.requestHeaders });
+      }
+    },
+  );
 
   // The referring page is wanted for one thing only: a document at the right origin to host the
   // iframe from. Its own scripts, stylesheets, fonts and XHRs are dead weight here - the body is
@@ -475,27 +503,12 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
     // One reachability check per URL for the whole resolve, shared between the master-playlist
     // check below and the final validation in buildResult.
     const probes = new Map<string, Promise<StreamProbe>>();
-    const checkedPlaylists = new Set<string>();
-
-    /**
-     * Returns the first captured URL that turns out to be an HLS master playlist.
-     *
-     * The resolver script's job is to enumerate renditions, which for Alloha means driving the
-     * player through its quality menu a step at a time and waiting between steps. A master
-     * playlist already lists every one of them, so the moment one is captured there is nothing
-     * left to collect: the wait for the script to finish, and the idle settle after it, are both
-     * spent on renditions the player will read out of that manifest anyway.
-     */
-    const findMasterPlaylist = async (captures: Capture[]): Promise<Capture | null> => {
-      for (const capture of captures) {
-        if (!PLAYLIST_URL_PATTERN.test(capture.url) || PLACEHOLDER_URL_PATTERN.test(capture.url)) continue;
-        if (checkedPlaylists.has(capture.url)) continue;
-        checkedPlaylists.add(capture.url);
-        const checked = await probeStream(target, capture.url, deadline, probes);
-        if (checked.reachable && checked.head.includes(MASTER_PLAYLIST_MARKER)) return capture;
-      }
-      return null;
-    };
+    // `master()` is an explicit part of the resolver contract. Re-fetching that URL merely to
+    // rediscover #EXT-X-STREAM-INF adds a full CDN round trip (or a CORS failure timeout) after the
+    // resolver already did the provider-specific work. Network-only observations remain subject
+    // to validation in buildResult(); only an extension's deliberate master report is trusted.
+    const findDeclaredMaster = (captures: Capture[]): Capture | null =>
+      captures.find((capture) => capture.kind === "master" && !PLACEHOLDER_URL_PATTERN.test(capture.url)) ?? null;
     for (let probe = 0; probe < MAX_PROBES && !done && Date.now() < deadline; probe++) {
       if (!started) {
         // The script is expected to drive its own state machine forward (see alloha.js's
@@ -526,10 +539,10 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
       currentQuality = state.lastQuality; // tags network captures made before the *next* tick
       done = state.done;
 
-      const master = await findMasterPlaylist([...state.captures, ...networkCaptures]);
+      const master = findDeclaredMaster(state.captures);
       if (master) {
         logger.debug("resolve", `master playlist captured on probe ${probe + 1}, stopping early`);
-        return await buildResult([master], [], link, win, target, deadline, probes);
+        return await buildResult([master], [], link, win, target, deadline, probes, capturedRequestHeaders);
       }
 
       const totalCount = state.captures.length + networkCaptures.length;
@@ -541,12 +554,12 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
       }
 
       if (done) {
-        return await buildResult(state.captures, networkCaptures, link, win, target, deadline, probes);
+        return await buildResult(state.captures, networkCaptures, link, win, target, deadline, probes, capturedRequestHeaders);
       }
     }
 
     const finalState = await readPageState(target, deadline);
-    return await buildResult(finalState.captures, networkCaptures, link, win, target, deadline, probes);
+    return await buildResult(finalState.captures, networkCaptures, link, win, target, deadline, probes, capturedRequestHeaders);
   } finally {
     removeNetworkCapture(webContentsId);
     void releaseResolverWindow(win, heldRefererUrl);
@@ -623,6 +636,7 @@ async function buildResult(
   target: ScriptTarget,
   deadline: number,
   probes: Map<string, Promise<StreamProbe>>,
+  capturedRequestHeaders: ReadonlyMap<string, Record<string, string>>,
 ): Promise<ResolvedStream[]> {
   const seen = new Set<string>();
   const combined = [...pageCaptures, ...networkCaptures]
@@ -634,48 +648,85 @@ async function buildResult(
   // Refreshed after capture, not before - a Cloudflare-style clearance cookie set while the page
   // ran (exactly what challenge() exists for elsewhere in this app) needs to be in the header set
   // handed back for the *next* request (the actual stream fetch), not the embed page's own load.
-  const cookies = await win.webContents.session.cookies.get({ url: link.url });
-  const headers: Record<string, string> = { ...(link.headers ?? {}), Referer: link.url };
+  const baseHeaders: Record<string, string> = {
+    ...(link.headers ?? {}),
+    "User-Agent": win.webContents.getUserAgent(),
+    Referer: link.url,
+    Accept: "*/*",
+    "Sec-Fetch-Dest": "video",
+    "Sec-Fetch-Mode": "no-cors",
+    "Sec-Fetch-Site": "cross-site",
+  };
   // Browser-runtime streams were requested by the third-party embed page itself. Some CDNs
   // validate Origin as well as Referer (Alloha's vkvideo.cloud endpoint returns 403 to hls.js
   // without it even though the exact same signed URL works inside alloha.yani.tv), so preserve
   // that request identity when the stream moves into Hibiki's renderer.
   try {
-    headers.Origin = new URL(link.url).origin;
+    baseHeaders.Origin = new URL(link.url).origin;
   } catch {
     // The URL was already usable enough to load in the browser resolver; leave malformed edge
     // cases to the existing validation/fallback path rather than failing a successful capture.
   }
-  if (cookies.length > 0) headers.Cookie = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
-
-  // A captured URL that's already known-dead is worse to hand back than not resolving at all: the
-  // player would just spin (or, now, burn its retry budget) on something that was never going to
-  // work, instead of falling through to the next resolver or the EMBED iframe fallback this
-  // replaces. Validating each candidate before it's trusted - from inside the browser context that
-  // captured it, see validateInBrowser - catches that; only survivors are returned, and if none
-  // survive this throws like an outright resolve failure would, so the caller's existing fallback
-  // chain (see runtime.ts) still applies.
+  // Prefer candidates that a same-page fetch can validate. That fetch is still subject to CORS,
+  // though, while media elements and Hibiki's player are not (the latter has response headers
+  // relaxed in playerHeaders.ts). MegaPlay is the important real-world case: its player visibly
+  // consumes the captured HLS URL, but a script fetch from the same frame is rejected, which used
+  // to misclassify every Anichi stream as dead and force the raw EMBED iframe. Android already
+  // trusts these browser captures and lets the player perform the authoritative media request.
   const reachable = new Array<boolean>(combined.length).fill(false);
   let nextValidation = 0;
   async function validateWorker(): Promise<void> {
     for (;;) {
       const index = nextValidation++;
       if (index >= combined.length) return;
+      // A resolver explicitly calling master()/video()/stream() is authoritative provider logic,
+      // equivalent to a NODE resolver returning the URL directly. Validating it again was both
+      // redundant and expensive for cross-origin players such as MegaPlay. Requests merely seen
+      // in the network log are less trustworthy and still take the existing reachability check.
+      if (combined[index].kind !== "network") {
+        reachable[index] = true;
+        continue;
+      }
       reachable[index] = (await probeStream(target, combined[index].url, deadline, probes)).reachable;
     }
   }
   // URLs the probe loop already checked answer from the cache, so this is usually far less work
   // than it looks - most often none at all.
   await Promise.all(Array.from({ length: Math.min(MAX_VALIDATION_CONCURRENCY, combined.length) }, validateWorker));
-  const resolved = combined
-    .filter((_capture, index) => reachable[index])
-    .map((capture): ResolvedStream => ({
+  const reachableCaptures = combined.filter((_capture, index) => reachable[index]);
+  const selected = reachableCaptures.length > 0 ? reachableCaptures : combined;
+  if (reachableCaptures.length === 0) {
+    logger.warn("resolve", `same-page validation was blocked for ${combined.length} captured stream(s); returning browser captures`);
+  }
+  return Promise.all(selected.map(async (capture): Promise<ResolvedStream> => {
+    // Cookies belong to the media CDN, not to the embed page. The hidden browser and the renderer
+    // share Electron's session, but hls.js uses a cross-origin XHR without credentials, so Chromium
+    // does not attach those CDN cookies by itself. Android explicitly refreshes CookieManager for
+    // every captured stream URL for the same reason. The old code instead copied MegaPlay's own
+    // cookies onto cdn.imgnex.top, leaving out the clearance/token cookie that made the capture's
+    // browser request work and producing the 403 seen as hls.js levelLoadError.
+    const streamCookies = await win.webContents.session.cookies.get({ url: capture.url });
+    const capturedHeaders = capturedRequestHeaders.get(capture.url);
+    const headers = { ...baseHeaders, ...(capturedHeaders ?? {}) };
+    // Chromium owns these transport/framing headers. Replaying stale values from the hidden
+    // request can make its otherwise-correct identity invalid when hls.js asks for a different
+    // playlist or segment body.
+    for (const name of Object.keys(headers)) {
+      if (["host", "connection", "content-length", "accept-encoding"].includes(name.toLowerCase())) {
+        delete headers[name];
+      }
+    }
+    if (streamCookies.length > 0) headers.Cookie = streamCookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
+    logger.debug(
+      "resolve",
+      `captured browser headers for ${new URL(capture.url).hostname}: ${capturedHeaders ? Object.keys(capturedHeaders).join(", ") : "none"}`,
+    );
+    return {
       url: capture.url,
       type: streamTypeForUrl(capture.url),
       quality: capture.quality,
       headers,
       segments: [],
-    }));
-  if (resolved.length > 0) return resolved;
-  throw new Error("Browser resolver's captured stream(s) are not reachable");
+    };
+  }));
 }

@@ -585,7 +585,10 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
               const isManifestFailure = data.details === HlsEngine.ErrorDetails.MANIFEST_LOAD_ERROR ||
                 data.details === HlsEngine.ErrorDetails.MANIFEST_LOAD_TIMEOUT;
               const status = data.response?.code;
-              const answered = isManifestFailure && typeof status === "number" && status > 0 &&
+              // A 4xx/5xx on a level/fragment is just as definitive as one on the master. The old
+              // manifest-only check retried every MegaPlay 403 three times before trying the next
+              // mirror, turning a finite fallback list into minutes of apparent endless loading.
+              const answered = typeof status === "number" && status > 0 &&
                 !RETRYABLE_MANIFEST_STATUSES.has(status);
               networkRetries += 1;
               if (answered || networkRetries > MAX_NETWORK_RETRIES) {
