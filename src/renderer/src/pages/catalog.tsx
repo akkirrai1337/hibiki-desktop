@@ -10,6 +10,7 @@ import { AnimeCard } from "@/components/AnimeCard";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { useUiStore } from "@/stores/uiStore";
 import { useDescribedTitles } from "@/lib/describedTitles";
+import { AggregatorCatalog } from "@/components/AggregatorCatalog";
 import { usePopoverTheme } from "@/lib/usePopoverTheme";
 import type { AnimeTitle, SourceInfo } from "@shared/types";
 
@@ -86,6 +87,7 @@ export function CatalogBrowsePage() {
   const error = mode === "recent" ? recent.error : browse.error;
 
   const catalogAutoLoad = useUiStore((s) => s.catalogAutoLoad);
+  const aggregatorCatalog = useUiStore((s) => s.aggregatorCatalog);
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = browse;
   const loadMoreRef = useRef<HTMLDivElement>(null);
   // Fires fetchNextPage itself once the sentinel below the grid scrolls into view, instead of
@@ -105,6 +107,17 @@ export function CatalogBrowsePage() {
     observer.observe(el);
     return () => observer.disconnect();
   }, [catalogAutoLoad, mode, hasNextPage, isFetchingNextPage, describingMore, fetchNextPage, items.length]);
+
+  // The aggregator's catalog replaces this one wholesale rather than sitting beside it: the two
+  // list different things (entries against this source's titles), and a screen that mixed them
+  // would be back to the problem whole-screen description exists to avoid.
+  if (aggregatorCatalog && source?.useExternalMetadata) {
+    return (
+      <div className="min-h-full bg-app-bg px-8 py-8 pb-16">
+        <AggregatorCatalog sourceId={source.id} />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-full bg-app-bg px-8 py-8 pb-16">

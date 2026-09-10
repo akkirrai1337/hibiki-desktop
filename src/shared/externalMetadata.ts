@@ -91,6 +91,36 @@ export function metadataProviderOrder(
   return [preferred, ...METADATA_PROVIDER_IDS.filter((id) => id !== preferred)];
 }
 
+/** What an aggregator-driven catalog asks for. Deliberately small: these are the three shapes a
+ * catalog screen actually offers, not a general query language over three different APIs. */
+export interface ExternalCatalogRequest {
+  mode: "trending" | "popular" | "season";
+  offset: number;
+  limit: number;
+  /** For "season" - defaults to the season now when absent. */
+  season?: AnimeSeason;
+  seasonYear?: number;
+}
+
+export type AnimeSeason = "winter" | "spring" | "summer" | "fall";
+
+const SEASON_BY_MONTH: AnimeSeason[] = [
+  "winter", "winter", "spring", "spring", "spring", "summer",
+  "summer", "summer", "fall", "fall", "fall", "winter",
+];
+
+/** The season a date falls in, by the convention every aggregator uses: January to March is winter,
+ * and December belongs to the winter that January continues. */
+export function seasonOf(date: Date): { season: AnimeSeason; year: number } {
+  const month = date.getMonth();
+  const season = SEASON_BY_MONTH[month];
+  return { season, year: month === 11 ? date.getFullYear() + 1 : date.getFullYear() };
+}
+
+/** Which of the providers can be browsed rather than only looked up. MAL through Jikan has nothing
+ * worth calling a trending endpoint, so it stays a description provider. */
+export const CATALOG_PROVIDERS: MetadataProviderId[] = ["kitsu", "anilist"];
+
 /** One provider's entry, as identified by the user rather than by the matcher. Kitsu's own web
  * URLs name a title by slug rather than by id, so a reference carries one or the other. */
 export interface MetadataReference {

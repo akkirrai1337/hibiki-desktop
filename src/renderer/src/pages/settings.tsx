@@ -556,6 +556,8 @@ export function SettingsPage() {
   const setExternalMetadataFallback = useUiStore((s) => s.setExternalMetadataFallback);
   const externalMetadataShowBinding = useUiStore((s) => s.externalMetadataShowBinding);
   const setExternalMetadataShowBinding = useUiStore((s) => s.setExternalMetadataShowBinding);
+  const aggregatorCatalog = useUiStore((s) => s.aggregatorCatalog);
+  const setAggregatorCatalog = useUiStore((s) => s.setAggregatorCatalog);
   return <div className="min-h-full bg-app-bg p-8">
     <div className="mx-auto max-w-xl">
       <h1 className="mb-6 text-xl font-semibold text-text">{t("nav.settings")}</h1>
@@ -665,6 +667,13 @@ export function SettingsPage() {
                   <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.externalMetadata.fallbackHint")}</p>
                 </div>
                 <Switch checked={externalMetadataFallback} onChange={setExternalMetadataFallback} />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-text">{t("settings.externalMetadata.aggregatorCatalog")}</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.externalMetadata.aggregatorCatalogHint")}</p>
+                </div>
+                <Switch checked={aggregatorCatalog} onChange={setAggregatorCatalog} />
               </div>
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">

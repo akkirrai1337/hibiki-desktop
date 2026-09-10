@@ -9,7 +9,7 @@ import {
   type KitsuAnime,
   type KitsuIncluded,
 } from "@shared/kitsuMapping";
-import type { ExternalMetadata, MatchCandidate } from "@shared/externalMetadata";
+import { seasonOf, type ExternalCatalogRequest, type ExternalMetadata, type MatchCandidate } from "@shared/externalMetadata";
 import { rateLimitedJson } from "./requestQueue";
 
 const BASE_URL = "https://kitsu.io/api/edge";
@@ -56,6 +56,38 @@ export async function fetchByMalId(malId: number): Promise<ExternalMetadata | nu
   );
   const kitsuId = Number(body?.data?.[0]?.relationships?.item?.data?.id);
   return Number.isFinite(kitsuId) ? fetchById(kitsuId) : null;
+}
+
+/**
+ * A page of Kitsu's catalog. Null when the request failed, the same distinction the rest of this
+ * client draws.
+ *
+ * "Trending" is its own endpoint with no paging and no filters of its own, so a request for a later
+ * page of it has nothing to return - the catalog screen stops there rather than pretending.
+ */
+export async function browse(request: ExternalCatalogRequest): Promise<ExternalMetadata[] | null> {
+  const path = catalogPath(request);
+  if (path === null) return [];
+  const body = await get<KitsuAnime[]>(path);
+  if (!body) return null;
+  const included = body.included ?? [];
+  return (body.data ?? []).map((anime) => toExternalMetadata(anime, included));
+}
+
+function catalogPath(request: ExternalCatalogRequest): string | null {
+  const paging = `page[limit]=${request.limit}&page[offset]=${request.offset}`;
+  if (request.mode === "trending") {
+    return request.offset > 0 ? null : `/trending/anime?limit=${request.limit}&include=${KITSU_INCLUDE}`;
+  }
+  if (request.mode === "season") {
+    const now = seasonOf(new Date());
+    const season = request.season ?? now.season;
+    const year = request.seasonYear ?? now.year;
+    return `/anime?filter[season]=${season}&filter[seasonYear]=${year}&sort=-userCount&${paging}&include=${KITSU_INCLUDE}`;
+  }
+  // Kitsu's own popularity ranking, which is a lifetime count rather than a recent one - the
+  // difference between this and "trending" above.
+  return `/anime?sort=-userCount&${paging}&include=${KITSU_INCLUDE}`;
 }
 
 /** Null when the request itself failed - distinct from an empty list, which is Kitsu genuinely not

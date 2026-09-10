@@ -92,6 +92,7 @@ export const IPC = {
   metadataSetMatch: "metadata:setMatch",
   // The reverse direction: which title of a source is this provider entry (see
   // docs/aggregator-first-catalog.md).
+  metadataBrowse: "metadata:browse",
   metadataResolveSource: "metadata:resolveSource",
   metadataSetSourceTitle: "metadata:setSourceTitle",
   metadataClearMatch: "metadata:clearMatch",

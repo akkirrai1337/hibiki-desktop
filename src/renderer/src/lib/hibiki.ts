@@ -1,4 +1,4 @@
-import type { ExternalMetadata, MetadataProviderId } from "@shared/externalMetadata";
+import type { ExternalCatalogRequest, ExternalMetadata, MetadataProviderId } from "@shared/externalMetadata";
 import type {
   AnimeTitle,
   AppUpdate,
@@ -120,6 +120,7 @@ export interface HibikiApi {
     search(sourceId: string, query: string): Promise<MetadataSearchResult>;
     entry(provider: MetadataProviderId, reference: { externalId?: number; slug?: string }): Promise<ExternalMetadata | null>;
     setMatch(sourceId: string, animeId: string, provider: MetadataProviderId, externalId: number): Promise<ExternalMetadata | null>;
+    browse(sourceId: string, request: ExternalCatalogRequest): Promise<{ results: ExternalMetadata[]; provider: MetadataProviderId | null }>;
     resolveSource(sourceId: string, entry: ExternalMetadata): Promise<ResolvedSourceTitle | null>;
     setSourceTitle(sourceId: string, animeId: string, entry: ExternalMetadata): Promise<void>;
     clearMatch(sourceId: string, animeId: string): Promise<void>;

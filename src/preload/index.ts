@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webFrame } from "electron";
 import { IPC } from "@shared/ipc";
-import type { ExternalMetadata, MetadataProviderId } from "@shared/externalMetadata";
+import type { ExternalCatalogRequest, ExternalMetadata, MetadataProviderId } from "@shared/externalMetadata";
 import type {
   AnimeTitle,
   AppUpdate,
@@ -168,6 +168,8 @@ const api = {
       ipcRenderer.invoke(IPC.metadataEntry, provider, reference),
     setMatch: (sourceId: string, animeId: string, provider: MetadataProviderId, externalId: number): Promise<ExternalMetadata | null> =>
       ipcRenderer.invoke(IPC.metadataSetMatch, sourceId, animeId, provider, externalId),
+    browse: (sourceId: string, request: ExternalCatalogRequest): Promise<{ results: ExternalMetadata[]; provider: MetadataProviderId | null }> =>
+      ipcRenderer.invoke(IPC.metadataBrowse, sourceId, request),
     resolveSource: (sourceId: string, entry: ExternalMetadata): Promise<ResolvedSourceTitle | null> =>
       ipcRenderer.invoke(IPC.metadataResolveSource, sourceId, entry),
     setSourceTitle: (sourceId: string, animeId: string, entry: ExternalMetadata): Promise<void> =>

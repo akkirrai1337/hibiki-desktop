@@ -6,12 +6,14 @@
 // everything stateful in between.
 import { and, eq } from "drizzle-orm";
 import {
+  CATALOG_PROVIDERS,
   MATCH_CONFIDENCE_THRESHOLD,
   METADATA_PROVIDER_IDS,
   pickBestMatch,
   pickSourceTitleFor,
   searchQueriesFor,
   sourceSearchQueriesFor,
+  type ExternalCatalogRequest,
   type ExternalMetadata,
   type MatchCandidate,
   type MetadataProviderId,
@@ -419,6 +421,28 @@ export async function describeMany(
     if (media) described.push({ animeId: title.id, media });
   }
   return described;
+}
+
+/** A page of a provider's catalog, from the first browsable provider in `order` that answers.
+ *
+ * Not every provider can be browsed (see CATALOG_PROVIDERS - Jikan has nothing worth calling a
+ * trending endpoint), and the ones that can go down independently, so this walks the same order the
+ * describing path uses and reports which one actually answered. Entries are cached on the way past,
+ * which is what makes opening one of these cards resolve without another request.
+ */
+export async function browseProviders(
+  request: ExternalCatalogRequest,
+  order: MetadataProviderId[],
+): Promise<{ results: ExternalMetadata[]; provider: MetadataProviderId | null }> {
+  const browsable = order.filter((provider) => CATALOG_PROVIDERS.includes(provider));
+  for (const provider of browsable) {
+    const browse = provider === "anilist" ? anilist.browse : kitsu.browse;
+    const results = await browse(request).catch(() => null);
+    if (!results) continue;
+    for (const media of results) writeCachedMedia(media);
+    return { results, provider };
+  }
+  return { results: [], provider: null };
 }
 
 /** Binds a title to a provider entry by hand, from the title page. Marked manual, which is what

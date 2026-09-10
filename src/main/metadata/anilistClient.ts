@@ -5,7 +5,7 @@
 // outright while this was written ("temporarily disabled due to severe stability issues", HTTP 403
 // on every query), which is exactly the case the service's provider fallback exists for.
 import { ANILIST_MEDIA_FIELDS, toExternalMetadata, toMatchCandidate, type AniListMedia } from "@shared/anilistMapping";
-import type { ExternalMetadata, MatchCandidate } from "@shared/externalMetadata";
+import { seasonOf, type ExternalCatalogRequest, type ExternalMetadata, type MatchCandidate } from "@shared/externalMetadata";
 import { logger } from "../logger";
 import { rateLimitedJson } from "./requestQueue";
 
@@ -49,6 +49,42 @@ export async function fetchByMalId(malId: number): Promise<ExternalMetadata | nu
     { idMal: malId },
   );
   return data?.Media ? toExternalMetadata(data.Media) : null;
+}
+
+const SEASON_TO_ANILIST: Record<string, string> = {
+  winter: "WINTER",
+  spring: "SPRING",
+  summer: "SUMMER",
+  fall: "FALL",
+};
+
+/**
+ * A page of AniList's catalog.
+ *
+ * Its "trending" is genuinely trending - what people are watching and talking about this week -
+ * rather than a lifetime popularity ranking, which is the one thing AniList does better than Kitsu
+ * for a catalog and the reason it is preferred here when it is reachable at all.
+ */
+export async function browse(request: ExternalCatalogRequest): Promise<ExternalMetadata[] | null> {
+  const now = seasonOf(new Date());
+  const seasonal = request.mode === "season";
+  const data = await graphql<{ Page?: { media?: AniListMedia[] | null } | null }>(
+    `query ($page: Int, $perPage: Int, $season: MediaSeason, $seasonYear: Int) {
+      Page(page: $page, perPage: $perPage) {
+        media(type: ANIME, sort: ${request.mode === "popular" ? "POPULARITY_DESC" : "TRENDING_DESC"}, season: $season, seasonYear: $seasonYear, isAdult: false) { ${ANILIST_MEDIA_FIELDS} }
+      }
+    }`,
+    {
+      // AniList pages by number, not by offset, so a caller's offset has to divide evenly by the
+      // page size - which it does, since the catalog screen only ever asks for whole pages.
+      page: Math.floor(request.offset / request.limit) + 1,
+      perPage: request.limit,
+      season: seasonal ? SEASON_TO_ANILIST[request.season ?? now.season] : null,
+      seasonYear: seasonal ? (request.seasonYear ?? now.year) : null,
+    },
+  );
+  if (!data) return null;
+  return (data.Page?.media ?? []).map(toExternalMetadata);
 }
 
 /** Null when the request itself failed - distinct from an empty list, which is AniList genuinely

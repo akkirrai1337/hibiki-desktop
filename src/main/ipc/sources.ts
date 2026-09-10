@@ -1,9 +1,15 @@
 import { ipcMain } from "electron";
 import { IPC } from "@shared/ipc";
 import type { AnimeTitle, ExternalMetadataPreferences, MetadataBindingState, ResolvedSourceTitle, PlaybackGroup, PlayerLink, PlayerLinkPreference } from "@shared/types";
-import { mergeExternalMetadata, type ExternalMetadata, type MetadataProviderId } from "@shared/externalMetadata";
+import {
+  mergeExternalMetadata,
+  type ExternalCatalogRequest,
+  type ExternalMetadata,
+  type MetadataProviderId,
+} from "@shared/externalMetadata";
 import type { ExtensionRuntime } from "../extensions/runtime";
 import {
+  browseProviders,
   clearMatch,
   currentMatch,
   describeMany,
@@ -77,6 +83,11 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   );
   // The source's own search, as the resolver sees it - one query in, its titles out. Kept here
   // rather than in the service so that layer stays free of the extension runtime.
+  // The catalog is browsed for a source, not in the abstract: which providers may answer, and in
+  // which order, is that source's own setting.
+  ipcMain.handle(IPC.metadataBrowse, (_e, sourceId: string, request: ExternalCatalogRequest) =>
+    browseProviders(request, orderFor(sourceId)),
+  );
   ipcMain.handle(
     IPC.metadataResolveSource,
     (_e, sourceId: string, entry: ExternalMetadata): Promise<ResolvedSourceTitle | null> =>
