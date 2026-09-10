@@ -1,3 +1,4 @@
+import type { ExternalMetadata, MetadataProviderId } from "@shared/externalMetadata";
 import type {
   AnimeTitle,
   AppUpdate,
@@ -11,6 +12,8 @@ import type {
   DownloadRequest,
   ExternalMetadataPreferences,
   InstalledVersions,
+  MetadataMatchInfo,
+  MetadataSearchResult,
   LibraryEntry,
   MarketplaceExtension,
   PlaybackGroup,
@@ -111,6 +114,11 @@ export interface HibikiApi {
   };
   metadata: {
     setPreferences(preferences: ExternalMetadataPreferences): Promise<void>;
+    match(sourceId: string, animeId: string): Promise<MetadataMatchInfo | null>;
+    search(sourceId: string, query: string): Promise<MetadataSearchResult>;
+    entry(provider: MetadataProviderId, externalId: number): Promise<ExternalMetadata | null>;
+    setMatch(sourceId: string, animeId: string, provider: MetadataProviderId, externalId: number): Promise<ExternalMetadata | null>;
+    clearMatch(sourceId: string, animeId: string): Promise<void>;
   };
   discord: {
     setEnabled(enabled: boolean): Promise<void>;

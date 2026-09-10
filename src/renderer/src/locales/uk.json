@@ -106,6 +106,20 @@
       "favoriteRemove": "Прибрати з обраного",
       "markWatched": "Позначити переглянутою",
       "clearProgress": "Видалити дані про перегляд"
+    },
+    "metadata": {
+      "describedBy": "Метадані з {{provider}}",
+      "manual": "вибрано вручну",
+      "confidence": "збіг {{percent}}%",
+      "change": "Змінити",
+      "pickerTitle": "Запис метаданих",
+      "pickerHint": "Знайдіть або вставте посилання AniList / MAL",
+      "searchPlaceholder": "Назва, посилання або id",
+      "searching": "Шукаю…",
+      "searchUnavailable": "Пошук не відповідає в жодного провайдера. Вставте посилання.",
+      "noneFound": "Нічого не знайдено.",
+      "reset": "Зіставити автоматично знову",
+      "idsRead": "Просте число читається як id {{provider}}"
     }
   },
   "watch": {

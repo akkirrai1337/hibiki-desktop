@@ -106,6 +106,20 @@
       "favoriteRemove": "Убрать из избранного",
       "markWatched": "Отметить просмотренной",
       "clearProgress": "Удалить данные о просмотре"
+    },
+    "metadata": {
+      "describedBy": "Метаданные из {{provider}}",
+      "manual": "выбрано вручную",
+      "confidence": "совпадение {{percent}}%",
+      "change": "Изменить",
+      "pickerTitle": "Запись метаданных",
+      "pickerHint": "Найдите или вставьте ссылку AniList / MAL",
+      "searchPlaceholder": "Название, ссылка или id",
+      "searching": "Ищу…",
+      "searchUnavailable": "Поиск не отвечает ни у одного провайдера. Вставьте ссылку.",
+      "noneFound": "Ничего не найдено.",
+      "reset": "Сопоставить автоматически заново",
+      "idsRead": "Просто число читается как id {{provider}}"
     }
   },
   "watch": {

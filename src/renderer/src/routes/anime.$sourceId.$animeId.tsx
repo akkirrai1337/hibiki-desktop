@@ -7,6 +7,7 @@ import type { TFunction } from "i18next";
 import { AnimatePresence, motion } from "motion/react";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import { Play, Bookmark, Check, ChevronDown, Clock, Download, Eraser, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
+import { MetadataBinding } from "@/components/MetadataBinding";
 import { hibiki } from "@/lib/hibiki";
 import { findListedTitle } from "@/lib/listedTitles";
 import { usePlaybackGroups } from "@/lib/playbackGroups";
@@ -659,6 +660,10 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
           <p ref={descriptionRef} className="select-text text-sm leading-6 text-muted">{anime.description}</p>
         </div>}
         {anime.description && <button onClick={() => setDescriptionOpen((v) => !v)} className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-muted transition hover:text-text">{descriptionOpen ? t("common.hideDescription") : t("common.readDescription")}<ChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-300", descriptionOpen && "rotate-180")} strokeWidth={2.5} /></button>}
+        {/* Where the description came from, and the way to correct a wrong match - below the
+            description it explains, above the actions, since it is a note about this page rather
+            than something to do on it. */}
+        <MetadataBinding sourceId={sourceId} animeId={animeId} />
         <div className="mt-6 flex items-center gap-3">
           {continueTarget ? <Link to="/watch/$sourceId/$animeId/$groupId/$episodeId" params={{ sourceId, animeId, groupId: continueTarget.groupId, episodeId: continueTarget.episodeId }} className="inline-flex items-center gap-2 rounded-xl bg-text px-5 py-3 text-sm font-bold text-bg transition-transform hover:scale-[1.02] active:scale-[0.98]"><Play className="h-4 w-4 fill-current" strokeWidth={0} />{continueTarget.label}</Link>
             : <span className="inline-flex items-center gap-2 rounded-xl bg-text/10 px-5 py-3 text-sm font-bold text-muted">{t("detail.noEpisodes")}</span>}

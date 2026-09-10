@@ -89,6 +89,41 @@ export function metadataProviderOrder(
   return [preferred, ...METADATA_PROVIDER_IDS.filter((id) => id !== preferred)];
 }
 
+/** One provider's entry, as identified by the user rather than by the matcher. */
+export interface MetadataReference {
+  provider: MetadataProviderId;
+  externalId: number;
+}
+
+/**
+ * Reads a provider entry out of whatever the user pasted into the manual-rebind box: an AniList or
+ * MAL page URL, or a bare id belonging to `defaultProvider`.
+ *
+ * A URL carries the provider with it, which is the point - pasting the page you are looking at is
+ * the one way to fix a wrong match that works even while both providers' *search* endpoints are
+ * down, which is exactly the state they were in when this was written.
+ */
+export function parseMetadataReference(
+  input: string,
+  defaultProvider: MetadataProviderId,
+): MetadataReference | null {
+  const text = input.trim();
+  if (!text) return null;
+  const anilist = /anilist\.co\/(?:anime|manga)\/(\d+)/i.exec(text);
+  if (anilist) return { provider: "anilist", externalId: Number(anilist[1]) };
+  const mal = /myanimelist\.net\/anime\/(\d+)/i.exec(text);
+  if (mal) return { provider: "mal", externalId: Number(mal[1]) };
+  // A bare number is an id for whichever provider is currently in charge - the ids are unrelated
+  // between the two, so guessing the other one would bind the title to a different show entirely.
+  if (/^\d+$/.test(text)) return { provider: defaultProvider, externalId: Number(text) };
+  return null;
+}
+
+/** Where to send someone who wants to look at the entry a title is bound to. */
+export function metadataEntryUrl(provider: MetadataProviderId, externalId: number): string {
+  return provider === "anilist" ? `https://anilist.co/anime/${externalId}` : `https://myanimelist.net/anime/${externalId}`;
+}
+
 /**
  * Turns a provider's HTML or marked-up synopsis into plain text.
  *

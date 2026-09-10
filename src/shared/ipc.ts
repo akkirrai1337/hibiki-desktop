@@ -82,6 +82,12 @@ export const IPC = {
   // AniList metadata: the renderer mirrors its persisted preference into main, which owns the
   // merge (see metadata/metadataPreferences.ts).
   metadataSetPreferences: "metadata:setPreferences",
+  // The title page's own metadata line: what describes this title, and the manual rebind behind it.
+  metadataMatch: "metadata:match",
+  metadataSearch: "metadata:search",
+  metadataEntry: "metadata:entry",
+  metadataSetMatch: "metadata:setMatch",
+  metadataClearMatch: "metadata:clearMatch",
 
   discordSetEnabled: "discord:setEnabled",
   discordUpdatePresence: "discord:updatePresence",

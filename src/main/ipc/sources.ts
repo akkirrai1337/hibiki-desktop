@@ -1,13 +1,26 @@
 import { ipcMain } from "electron";
 import { IPC } from "@shared/ipc";
 import type { AnimeTitle, ExternalMetadataPreferences, PlaybackGroup, PlayerLink, PlayerLinkPreference } from "@shared/types";
-import { mergeExternalMetadata } from "@shared/externalMetadata";
+import { mergeExternalMetadata, type MetadataProviderId } from "@shared/externalMetadata";
 import type { ExtensionRuntime } from "../extensions/runtime";
-import { getExternalMetadata } from "../metadata/externalMetadataService";
+import {
+  clearMatch,
+  currentMatch,
+  fetchEntry,
+  getCachedExternalMetadataMany,
+  getExternalMetadata,
+  searchProviders,
+  setManualMatch,
+} from "../metadata/externalMetadataService";
 import { providerOrderFor, setExternalMetadataPreferences } from "../metadata/metadataPreferences";
 import { cacheAnime, cachePlaybackGroups, cacheSourceQuery, getCachedAnime, getCachedAnimeMany, getCachedPlaybackGroups, getCachedPlaybackGroupsEntry, getCachedSourceQuery } from "../offlineCache";
 
 export function registerSourceHandlers(runtime: ExtensionRuntime): void {
+  // Which providers may describe this source's titles, in order - shared by every path below, so a
+  // list, a title page and the line naming the provider all agree.
+  const orderFor = (sourceId: string): MetadataProviderId[] =>
+    providerOrderFor(sourceId, runtime.list().find((info) => info.id === sourceId)?.useExternalMetadata === true);
+
   /**
    * Replaces a title's descriptive fields with a metadata provider's, when both the source asked
    * for that in its manifest and the user has not turned it off.
@@ -17,8 +30,7 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
    * page still renders exactly as it did before this existed.
    */
   const describe = async (sourceId: string, anime: AnimeTitle): Promise<AnimeTitle> => {
-    const source = runtime.list().find((info) => info.id === sourceId);
-    const order = providerOrderFor(sourceId, source?.useExternalMetadata === true);
+    const order = orderFor(sourceId);
     if (order.length === 0) return anime;
     try {
       return mergeExternalMetadata(anime, await getExternalMetadata(anime, order));
@@ -27,13 +39,51 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
     }
   };
 
+  /**
+   * The same merge for a whole list, but strictly from what is already cached - no requests.
+   *
+   * Lists exist to be scrolled: matching a screenful of unseen titles would mean a dozen searches
+   * against a provider that allows about one a second, and the screen would finish painting long
+   * before they returned. What this does buy is consistency - once a title has been opened, its
+   * card and its page describe it the same way instead of disagreeing about its own name.
+   */
+  const describeAllFromCache = (sourceId: string, titles: AnimeTitle[]): AnimeTitle[] => {
+    const order = orderFor(sourceId);
+    if (order.length === 0 || titles.length === 0) return titles;
+    try {
+      const cached = getCachedExternalMetadataMany(titles.map((title) => ({ sourceId, animeId: title.id })), order);
+      return titles.map((title) => mergeExternalMetadata(title, cached[`${sourceId}:${title.id}`] ?? null));
+    } catch {
+      return titles;
+    }
+  };
+
   ipcMain.handle(IPC.metadataSetPreferences, (_e, preferences: ExternalMetadataPreferences) =>
     setExternalMetadataPreferences(preferences),
   );
+  ipcMain.handle(IPC.metadataMatch, (_e, sourceId: string, animeId: string) =>
+    currentMatch(sourceId, animeId, orderFor(sourceId)),
+  );
+  ipcMain.handle(IPC.metadataSearch, (_e, sourceId: string, query: string) =>
+    searchProviders(query, orderFor(sourceId)),
+  );
+  ipcMain.handle(IPC.metadataEntry, (_e, provider: MetadataProviderId, externalId: number) =>
+    fetchEntry(provider, externalId),
+  );
+  ipcMain.handle(
+    IPC.metadataSetMatch,
+    (_e, sourceId: string, animeId: string, provider: MetadataProviderId, externalId: number) =>
+      setManualMatch(sourceId, animeId, provider, externalId),
+  );
+  ipcMain.handle(IPC.metadataClearMatch, (_e, sourceId: string, animeId: string) => clearMatch(sourceId, animeId));
   ipcMain.handle(IPC.sourcesList, () => runtime.list());
-  ipcMain.handle(IPC.sourceSearch, (_e, sourceId: string, request, requestId?: string) => runtime.search(sourceId, request, requestId));
+  ipcMain.handle(IPC.sourceSearch, async (_e, sourceId: string, request, requestId?: string) =>
+    describeAllFromCache(sourceId, await runtime.search(sourceId, request, requestId)),
+  );
   ipcMain.on(IPC.sourceSearchCancel, (_e, requestId: string) => runtime.cancelRequest(requestId));
-  ipcMain.handle(IPC.sourceLatest, (_e, sourceId: string, limit: number) => runtime.latest(sourceId, limit));
+  ipcMain.handle(IPC.sourceLatest, async (_e, sourceId: string, limit: number) =>
+    describeAllFromCache(sourceId, await runtime.latest(sourceId, limit)),
+  );
   // Falls back to whatever's cached (either from a previous successful fetch below, or from one of
   // this title's episodes finishing a download - see downloads.ts's cacheForOffline) - the source
   // itself being unreachable (offline, taken down, extension uninstalled, ...) shouldn't also take

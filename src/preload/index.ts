@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webFrame } from "electron";
 import { IPC } from "@shared/ipc";
+import type { ExternalMetadata, MetadataProviderId } from "@shared/externalMetadata";
 import type {
   AnimeTitle,
   AppUpdate,
@@ -28,6 +29,8 @@ import type {
   UpdateDownloadProgress,
   WatchProgress,
   ExternalMetadataPreferences,
+  MetadataMatchInfo,
+  MetadataSearchResult,
   XpEvent,
 } from "@shared/types";
 
@@ -154,6 +157,16 @@ const api = {
     // Mirrors the renderer's persisted preference into the main process, which owns the merge.
     setPreferences: (preferences: ExternalMetadataPreferences): Promise<void> =>
       ipcRenderer.invoke(IPC.metadataSetPreferences, preferences),
+    match: (sourceId: string, animeId: string): Promise<MetadataMatchInfo | null> =>
+      ipcRenderer.invoke(IPC.metadataMatch, sourceId, animeId),
+    search: (sourceId: string, query: string): Promise<MetadataSearchResult> =>
+      ipcRenderer.invoke(IPC.metadataSearch, sourceId, query),
+    entry: (provider: MetadataProviderId, externalId: number): Promise<ExternalMetadata | null> =>
+      ipcRenderer.invoke(IPC.metadataEntry, provider, externalId),
+    setMatch: (sourceId: string, animeId: string, provider: MetadataProviderId, externalId: number): Promise<ExternalMetadata | null> =>
+      ipcRenderer.invoke(IPC.metadataSetMatch, sourceId, animeId, provider, externalId),
+    clearMatch: (sourceId: string, animeId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC.metadataClearMatch, sourceId, animeId),
   },
   discord: {
     setEnabled: (enabled: boolean): Promise<void> => ipcRenderer.invoke(IPC.discordSetEnabled, enabled),

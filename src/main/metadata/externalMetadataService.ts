@@ -225,6 +225,46 @@ export async function getExternalMetadata(anime: AnimeTitle, order: MetadataProv
   return null;
 }
 
+/** What currently describes this title, for the title page's own "metadata" line - the first
+ * provider in `order` that has a usable binding, and whether the user set it by hand. */
+export function currentMatch(
+  sourceId: string,
+  animeId: string,
+  order: MetadataProviderId[],
+): { provider: MetadataProviderId; externalId: number; manual: boolean; confidence: number | null } | null {
+  for (const provider of order) {
+    const match = readMatch(sourceId, animeId, provider);
+    if (match?.externalId == null) continue;
+    return { provider, externalId: match.externalId, manual: match.manual, confidence: match.confidence };
+  }
+  return null;
+}
+
+/** Candidates for the title page's manual picker, from the first provider in `order` whose search
+ * endpoint answers - both providers' searches go down independently, and the picker is the one
+ * screen where a person is waiting on one. */
+export async function searchProviders(
+  query: string,
+  order: MetadataProviderId[],
+): Promise<{ results: ExternalMetadata[]; searchedProvider: MetadataProviderId | null }> {
+  for (const provider of order) {
+    const results = await CLIENTS[provider].search(query).catch(() => null);
+    if (!results) continue;
+    for (const result of results) writeCachedMedia(result.media);
+    return { results: results.map((result) => result.media), searchedProvider: provider };
+  }
+  // No provider answered at all. The picker says so, and its paste-an-id path still works.
+  return { results: [], searchedProvider: null };
+}
+
+/** One entry by id, for the picker's paste-a-URL path - the way a title gets rebound while every
+ * search endpoint is down. */
+export async function fetchEntry(provider: MetadataProviderId, externalId: number): Promise<ExternalMetadata | null> {
+  const media = await CLIENTS[provider].fetchById(externalId).catch(() => null);
+  if (media) writeCachedMedia(media);
+  return media ?? readCachedMedia(provider, externalId)?.media ?? null;
+}
+
 /** Binds a title to a provider entry by hand, from the title page. Marked manual, which is what
  * stops the automatic matcher from ever overwriting it again. */
 export async function setManualMatch(

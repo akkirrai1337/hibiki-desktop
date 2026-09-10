@@ -284,6 +284,23 @@ export interface ExternalMetadataPreferences {
   fallbackEnabled: boolean;
 }
 
+/** What the title page's metadata line prints: which provider entry is describing this title, and
+ * whether the user picked it by hand (in which case the matcher will never change it). */
+export interface MetadataMatchInfo {
+  provider: "anilist" | "mal";
+  externalId: number;
+  manual: boolean;
+  /** 0..100 for an automatic match, null for a manual one, which is certain by definition. */
+  confidence: number | null;
+}
+
+/** A manual-picker search, plus which provider actually answered it - null means none did, and the
+ * picker says so instead of showing an empty list as if nothing matched. */
+export interface MetadataSearchResult {
+  results: import("./externalMetadata").ExternalMetadata[];
+  searchedProvider: "anilist" | "mal" | null;
+}
+
 // A source-declared (id, display title) pair - options come from the source itself (e.g. its own
 // genre list), never hardcoded on the client. Mirrors Android's SearchFilterOption.
 export interface SearchFilterOption {

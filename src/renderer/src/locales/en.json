@@ -106,6 +106,20 @@
       "favoriteRemove": "Remove from favorites",
       "markWatched": "Mark as watched",
       "clearProgress": "Clear watch data"
+    },
+    "metadata": {
+      "describedBy": "Described from {{provider}}",
+      "manual": "picked by hand",
+      "confidence": "{{percent}}% match",
+      "change": "Change",
+      "pickerTitle": "Metadata entry",
+      "pickerHint": "Search, or paste an AniList / MAL link",
+      "searchPlaceholder": "Title, link, or id",
+      "searching": "Looking…",
+      "searchUnavailable": "Neither provider's search is answering right now. Paste a link instead.",
+      "noneFound": "Nothing found.",
+      "reset": "Match automatically again",
+      "idsRead": "A bare id is read as {{provider}}"
     }
   },
   "watch": {

@@ -3,7 +3,9 @@ import type { AnimeTitle } from "@shared/types";
 import {
   mergeExternalMetadata,
   metadataProviderOrder,
+  metadataEntryUrl,
   normalizeTitleForMatch,
+  parseMetadataReference,
   pickBestMatch,
   PROVIDER_RATING_SOURCE,
   sanitizeDescription,
@@ -121,6 +123,35 @@ describe("metadataProviderOrder", () => {
     expect(metadataProviderOrder({ ...preferences, enabled: false }, "anichi", true)).toEqual([]);
     expect(metadataProviderOrder({ ...preferences, enabled: false, overrides: { anichi: true } }, "anichi", true)).toEqual(["anilist", "mal"]);
     expect(metadataProviderOrder({ ...preferences, overrides: { anichi: false } }, "anichi", true)).toEqual([]);
+  });
+});
+
+describe("parseMetadataReference", () => {
+  it("reads the provider off a pasted page URL, whichever is selected", () => {
+    expect(parseMetadataReference("https://anilist.co/anime/154587/Sousou-no-Frieren/", "mal")).toEqual({
+      provider: "anilist",
+      externalId: 154587,
+    });
+    expect(parseMetadataReference("https://myanimelist.net/anime/52991/Sousou_no_Frieren", "anilist")).toEqual({
+      provider: "mal",
+      externalId: 52991,
+    });
+  });
+
+  it("reads a bare id as the selected provider's, since the two number spaces are unrelated", () => {
+    expect(parseMetadataReference("52991", "mal")).toEqual({ provider: "mal", externalId: 52991 });
+    expect(parseMetadataReference(" 154587 ", "anilist")).toEqual({ provider: "anilist", externalId: 154587 });
+  });
+
+  it("returns nothing for a plain title, which is a search and not a reference", () => {
+    expect(parseMetadataReference("Frieren", "anilist")).toBeNull();
+    expect(parseMetadataReference("", "anilist")).toBeNull();
+  });
+
+  it("round-trips through the entry URL it builds", () => {
+    for (const provider of ["anilist", "mal"] as const) {
+      expect(parseMetadataReference(metadataEntryUrl(provider, 1234), provider)).toEqual({ provider, externalId: 1234 });
+    }
   });
 });
 
