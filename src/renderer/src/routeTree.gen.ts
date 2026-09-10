@@ -19,6 +19,7 @@ import { Route as SearchRouteImport } from './routes/search'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SourcesRouteImport } from './routes/sources'
 import { Route as AnimeSourceIdAnimeIdRouteImport } from './routes/anime.$sourceId.$animeId'
+import { Route as EntryProviderExternalIdRouteImport } from './routes/entry.$provider.$externalId'
 import { Route as WatchSourceIdAnimeIdGroupIdEpisodeIdRouteImport } from './routes/watch.$sourceId.$animeId.$groupId.$episodeId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -71,6 +72,11 @@ const AnimeSourceIdAnimeIdRoute = AnimeSourceIdAnimeIdRouteImport.update({
   path: '/anime/$sourceId/$animeId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EntryProviderExternalIdRoute = EntryProviderExternalIdRouteImport.update({
+  id: '/entry/$provider/$externalId',
+  path: '/entry/$provider/$externalId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const WatchSourceIdAnimeIdGroupIdEpisodeIdRoute =
   WatchSourceIdAnimeIdGroupIdEpisodeIdRouteImport.update({
     id: '/watch/$sourceId/$animeId/$groupId/$episodeId',
@@ -89,6 +95,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/sources': typeof SourcesRoute
   '/anime/$sourceId/$animeId': typeof AnimeSourceIdAnimeIdRoute
+  '/entry/$provider/$externalId': typeof EntryProviderExternalIdRoute
   '/watch/$sourceId/$animeId/$groupId/$episodeId': typeof WatchSourceIdAnimeIdGroupIdEpisodeIdRoute
 }
 export interface FileRoutesByTo {
@@ -102,6 +109,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/sources': typeof SourcesRoute
   '/anime/$sourceId/$animeId': typeof AnimeSourceIdAnimeIdRoute
+  '/entry/$provider/$externalId': typeof EntryProviderExternalIdRoute
   '/watch/$sourceId/$animeId/$groupId/$episodeId': typeof WatchSourceIdAnimeIdGroupIdEpisodeIdRoute
 }
 export interface FileRoutesById {
@@ -116,6 +124,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/sources': typeof SourcesRoute
   '/anime/$sourceId/$animeId': typeof AnimeSourceIdAnimeIdRoute
+  '/entry/$provider/$externalId': typeof EntryProviderExternalIdRoute
   '/watch/$sourceId/$animeId/$groupId/$episodeId': typeof WatchSourceIdAnimeIdGroupIdEpisodeIdRoute
 }
 export interface FileRouteTypes {
@@ -131,6 +140,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sources'
     | '/anime/$sourceId/$animeId'
+    | '/entry/$provider/$externalId'
     | '/watch/$sourceId/$animeId/$groupId/$episodeId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -144,6 +154,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sources'
     | '/anime/$sourceId/$animeId'
+    | '/entry/$provider/$externalId'
     | '/watch/$sourceId/$animeId/$groupId/$episodeId'
   id:
     | '__root__'
@@ -157,6 +168,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sources'
     | '/anime/$sourceId/$animeId'
+    | '/entry/$provider/$externalId'
     | '/watch/$sourceId/$animeId/$groupId/$episodeId'
   fileRoutesById: FileRoutesById
 }
@@ -171,6 +183,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SourcesRoute: typeof SourcesRoute
   AnimeSourceIdAnimeIdRoute: typeof AnimeSourceIdAnimeIdRoute
+  EntryProviderExternalIdRoute: typeof EntryProviderExternalIdRoute
   WatchSourceIdAnimeIdGroupIdEpisodeIdRoute: typeof WatchSourceIdAnimeIdGroupIdEpisodeIdRoute
 }
 
@@ -246,6 +259,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AnimeSourceIdAnimeIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/entry/$provider/$externalId': {
+      id: '/entry/$provider/$externalId'
+      path: '/entry/$provider/$externalId'
+      fullPath: '/entry/$provider/$externalId'
+      preLoaderRoute: typeof EntryProviderExternalIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/watch/$sourceId/$animeId/$groupId/$episodeId': {
       id: '/watch/$sourceId/$animeId/$groupId/$episodeId'
       path: '/watch/$sourceId/$animeId/$groupId/$episodeId'
@@ -267,6 +287,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SourcesRoute: SourcesRoute,
   AnimeSourceIdAnimeIdRoute: AnimeSourceIdAnimeIdRoute,
+  EntryProviderExternalIdRoute: EntryProviderExternalIdRoute,
   WatchSourceIdAnimeIdGroupIdEpisodeIdRoute:
     WatchSourceIdAnimeIdGroupIdEpisodeIdRoute,
 }

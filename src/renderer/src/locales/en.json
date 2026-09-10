@@ -120,8 +120,22 @@
       "searchUnavailable": "No provider's search is answering right now. Paste a link instead.",
       "noneFound": "Nothing found.",
       "reset": "Match automatically again",
-      "idsRead": "A bare id is read as {{provider}}"
+      "idsRead": "A bare id is read as {{provider}}",
+      "openEntry": "Open as an aggregator entry"
     }
+  },
+  "entry": {
+    "notFound": "That entry could not be loaded.",
+    "notOnSource": "Not found on {{source}}",
+    "noDescribedSources": "No source uses an aggregator",
+    "notOnSourceHint": "Its name there may be spelled differently, or it may not be uploaded at all. Try another source, or point it at the right title yourself.",
+    "tryHere": "Try this source",
+    "looking": "Looking…",
+    "notHereEither": "Not here either",
+    "pickTitle": "Find it on {{source}}",
+    "pickTitleHint": "Search the source and pick the right title. The choice is remembered.",
+    "searchPlaceholder": "Search {{source}}",
+    "nothingFound": "Nothing found."
   },
   "watch": {
     "loadingLink": "Loading link…",

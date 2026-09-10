@@ -3,7 +3,8 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, Globe, RotateCcw, Search, X } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { ArrowRightLeft, ExternalLink, Globe, RotateCcw, Search, X } from "lucide-react";
 import {
   metadataEntryUrl,
   parseMetadataReference,
@@ -70,6 +71,19 @@ export function MetadataBinding({ sourceId, animeId, titleLoadedAt }: { sourceId
             <span>{t("detail.metadata.notMatched")}</span>
           )}
         </button>
+        {match && (
+          // The way in to the resolution screen while nothing else leads there yet - opening this
+          // title's own entry as if it had been clicked in an aggregator catalog. It normally
+          // redirects straight back here, which is exactly the behaviour worth being able to check.
+          <Link
+            to="/entry/$provider/$externalId"
+            params={{ provider: match.provider, externalId: String(match.externalId) }}
+            className="inline-flex items-center transition-colors hover:text-text"
+            title={t("detail.metadata.openEntry")}
+          >
+            <ArrowRightLeft className="h-3 w-3" strokeWidth={2.5} />
+          </Link>
+        )}
         {match && (
           <a
             href={metadataEntryUrl(match.provider, match.externalId)}
