@@ -36,6 +36,7 @@ export type ExtensionMethod =
   | "getAccount"
   | "listComments"
   | "postComment"
+  | "voteComment"
   | "listReviews"
   | "postReview"
   | "syncLibraryEntry"
@@ -169,6 +170,7 @@ export function executeExtensionCall(
     case "getAccount":
     case "listComments":
     case "postComment":
+    case "voteComment":
     case "listReviews":
     case "postReview":
     case "syncLibraryEntry":

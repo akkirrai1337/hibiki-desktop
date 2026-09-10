@@ -73,6 +73,9 @@ const api = {
         ipcRenderer.invoke(IPC.sourceComments, sourceId, request),
       post: (sourceId: string, request: { animeId: string; text: string; parentId?: string | null }): Promise<SourceComment> =>
         ipcRenderer.invoke(IPC.sourcePostComment, sourceId, request),
+      /** 1 to like, -1 to dislike, 0 to take a vote back. */
+      vote: (sourceId: string, request: { commentId: string; vote: number }): Promise<boolean> =>
+        ipcRenderer.invoke(IPC.sourceVoteComment, sourceId, request),
     },
     reviews: {
       list: (sourceId: string, request: { animeId: string; offset?: number }): Promise<SourceReview[]> =>

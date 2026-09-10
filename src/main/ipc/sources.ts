@@ -171,6 +171,9 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   ipcMain.handle(IPC.sourcePostComment, (_e, sourceId: string, request: Parameters<typeof runtime.postComment>[1]) =>
     runtime.postComment(sourceId, request),
   );
+  ipcMain.handle(IPC.sourceVoteComment, (_e, sourceId: string, request: Parameters<typeof runtime.voteComment>[1]) =>
+    runtime.voteComment(sourceId, request),
+  );
   ipcMain.handle(IPC.sourceReviews, (_e, sourceId: string, request: Parameters<typeof runtime.listReviews>[1]) =>
     runtime.listReviews(sourceId, request),
   );

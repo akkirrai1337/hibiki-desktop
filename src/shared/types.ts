@@ -221,7 +221,13 @@ export interface SourceComment {
   authorAvatarUrl?: string | null;
   text: string;
   createdAt: number;
+  /** Both sides separately, the way a site shows them - a host given only the difference could not
+   * get back to "4 up, 1 down". */
   likes?: number;
+  dislikes?: number;
+  /** What the signed-in account already voted on this comment: 1, -1 or 0. Null while signed out,
+   * which is not the same as having voted nothing. */
+  viewerVote?: number | null;
   replyCount?: number;
   /** Set on replies, so a flat list can still be drawn as threads. */
   parentId?: string | null;

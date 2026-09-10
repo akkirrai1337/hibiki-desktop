@@ -24,6 +24,7 @@ export const IPC = {
   sourceAccount: "source:account:get",
   sourceComments: "source:comments:list",
   sourcePostComment: "source:comments:post",
+  sourceVoteComment: "source:comments:vote",
   sourceReviews: "source:reviews:list",
   sourcePostReview: "source:reviews:post",
   sourceSyncLibraryEntry: "source:library:sync",

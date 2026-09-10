@@ -461,6 +461,11 @@ export class ExtensionRuntime {
     return this.run("postComment", sourceId, [request]);
   }
 
+  /** 1 to like, -1 to dislike, 0 to take a vote back. */
+  voteComment(sourceId: string, request: { commentId: string; vote: number }): Promise<boolean> {
+    return this.run("voteComment", sourceId, [request]);
+  }
+
   listReviews(sourceId: string, request: { animeId: string; offset?: number }): Promise<SourceReview[]> {
     return this.run("listReviews", sourceId, [request]);
   }

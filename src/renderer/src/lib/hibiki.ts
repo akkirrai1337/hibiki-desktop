@@ -66,6 +66,8 @@ export interface HibikiApi {
     comments: {
       list(sourceId: string, request: { animeId: string; parentId?: string | null; offset?: number }): Promise<SourceComment[]>;
       post(sourceId: string, request: { animeId: string; text: string; parentId?: string | null }): Promise<SourceComment>;
+      /** 1 to like, -1 to dislike, 0 to take a vote back. */
+      vote(sourceId: string, request: { commentId: string; vote: number }): Promise<boolean>;
     };
     reviews: {
       list(sourceId: string, request: { animeId: string; offset?: number }): Promise<SourceReview[]>;

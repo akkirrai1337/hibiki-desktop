@@ -2,10 +2,11 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { CornerDownRight, Heart, MessageSquare, UserRound } from "lucide-react";
+import { CornerDownRight, MessageSquare, Send, ThumbsDown, ThumbsUp, UserRound } from "lucide-react";
 import type { SourceComment, SourceInfo } from "@shared/types";
 import { hibiki } from "@/lib/hibiki";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { splitMentions } from "@/lib/commentText";
 import { cn } from "@/lib/cn";
 
 /**
@@ -126,18 +127,13 @@ function Comment({
           <span className="shrink-0 text-xs text-muted">
             {new Date(comment.createdAt).toLocaleDateString(i18n.language, { day: "numeric", month: "short", year: "numeric" })}
           </span>
-          {/* One number, because that is what the source reports: likes minus dislikes, with no way
-              to vote from here - the contract has no call for it. */}
-          {comment.likes != null && comment.likes !== 0 && (
-            <span className="flex shrink-0 items-center gap-1 text-xs text-muted">
-              <Heart className="h-3 w-3" strokeWidth={2.5} />
-              {comment.likes}
-            </span>
-          )}
         </div>
-        <p className="mt-1 select-text whitespace-pre-wrap text-sm leading-relaxed text-text/90">{comment.text}</p>
+        <p className="mt-1 select-text whitespace-pre-wrap text-sm leading-relaxed text-text/90">
+          <CommentText text={comment.text} />
+        </p>
 
         <div className="mt-1.5 flex items-center gap-4">
+          <Votes sourceId={sourceId} animeId={animeId} comment={comment} canVote={canReply} />
           {canReply && (
             <button
               onClick={() => setReplying((open) => !open)}
@@ -224,24 +220,143 @@ function Composer({
         if (canSubmit) post.mutate();
       }}
     >
-      <textarea
-        value={text}
-        onChange={(event) => setText(event.target.value)}
-        rows={compact ? 2 : 3}
-        placeholder={t(parentId ? "detail.comments.replyPlaceholder" : "detail.comments.placeholder")}
-        className="w-full resize-y rounded-xl border border-border bg-text/[.03] px-3 py-2.5 text-sm text-text outline-none transition-colors placeholder:text-muted focus:border-accent/70"
-      />
-      {post.isError && <ErrorBanner className="mt-2" message={(post.error as Error).message} />}
-      <div className="mt-2 flex justify-end">
+      {/* The send control sits inside the field rather than under it. A button on its own line
+          added a block of empty space between this box and whatever follows it, which read as the
+          thread being misaligned rather than as a form having a button. */}
+      <div className="relative">
+        <textarea
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          onKeyDown={(event) => {
+            // Enter sends, Shift+Enter breaks the line - the shape every comment box has. Without
+            // it the only way to send is a mouse trip to a corner of the field.
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              if (canSubmit) post.mutate();
+            }
+          }}
+          rows={compact ? 2 : 3}
+          placeholder={t(parentId ? "detail.comments.replyPlaceholder" : "detail.comments.placeholder")}
+          className="w-full resize-none rounded-xl border border-border bg-text/[.03] py-2.5 pl-3 pr-12 text-sm text-text outline-none transition-colors placeholder:text-muted focus:border-accent/70"
+        />
         <button
           type="submit"
           disabled={!canSubmit}
-          className="rounded-xl bg-accent px-4 py-2 text-sm font-bold text-accent-fg transition-transform hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+          aria-label={t("detail.comments.post")}
+          title={t("detail.comments.post")}
+          className={cn(
+            "absolute bottom-2.5 right-2.5 flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
+            canSubmit ? "bg-accent text-accent-fg hover:brightness-110" : "bg-text/[.06] text-muted",
+          )}
         >
-          {post.isPending ? t("detail.comments.posting") : t("detail.comments.post")}
+          <Send className="h-4 w-4" strokeWidth={2.25} />
         </button>
       </div>
+      {post.isError && <ErrorBanner className="mt-2" message={(post.error as Error).message} />}
     </form>
+  );
+}
+
+/**
+ * One comment's up and down votes.
+ *
+ * Counts come from the source and so does the viewer's own vote, which is what lets a pressed
+ * button look pressed. Pressing the one already chosen takes the vote back, the way every site with
+ * these buttons behaves.
+ */
+function Votes({
+  sourceId,
+  animeId,
+  comment,
+  canVote,
+}: {
+  sourceId: string;
+  animeId: string;
+  comment: SourceComment;
+  canVote: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [pending, setPending] = useState<number | null>(null);
+
+  const vote = useMutation({
+    mutationFn: (next: number) => hibiki.sources.comments.vote(sourceId, { commentId: comment.id, vote: next }),
+    onMutate: (next) => setPending(next),
+    // Refetched rather than counted locally: the source owns these numbers, and a vote that was
+    // refused (a deleted comment, a rate limit) must not leave a number here that nobody else sees.
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["comments", sourceId, animeId] });
+      setPending(null);
+    },
+  });
+
+  const current = pending ?? comment.viewerVote ?? 0;
+  const likes = (comment.likes ?? 0) + (pending === 1 && comment.viewerVote !== 1 ? 1 : 0);
+  const dislikes = (comment.dislikes ?? 0) + (pending === -1 && comment.viewerVote !== -1 ? 1 : 0);
+
+  return (
+    <span className="flex items-center gap-1">
+      <VoteButton
+        icon={ThumbsUp}
+        count={likes}
+        active={current === 1}
+        disabled={!canVote || vote.isPending}
+        onClick={() => vote.mutate(current === 1 ? 0 : 1)}
+        activeClassName="text-emerald-400"
+      />
+      <VoteButton
+        icon={ThumbsDown}
+        count={dislikes}
+        active={current === -1}
+        disabled={!canVote || vote.isPending}
+        onClick={() => vote.mutate(current === -1 ? 0 : -1)}
+        activeClassName="text-rose-400"
+      />
+    </span>
+  );
+}
+
+function VoteButton({
+  icon: Icon,
+  count,
+  active,
+  disabled,
+  onClick,
+  activeClassName,
+}: {
+  icon: typeof ThumbsUp;
+  count: number;
+  active: boolean;
+  disabled: boolean;
+  onClick: () => void;
+  activeClassName: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-semibold transition-colors",
+        active ? activeClassName : "text-muted",
+        disabled ? "cursor-default" : "hover:bg-text/[.06] hover:text-text",
+      )}
+    >
+      <Icon className={cn("h-3.5 w-3.5", active && "fill-current")} strokeWidth={2.25} />
+      {count > 0 ? count : ""}
+    </button>
+  );
+}
+
+function CommentText({ text }: { text: string }) {
+  return (
+    <>
+      {splitMentions(text).map((part, index) =>
+        part.type === "mention" ? (
+          <span key={index} className="font-semibold text-accent-text">@{part.name}</span>
+        ) : (
+          part.value
+        ),
+      )}
+    </>
   );
 }
 
