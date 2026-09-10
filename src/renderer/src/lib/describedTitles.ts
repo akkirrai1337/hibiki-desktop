@@ -38,15 +38,16 @@ export function useDescribedTitles(
     // The answer is as durable as the cache behind it, and re-asking on every remount would put
     // this screen back at the start of the provider's queue for nothing.
     staleTime: 5 * 60_000,
-    // A catalog page appended to the bottom is a new question about a longer list, and answering it
-    // from scratch would blank the grid someone is in the middle of scrolling. Holding the previous
-    // answer keeps the screen still until the longer one is ready.
-    //
-    // Only within one source, though: switching source is not a longer version of the same list but
-    // a different catalog entirely, and holding the old one left the previous source's titles on
-    // screen under the new source's name.
-    placeholderData: (previous, previousQuery) =>
-      (previousQuery?.queryKey as [string, string | null | undefined, string] | undefined)?.[1] === sourceId ? previous : undefined,
+    // Held only for the one case it exists for: a catalog page appended to the bottom, which is a
+    // longer version of the list already on screen. Recognised by the previous ids being a prefix
+    // of the current ones - anything else (a different source, a different search) is a different
+    // list, and holding the old answer left the previous query's results sitting under the new
+    // query's heading.
+    placeholderData: (previous, previousQuery) => {
+      const key = previousQuery?.queryKey as [string, string | null | undefined, string] | undefined;
+      if (!key || key[1] !== sourceId) return undefined;
+      return ids.startsWith(key[2]) ? previous : undefined;
+    },
   });
   // Raised the moment the pass starts and dropped when it finishes, with no grace period: the
   // point is that nothing on screen is final until it does, so showing the source's version first
