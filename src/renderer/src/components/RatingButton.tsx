@@ -23,6 +23,7 @@ export function RatingButton({ sourceId, animeId }: { sourceId: string; animeId:
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [hovered, setHovered] = useState<number | null>(null);
 
   const rating = useQuery({
     queryKey: ["rating", sourceId, animeId],
@@ -36,11 +37,14 @@ export function RatingButton({ sourceId, animeId }: { sourceId: string; animeId:
     onMutate: (value) => {
       queryClient.setQueryData(["rating", sourceId, animeId], value);
       setOpen(false);
+      setHovered(null);
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["rating", sourceId, animeId] }),
   });
 
   const current = rating.data ?? null;
+  // What the panel is currently talking about: the star under the pointer, or the saved score.
+  const shown = hovered ?? current;
 
   return (
     <div className="relative">
@@ -66,36 +70,76 @@ export function RatingButton({ sourceId, animeId }: { sourceId: string; animeId:
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.15 }}
-              className="absolute left-0 top-[52px] z-50 w-max rounded-2xl border border-border bg-surface p-2 shadow-2xl"
+              className="absolute left-0 top-[52px] z-50 w-max rounded-2xl border border-border bg-surface p-3 shadow-2xl"
+              onMouseLeave={() => setHovered(null)}
             >
-              <div className="flex gap-1">
-                {Array.from({ length: MAX_RATING }, (_, index) => index + 1).map((value) => (
-                  <button
-                    key={value}
-                    onClick={() => save.mutate(value)}
-                    className={cn(
-                      "h-9 w-9 rounded-lg text-sm font-bold transition-colors",
-                      value === current ? "bg-amber-400/20 text-amber-500 dark:text-amber-300" : "text-muted hover:bg-text/[.08] hover:text-text",
-                    )}
-                  >
-                    {value}
-                  </button>
-                ))}
+              {/* The number being considered, said out loud. Ten bare buttons gave no answer to
+                  "what does a 7 mean here", and the row below reads as a scale only once something
+                  names its ends. */}
+              <div className="mb-2 flex items-baseline gap-2 px-1">
+                <span className={cn("text-2xl font-bold leading-none tabular-nums", shown == null ? "text-muted/50" : toneText(shown))}>
+                  {shown ?? "–"}
+                </span>
+                <span className="text-xs font-semibold text-muted">
+                  {shown == null ? t("detail.rating.pick") : t(`detail.rating.labels.${shown}`)}
+                </span>
               </div>
-              {current != null && (
-                <button
-                  onClick={() => save.mutate(null)}
-                  className="mt-1 w-full rounded-lg px-3 py-2 text-xs font-semibold text-muted transition-colors hover:bg-text/[.06] hover:text-text"
-                >
-                  {t("detail.rating.clear")}
-                </button>
-              )}
+
+              <div className="flex gap-0.5">
+                {Array.from({ length: MAX_RATING }, (_, index) => index + 1).map((value) => {
+                  // Filled up to whatever is being considered - the hovered value while a pointer is
+                  // in the row, the saved one otherwise. A rating scale that only lights the single
+                  // number under the cursor reads as ten separate choices rather than one scale.
+                  const filled = shown != null && value <= shown;
+                  return (
+                    <button
+                      key={value}
+                      onMouseEnter={() => setHovered(value)}
+                      onFocus={() => setHovered(value)}
+                      onClick={() => save.mutate(value)}
+                      aria-label={String(value)}
+                      className="group/star flex h-9 w-7 items-end justify-center rounded-md pb-1 transition-colors hover:bg-text/[.06]"
+                    >
+                      <Star
+                        className={cn(
+                          "h-[18px] w-[18px] transition-[color,transform] duration-150",
+                          filled ? cn(toneText(shown!), "fill-current") : "text-muted/40",
+                          "group-hover/star:scale-110",
+                        )}
+                        strokeWidth={2}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-2 flex items-center justify-between gap-4 border-t border-border pt-2">
+                <span className="px-1 text-[11px] text-muted">
+                  {current != null ? t("detail.rating.yours", { rating: current }) : t("detail.rating.notRated")}
+                </span>
+                {current != null && (
+                  <button
+                    onClick={() => save.mutate(null)}
+                    className="rounded-lg px-2 py-1 text-[11px] font-semibold text-muted transition-colors hover:bg-rose-500/10 hover:text-rose-400"
+                  >
+                    {t("detail.rating.clear")}
+                  </button>
+                )}
+              </div>
             </motion.div>
           </>
         )}
       </AnimatePresence>
     </div>
   );
+}
+
+/** A score's own colour: the same three-band reading every ratings site uses, so the row says
+ * roughly what it thinks before the label is read. */
+function toneText(value: number): string {
+  if (value <= 3) return "text-rose-400";
+  if (value <= 6) return "text-amber-400";
+  return "text-emerald-400";
 }
 
 /** The scores a source reports for a title - its own, and whichever other sites it republishes.

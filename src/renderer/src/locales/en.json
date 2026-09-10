@@ -139,7 +139,22 @@
     "rating": {
       "rate": "Rate",
       "clear": "Remove rating",
-      "votes": "{{count}} votes"
+      "votes": "{{count}} votes",
+      "pick": "Pick a score",
+      "yours": "Your score: {{rating}}",
+      "notRated": "Not rated yet",
+      "labels": {
+        "1": "Awful",
+        "2": "Very bad",
+        "3": "Bad",
+        "4": "Weak",
+        "5": "So-so",
+        "6": "Decent",
+        "7": "Good",
+        "8": "Great",
+        "9": "Superb",
+        "10": "Masterpiece"
+      }
     }
   },
   "entry": {
