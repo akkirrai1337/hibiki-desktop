@@ -500,7 +500,7 @@
       "fallback": "Try the other one",
       "fallbackHint": "When the chosen one is unavailable or has no entry",
       "showBinding": "Show the metadata entry on a title",
-      "showBindingHint": "A line naming the provider and entry, and the way to correct a wrong match",
+      "showBindingHint": "An informational line naming the provider and matched entry",
       "aggregatorCatalog": "Browse through the aggregator",
       "aggregatorCatalogHint": "Home, catalog, and search use aggregator titles; playback still comes from the source"
     },
