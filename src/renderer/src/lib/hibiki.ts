@@ -12,7 +12,7 @@ import type {
   DownloadRequest,
   ExternalMetadataPreferences,
   InstalledVersions,
-  MetadataMatchInfo,
+  MetadataBindingState,
   MetadataSearchResult,
   LibraryEntry,
   MarketplaceExtension,
@@ -114,7 +114,7 @@ export interface HibikiApi {
   };
   metadata: {
     setPreferences(preferences: ExternalMetadataPreferences): Promise<void>;
-    match(sourceId: string, animeId: string): Promise<MetadataMatchInfo | null>;
+    match(sourceId: string, animeId: string): Promise<MetadataBindingState>;
     search(sourceId: string, query: string): Promise<MetadataSearchResult>;
     entry(provider: MetadataProviderId, externalId: number): Promise<ExternalMetadata | null>;
     setMatch(sourceId: string, animeId: string, provider: MetadataProviderId, externalId: number): Promise<ExternalMetadata | null>;

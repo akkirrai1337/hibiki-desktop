@@ -111,6 +111,7 @@
       "describedBy": "Described from {{provider}}",
       "manual": "picked by hand",
       "confidence": "{{percent}}% match",
+      "notMatched": "Not matched to a metadata entry",
       "change": "Change",
       "pickerTitle": "Metadata entry",
       "pickerHint": "Search, or paste an AniList / MAL link",

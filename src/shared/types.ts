@@ -284,8 +284,20 @@ export interface ExternalMetadataPreferences {
   fallbackEnabled: boolean;
 }
 
-/** What the title page's metadata line prints: which provider entry is describing this title, and
- * whether the user picked it by hand (in which case the matcher will never change it). */
+/** What the title page needs in order to draw its metadata line at all: which providers may
+ * describe this title (empty when the source does not use external metadata, or the user turned it
+ * off) and what it is currently bound to, if anything.
+ *
+ * The two are separate because "no match yet" is a state the page must still show a way out of -
+ * that is exactly when someone needs the manual picker, since a missing match usually means the
+ * provider's search could not answer. */
+export interface MetadataBindingState {
+  providers: Array<"anilist" | "mal">;
+  match: MetadataMatchInfo | null;
+}
+
+/** Which provider entry is describing this title, and whether the user picked it by hand (in which
+ * case the matcher will never change it). */
 export interface MetadataMatchInfo {
   provider: "anilist" | "mal";
   externalId: number;

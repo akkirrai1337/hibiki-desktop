@@ -111,6 +111,7 @@
       "describedBy": "Метадані з {{provider}}",
       "manual": "вибрано вручну",
       "confidence": "збіг {{percent}}%",
+      "notMatched": "Запис метаданих не підібрано",
       "change": "Змінити",
       "pickerTitle": "Запис метаданих",
       "pickerHint": "Знайдіть або вставте посилання AniList / MAL",

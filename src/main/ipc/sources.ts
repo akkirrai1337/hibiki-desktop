@@ -1,6 +1,6 @@
 import { ipcMain } from "electron";
 import { IPC } from "@shared/ipc";
-import type { AnimeTitle, ExternalMetadataPreferences, PlaybackGroup, PlayerLink, PlayerLinkPreference } from "@shared/types";
+import type { AnimeTitle, ExternalMetadataPreferences, MetadataBindingState, PlaybackGroup, PlayerLink, PlayerLinkPreference } from "@shared/types";
 import { mergeExternalMetadata, type MetadataProviderId } from "@shared/externalMetadata";
 import type { ExtensionRuntime } from "../extensions/runtime";
 import {
@@ -61,9 +61,10 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   ipcMain.handle(IPC.metadataSetPreferences, (_e, preferences: ExternalMetadataPreferences) =>
     setExternalMetadataPreferences(preferences),
   );
-  ipcMain.handle(IPC.metadataMatch, (_e, sourceId: string, animeId: string) =>
-    currentMatch(sourceId, animeId, orderFor(sourceId)),
-  );
+  ipcMain.handle(IPC.metadataMatch, (_e, sourceId: string, animeId: string): MetadataBindingState => {
+    const providers = orderFor(sourceId);
+    return { providers, match: currentMatch(sourceId, animeId, providers) };
+  });
   ipcMain.handle(IPC.metadataSearch, (_e, sourceId: string, query: string) =>
     searchProviders(query, orderFor(sourceId)),
   );

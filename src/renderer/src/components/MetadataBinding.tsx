@@ -27,40 +27,45 @@ import { cn } from "@/lib/cn";
 export function MetadataBinding({ sourceId, animeId }: { sourceId: string; animeId: string }) {
   const { t } = useTranslation();
   const [picking, setPicking] = useState(false);
-  const match = useQuery({
+  const binding = useQuery({
     queryKey: ["metadataMatch", sourceId, animeId],
     queryFn: () => hibiki.metadata.match(sourceId, animeId),
   });
 
-  // Nothing bound and nothing to bind: either this source does not use external metadata, or the
-  // user turned it off. Printing "not matched" there would advertise a feature that is not on.
-  if (!match.data && !picking) return null;
+  // No provider may describe this title at all: either the source does not use external metadata,
+  // or the user turned it off. That is the only case with nothing to say - an *unmatched* title
+  // still needs its line, since a missing match usually means the provider's search could not
+  // answer and the manual picker is the way through.
+  if (!binding.data || binding.data.providers.length === 0) return null;
+  const match = binding.data.match;
 
   return (
     <>
       <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted">
         <Globe className="h-3.5 w-3.5" strokeWidth={2} />
-        {match.data ? (
+        {match ? (
           <>
             <span>
-              {t("detail.metadata.describedBy", { provider: PROVIDER_RATING_SOURCE[match.data.provider] })}
-              {match.data.manual
+              {t("detail.metadata.describedBy", { provider: PROVIDER_RATING_SOURCE[match.provider] })}
+              {match.manual
                 ? ` · ${t("detail.metadata.manual")}`
-                : match.data.confidence != null
-                  ? ` · ${t("detail.metadata.confidence", { percent: match.data.confidence })}`
+                : match.confidence != null
+                  ? ` · ${t("detail.metadata.confidence", { percent: match.confidence })}`
                   : ""}
             </span>
             <a
-              href={metadataEntryUrl(match.data.provider, match.data.externalId)}
+              href={metadataEntryUrl(match.provider, match.externalId)}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 font-semibold transition-colors hover:text-text"
             >
-              #{match.data.externalId}
+              #{match.externalId}
               <ExternalLink className="h-3 w-3" strokeWidth={2.5} />
             </a>
           </>
-        ) : null}
+        ) : (
+          <span>{t("detail.metadata.notMatched")}</span>
+        )}
         <button onClick={() => setPicking(true)} className="font-semibold transition-colors hover:text-text">
           {t("detail.metadata.change")}
         </button>

@@ -29,7 +29,7 @@ import type {
   UpdateDownloadProgress,
   WatchProgress,
   ExternalMetadataPreferences,
-  MetadataMatchInfo,
+  MetadataBindingState,
   MetadataSearchResult,
   XpEvent,
 } from "@shared/types";
@@ -157,7 +157,7 @@ const api = {
     // Mirrors the renderer's persisted preference into the main process, which owns the merge.
     setPreferences: (preferences: ExternalMetadataPreferences): Promise<void> =>
       ipcRenderer.invoke(IPC.metadataSetPreferences, preferences),
-    match: (sourceId: string, animeId: string): Promise<MetadataMatchInfo | null> =>
+    match: (sourceId: string, animeId: string): Promise<MetadataBindingState> =>
       ipcRenderer.invoke(IPC.metadataMatch, sourceId, animeId),
     search: (sourceId: string, query: string): Promise<MetadataSearchResult> =>
       ipcRenderer.invoke(IPC.metadataSearch, sourceId, query),
