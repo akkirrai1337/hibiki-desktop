@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { AnimeTitle } from "@shared/types";
 import { hibiki } from "@/lib/hibiki";
@@ -44,25 +43,12 @@ export function useDescribedTitles(
     // answer keeps the screen still until the longer one is ready.
     placeholderData: keepPreviousData,
   });
-  // An already-described screen answers from disk in a millisecond or two, and flashing a skeleton
-  // for that reads as a stutter rather than as loading - so the flag only turns on once the wait is
-  // long enough to be worth acknowledging. Mirrors PosterImage's own placeholder guard on Android.
-  const describing = useDelayed(described.isPending && described.fetchStatus !== "idle", SKELETON_FLASH_GUARD_MS);
-  return { titles: described.data ?? titles ?? [], describing, refreshing: described.isFetching };
-}
-
-/** Loading states shorter than this never raise the flag, so a cached screen never flashes one. */
-const SKELETON_FLASH_GUARD_MS = 120;
-
-function useDelayed(active: boolean, delayMs: number): boolean {
-  const [delayed, setDelayed] = useState(false);
-  useEffect(() => {
-    if (!active) {
-      setDelayed(false);
-      return;
-    }
-    const timer = window.setTimeout(() => setDelayed(true), delayMs);
-    return () => window.clearTimeout(timer);
-  }, [active, delayMs]);
-  return delayed;
+  // Raised the moment the pass starts and dropped when it finishes, with no grace period: the
+  // point is that nothing on screen is final until it does, so showing the source's version first
+  // and swapping is exactly what this is meant to prevent, however brief the swap.
+  return {
+    titles: described.data ?? titles ?? [],
+    describing: described.isPending && described.fetchStatus !== "idle",
+    refreshing: described.isFetching,
+  };
 }

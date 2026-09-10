@@ -7,6 +7,7 @@ import type { TFunction } from "i18next";
 import { AnimatePresence, motion } from "motion/react";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import { Play, Bookmark, Check, ChevronDown, Clock, Download, Eraser, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
+import { metadataProviderOrder } from "@shared/externalMetadata";
 import { MetadataBinding } from "@/components/MetadataBinding";
 import { hibiki } from "@/lib/hibiki";
 import { findListedTitle } from "@/lib/listedTitles";
@@ -203,6 +204,24 @@ function AnimeDetailPage() {
         animeId,
       ),
   });
+  // Whether this page's title is going to be described by a metadata provider - which decides
+  // whether the placeholder above is worth showing at all. When it is, the placeholder is the
+  // source's own poster and name, and the real fetch replaces both a moment later; a skeleton until
+  // then is steadier than watching the page rewrite itself. The same three inputs the main process
+  // uses, so the two never disagree about it.
+  const sourcesQuery = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });
+  const externalMetadataEnabled = useUiStore((s) => s.externalMetadataEnabled);
+  const externalMetadataOverrides = useUiStore((s) => s.externalMetadataOverrides);
+  const externalMetadataProvider = useUiStore((s) => s.externalMetadataProvider);
+  const externalMetadataFallback = useUiStore((s) => s.externalMetadataFallback);
+  const describesTitles = metadataProviderOrder(
+    { enabled: externalMetadataEnabled, overrides: externalMetadataOverrides, provider: externalMetadataProvider, fallbackEnabled: externalMetadataFallback },
+    sourceId,
+    sourcesQuery.data?.find((source) => source.id === sourceId)?.useExternalMetadata === true,
+  ).length > 0;
+  // dataUpdatedAt stays 0 for placeholder data, so this is "the real fetch has not landed yet".
+  const describing = describesTitles && animeQuery.dataUpdatedAt === 0 && !animeQuery.isError;
+
   const groupsQuery = usePlaybackGroups(sourceId, animeId);
   const libraryQuery = useQuery({ queryKey: ["library"], queryFn: () => hibiki.library.list() });
   const progressQuery = useQuery({ queryKey: ["progress-all", sourceId, animeId], queryFn: () => hibiki.progress.listForAnime(sourceId, animeId) });
@@ -321,7 +340,10 @@ function AnimeDetailPage() {
       // own current (possibly user-resized) width, kept in sync via that CSS var (see Sidebar.tsx),
       // keeps this confined to the content area it's actually painted behind.
       <div className="fixed bottom-0 right-0 top-10 -z-10 overflow-hidden bg-bg" style={{ left: "var(--sidebar-width, 236px)" }}>
-        {anime?.posterUrl && <>
+        {/* Held back with the rest of the page: this backdrop is the poster, blurred, so painting
+            the source's while a skeleton stands in front of it would change the whole page's tint
+            the moment the real one arrives. */}
+        {anime?.posterUrl && !describing && <>
           <img src={anime.posterUrl} alt="" className="h-full w-full scale-110 object-cover opacity-20 blur-2xl dark:opacity-40" />
           {/* Reads --color-bg straight off the root element (see globals.css) rather than a
               hardcoded hex, same trick as ContinueWatchingRow's own PAGE_BG - so this scrim keeps
@@ -335,9 +357,9 @@ function AnimeDetailPage() {
         </>}
       </div>
     )}
-    {animeQuery.isLoading && <DetailSkeleton />}
+    {(animeQuery.isLoading || describing) && <DetailSkeleton />}
     {animeQuery.isError && <div className="p-8"><ErrorBanner message={(animeQuery.error as Error).message} /></div>}
-    {anime && <>
+    {anime && !describing && <>
       <Overview anime={anime} libraryCategory={libraryEntry?.category ?? null} onSetLibraryCategory={setLibraryCategory} onRemoveFromLibrary={removeFromLibrary} continueTarget={continueTarget ? { groupId: activeGroup!.id, episodeId: continueTarget.episode.id, label: continueTarget.label } : undefined} sourceId={sourceId} animeId={animeId} related={related} titleLoadedAt={animeQuery.dataUpdatedAt} />
       <div className="px-8 pt-6">
         <h2 className="mb-4 text-xl font-bold tracking-[-.02em] text-text">{t("detail.episodes")}</h2>
