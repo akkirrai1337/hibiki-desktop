@@ -12,7 +12,7 @@ import { MetadataBinding } from "@/components/MetadataBinding";
 import { hibiki } from "@/lib/hibiki";
 import { findListedTitle } from "@/lib/listedTitles";
 import { usePlaybackGroups } from "@/lib/playbackGroups";
-import { AnimeCard, animeTitle } from "@/components/AnimeCard";
+import { animeTitle } from "@/components/AnimeCard";
 import { GroupDropdown } from "@/components/GroupDropdown";
 import { HorizontalScrollRow } from "@/components/HorizontalScrollRow";
 import { SmoothImage } from "@/components/SmoothImage";
@@ -94,47 +94,23 @@ function dedupeById<T extends { id: string }>(items: T[]): T[] {
   return items.filter((item) => (seen.has(item.id) ? false : (seen.add(item.id), true)));
 }
 
-function toCardAnime(sourceId: string, item: RelatedAnimeTitle): AnimeTitle {
-  return { id: item.id, sourceId, russianName: item.title, posterUrl: item.posterUrl, type: item.type, year: item.year, availableEpisodeCount: item.episodeCount, status: item.status };
-}
-
-// Renders full AnimeCard grids ("Похожие тайтлы" - similarAnime) - NOT the same component as
-// RelatedStrip below ("Связанные тайтлы" - franchiseAnime/relatedAnime), despite the very similar
-// name and both dealing in "other titles related to this one" data. Different section, different
-// place on the page (this one's a grid under the episode list; RelatedStrip is the compact
-// horizontal strip up by the poster/watch button), different card component (AnimeCard's full
-// poster+meta card here vs RelatedStrip's own compact cover+title-only one). Mixed these two up
-// once already (see git history) - if a request mentions "связанные"/"related", it means
-// RelatedStrip; "похожие"/"similar" means this one.
-function RelatedTitlesRow({ titleKey, items, sourceId }: { titleKey: string; items: RelatedAnimeTitle[]; sourceId: string }) {
-  const { t } = useTranslation();
-  if (items.length === 0) return null;
-  return <div className="px-8 pt-10">
-    <h2 className="mb-4 text-xl font-bold tracking-[-.02em] text-text">{t(titleKey)}</h2>
-    <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-      {items.map((item) => <AnimeCard key={item.id} anime={toCardAnime(sourceId, item)} />)}
-    </div>
-  </div>;
-}
-
 // Same "6 full + a peek of the 7th" ratio the old hand-rolled version used (60px = 6 gaps of
 // gap-2.5/0.625rem, for a row that shows 7 cards' worth of width) - just expressed as a plain
 // Tailwind width class, like HorizontalScrollRow's other callers, instead of a CSS custom property.
 const RELATED_CARD_WIDTH_CLASSES = "w-[calc((100%-6*0.625rem)/6.2)]";
 
-// A franchise/related title reads as a sequence (Season 1, Season 2, Movie, ...) - a compact
-// horizontal strip of covers next to the watch/library actions fits that better than a full grid
-// section buried under the episode list, which read more like an unrelated "recommendations" dump
-// than something belonging to the title card itself (unlike similarAnime, which really is that).
-// This is "Связанные тайтлы" (franchiseAnime/relatedAnime) - NOT RelatedTitlesRow above
-// ("Похожие тайтлы"/similarAnime, the AnimeCard grid under the episode list). See that
-// component's own comment for the full distinction; mixed these two up once already.
-function RelatedStrip({ items, sourceId, currentAnimeId }: { items: RelatedAnimeTitle[]; sourceId: string; currentAnimeId: string }) {
+// Both "other titles" sections of this page: "Связанные тайтлы" (franchiseAnime/relatedAnime, a
+// compact strip next to the watch/library actions) and "Похожие тайтлы" (similarAnime, under the
+// episode list). They used to be a strip and a full AnimeCard grid, which made a page that says the
+// same kind of thing twice look like it says two different kinds of thing; one arrow-scrolled row
+// each reads as one page. Only the heading and the surrounding spacing differ, and the current
+// title is marked in place, which only the related strip ever contains.
+function TitleStrip({ items, sourceId, currentAnimeId, heading }: { items: RelatedAnimeTitle[]; sourceId: string; currentAnimeId?: string; heading: React.ReactNode }) {
   const { t } = useTranslation();
   if (items.length === 0) return null;
 
-  return <div className="mt-6">
-    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">{t("detail.relatedTitles")}</p>
+  return <div>
+    {heading}
     <HorizontalScrollRow
       items={items}
       getKey={(item) => item.id}
@@ -145,14 +121,14 @@ function RelatedStrip({ items, sourceId, currentAnimeId }: { items: RelatedAnime
         // are here": a plain eye badge + a desaturated, slightly dimmed cover (not an accent
         // highlight, since it isn't a call to action - the rest of the row is what's clickable).
         // The cover frame itself stays put and the poster zooms inside it, matching AnimeCard's own
-        // hover (see the similar-titles grid) - scaling the whole frame instead made this strip
-        // read as a different kind of card than every other poster in the app.
+        // hover (see AnimeCard) - scaling the whole frame instead made this strip read as a
+        // different kind of card than every other poster in the app.
         const cover = <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg bg-surface ring-1 ring-border">
           {item.posterUrl ? <SmoothImage src={item.posterUrl} alt={item.title} className={cn("h-full w-full transition-transform duration-500 ease-out", isCurrent ? "opacity-50 grayscale" : "group-hover:scale-[1.035] group-hover:will-change-transform")} /> : null}
           {isCurrent && <div className="absolute bottom-1 left-1 flex items-center gap-0.5 rounded bg-black/75 px-1 py-0.5">
             <Eye className="h-2.5 w-2.5 text-white/80" strokeWidth={2.5} />
           </div>}
-          {/* The same hover reveal AnimeCard uses in the similar-titles grid: the cover darkens
+          {/* The same hover reveal AnimeCard uses in every poster grid: the cover darkens
               under a bottom-up gradient and the title rises into it. Skipped on the current title -
               nothing there is a link, so a hover affordance would be promising an action that
               doesn't exist. Kept off the label below too, which stays clipped to two lines: this
@@ -412,7 +388,13 @@ function AnimeDetailPage() {
           ))}
         </div>}
       </div>
-      <RelatedTitlesRow titleKey="detail.similarTitles" items={similar} sourceId={sourceId} />
+      <div className="px-8 pt-10">
+        <TitleStrip
+          items={similar}
+          sourceId={sourceId}
+          heading={<h2 className="mb-4 text-xl font-bold tracking-[-.02em] text-text">{t("detail.similarTitles")}</h2>}
+        />
+      </div>
       <AnimatePresence>
         {downloadEpisode && (
           <DownloadDialog
@@ -698,7 +680,14 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
         that narrower column left it awkwardly indented under the metadata rather than reading as
         its own section. Full section width instead lines its left edge up with the poster's own,
         directly below it, the way the user actually asked for this to look. */}
-    <RelatedStrip items={related} sourceId={sourceId} currentAnimeId={animeId} />
+    <div className="mt-6">
+      <TitleStrip
+        items={related}
+        sourceId={sourceId}
+        currentAnimeId={animeId}
+        heading={<p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">{t("detail.relatedTitles")}</p>}
+      />
+    </div>
   </section>;
 }
 
