@@ -35,7 +35,11 @@ window.addEventListener("auxclick", (e) => { if (e.button === 1) e.preventDefaul
 // (`#/settings`, ...) after the `#`, which `file://` never touches, so it works identically in dev
 // (over http) and in a packaged build (over file://) - there's no visible address bar in this app
 // for the `#` to look out of place in anyway.
-const router = createRouter({ routeTree, scrollRestoration: true, history: createHashHistory() });
+// Routes are code-split (see vite.config.ts's autoCodeSplitting), so the first click on an episode
+// or a title pays for that chunk before anything can render. Preloading on intent - hovering the
+// link - means the chunk is usually already in memory by the time the click lands, which is most of
+// what makes a navigation feel instant rather than staged.
+const router = createRouter({ routeTree, scrollRestoration: true, history: createHashHistory(), defaultPreload: "intent" });
 
 declare module "@tanstack/react-router" {
   interface Register {

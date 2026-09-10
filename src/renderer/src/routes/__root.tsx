@@ -104,8 +104,16 @@ function RootLayout() {
   // The player replaces the sidebar/nav chrome with the video itself, but keeps the same TitleBar
   // — it already matches the app's look and gives back/forward navigation + a home for the OS
   // window buttons, so there's no need for the player to grow its own copy of that backdrop.
-  const isWatching = useRouterState({ select: (s) => s.location.pathname.startsWith("/watch/") });
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  // The *resolved* location, not the pending one. `location` flips the moment a navigation starts,
+  // while the player is a code-split chunk that still has to load - so the chrome tore down first
+  // and the sidebar visibly vanished into an empty black frame before the player appeared. Reading
+  // the resolved location keeps the page you are leaving on screen, sidebar and all, until the
+  // player is actually ready to be shown, and the swap then happens in one frame.
+  const isWatching = useRouterState({ select: (s) => (s.resolvedLocation ?? s.location).pathname.startsWith("/watch/") });
+  // Resolved as well, and for the same reason: this decides which persisted page is the visible
+  // one, so reading the pending location hid the page being left the instant a navigation started,
+  // leaving an empty frame under the chrome until the next route's chunk arrived.
+  const pathname = useRouterState({ select: (s) => (s.resolvedLocation ?? s.location).pathname });
   // Each of PERSISTED_PAGES only ever joins this set, never leaves it - the first visit mounts it
   // (paying its own load/query cost, same as before) and every visit after that just toggles
   // `hidden` on an already-live component instead of tearing it down and rebuilding its state from
