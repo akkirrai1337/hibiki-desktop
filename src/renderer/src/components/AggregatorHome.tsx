@@ -9,6 +9,7 @@ import { useMetadataProviderKey } from "@/lib/aggregatorBrowsing";
 import { HERO_ACTION_CLASS, HeroCarousel, type HeroSlide } from "@/components/Hero";
 import { EntryCard } from "@/components/AggregatorCatalog";
 import { PosterGrid, PosterGridSkeleton } from "@/components/AnimeCard";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 const HERO_SLIDE_COUNT = 5;
 const ROW_LIMIT = 12;
@@ -57,9 +58,13 @@ export function AggregatorHome({ source, children }: { source: SourceInfo; child
       )}
       {children}
       <div className="space-y-12 px-8 pt-10">
+        {/* An error is not an empty catalog: "nobody answered" reads as a verdict about the
+            aggregator, and a failed request deserves to say what actually went wrong. */}
+        {trending.isError && <ErrorBanner message={(trending.error as Error).message} />}
         <Row title={t("catalogPage.aggregator.trending")}>
           {trending.isPending ? <PosterGridSkeleton count={ROW_LIMIT} /> : <EntryGrid entries={rowEntries} />}
         </Row>
+        {seasonal.isError && <ErrorBanner message={(seasonal.error as Error).message} />}
         <Row title={t("catalogPage.aggregator.seasonOf", { season: t(`catalogPage.aggregator.seasons.${season.season}`), year: season.year })}>
           {seasonal.isPending ? <PosterGridSkeleton count={ROW_LIMIT} /> : <EntryGrid entries={seasonal.data?.results ?? []} />}
         </Row>

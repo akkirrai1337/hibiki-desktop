@@ -4,7 +4,7 @@
 // The two clients (anilistClient.ts, malClient.ts) only make requests. The rules for scoring a
 // match and merging fields are pure and live in shared/externalMetadata.ts. This file owns
 // everything stateful in between.
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, lt, sql } from "drizzle-orm";
 import {
   CATALOG_PROVIDERS,
   MATCH_CONFIDENCE_THRESHOLD,
@@ -20,7 +20,7 @@ import {
 } from "@shared/externalMetadata";
 import type { AnimeTitle, ResolvedSourceTitle } from "@shared/types";
 import { getDb } from "../db";
-import { externalMetadataMatches, externalMetadataMedia } from "../db/schema";
+import { externalMetadataMatches, externalMetadataMedia, externalMetadataUnresolved } from "../db/schema";
 import { logger } from "../logger";
 import * as anilist from "./anilistClient";
 import * as kitsu from "./kitsuClient";
@@ -59,6 +59,16 @@ const TTL_NO_MATCH_MS = 7 * 24 * 60 * 60 * 1000;
 
 const MAX_SEARCHES_PER_PROVIDER = 3;
 
+// How long a failed *resolution* is remembered - a day, against the week a failed description gets.
+// A source's catalog gains titles far faster than an aggregator gains entries.
+const TTL_UNRESOLVED_MS = 24 * 60 * 60 * 1000;
+
+// Entries are cached for their own sake while describing, but browsing a catalog caches a page of
+// two dozen at a time, most of which are never opened. Sweeping the oldest back down to this on
+// each write keeps that from growing without bound; a swept entry costs one request if it is ever
+// wanted again. Mirrors the Android store's own cap.
+const MAX_CACHED_MEDIA = 500;
+
 function ttlFor(media: ExternalMetadata): number {
   return media.status === "released" ? TTL_SETTLED_MS : TTL_AIRING_MS;
 }
@@ -72,6 +82,63 @@ function readCachedMedia(provider: MetadataProviderId, externalId: number): { me
   if (!row) return null;
   const media = JSON.parse(row.mediaJson) as ExternalMetadata;
   return { media, fresh: Date.now() - row.cachedAt < ttlFor(media) };
+}
+
+function readUnresolved(sourceId: string, provider: MetadataProviderId, externalId: number): boolean {
+  const row = getDb()
+    .select()
+    .from(externalMetadataUnresolved)
+    .where(
+      and(
+        eq(externalMetadataUnresolved.sourceId, sourceId),
+        eq(externalMetadataUnresolved.provider, provider),
+        eq(externalMetadataUnresolved.externalId, externalId),
+      ),
+    )
+    .get();
+  return row != null && Date.now() - row.attemptedAt < TTL_UNRESOLVED_MS;
+}
+
+function writeUnresolved(sourceId: string, provider: MetadataProviderId, externalId: number): void {
+  const values = { sourceId, provider, externalId, attemptedAt: Date.now() };
+  getDb()
+    .insert(externalMetadataUnresolved)
+    .values(values)
+    .onConflictDoUpdate({
+      target: [externalMetadataUnresolved.sourceId, externalMetadataUnresolved.provider, externalMetadataUnresolved.externalId],
+      set: { attemptedAt: values.attemptedAt },
+    })
+    .run();
+}
+
+function clearUnresolved(sourceId: string, provider: MetadataProviderId, externalId: number): void {
+  getDb()
+    .delete(externalMetadataUnresolved)
+    .where(
+      and(
+        eq(externalMetadataUnresolved.sourceId, sourceId),
+        eq(externalMetadataUnresolved.provider, provider),
+        eq(externalMetadataUnresolved.externalId, externalId),
+      ),
+    )
+    .run();
+}
+
+/** Drops the oldest cached entries once the table has grown past its cap. Runs after a write, and
+ * only does anything on the writes that actually cross it. */
+function sweepCachedMedia(): void {
+  const db = getDb();
+  const { count } = db.select({ count: sql<number>`count(*)` }).from(externalMetadataMedia).get() ?? { count: 0 };
+  if (count <= MAX_CACHED_MEDIA) return;
+  const cutoff = db
+    .select({ cachedAt: externalMetadataMedia.cachedAt })
+    .from(externalMetadataMedia)
+    .orderBy(desc(externalMetadataMedia.cachedAt))
+    .limit(1)
+    .offset(MAX_CACHED_MEDIA - 1)
+    .get();
+  if (!cutoff) return;
+  db.delete(externalMetadataMedia).where(lt(externalMetadataMedia.cachedAt, cutoff.cachedAt)).run();
 }
 
 function writeCachedMedia(media: ExternalMetadata): void {
@@ -89,6 +156,7 @@ function writeCachedMedia(media: ExternalMetadata): void {
       set: { mediaJson: values.mediaJson, cachedAt: values.cachedAt },
     })
     .run();
+  sweepCachedMedia();
 }
 
 function readMatch(sourceId: string, animeId: string, provider: MetadataProviderId) {
@@ -295,6 +363,13 @@ export async function fetchEntry(
   provider: MetadataProviderId,
   reference: { externalId?: number; slug?: string },
 ): Promise<ExternalMetadata | null> {
+  // Browsing a catalog caches every entry it shows, and opening a card asks for that same entry a
+  // moment later - so the common path is a disk read, not a request. Only a stale (or absent) entry
+  // is worth a round trip before a resolution that may need two source searches of its own.
+  if (reference.externalId != null) {
+    const cached = readCachedMedia(provider, reference.externalId);
+    if (cached?.fresh) return cached.media;
+  }
   const client = CLIENTS[provider];
   const media = await (reference.slug
     ? (client.fetchBySlug?.(reference.slug) ?? Promise.resolve(null))
@@ -334,6 +409,10 @@ export async function resolveSourceTitle(
   const recorded = readRecordedSourceTitle(sourceId, entry.provider, entry.externalId);
   if (recorded) return { ...recorded, via: "recorded" };
 
+  // A recent search of this source already came back with nothing for this entry. Re-running it on
+  // every visit to the same card is two requests to be told the same thing.
+  if (readUnresolved(sourceId, entry.provider, entry.externalId)) return null;
+
   for (const [provider, externalId] of crossIdsOf(entry)) {
     const viaOther = readRecordedSourceTitle(sourceId, provider, externalId);
     if (viaOther) return { ...viaOther, via: "cross-provider" };
@@ -352,15 +431,21 @@ export async function resolveSourceTitle(
     writeCachedMedia(entry);
     writeMatch(sourceId, best.animeId, entry.provider, entry.externalId, Math.round(best.confidence * 100), false);
     recordCrossMatch(sourceId, best.animeId, entry);
+    clearUnresolved(sourceId, entry.provider, entry.externalId);
     logger.debug("metadata", `${sourceId} resolved ${entry.provider}#${entry.externalId} to ${best.animeId} (${Math.round(best.confidence * 100)}%)`);
     return { animeId: best.animeId, confidence: Math.round(best.confidence * 100), manual: false, via: "search" };
   }
+  // Every query ran and none of them found it. Recorded so the next visit answers from disk - and
+  // only reachable when the searches actually completed, since an unreachable source returns above
+  // without writing anything.
+  writeUnresolved(sourceId, entry.provider, entry.externalId);
   return null;
 }
 
 /** Binds a provider entry to a title of this source by hand, from the resolution screen. */
 export function setManualSourceTitle(sourceId: string, animeId: string, entry: ExternalMetadata): void {
   writeCachedMedia(entry);
+  clearUnresolved(sourceId, entry.provider, entry.externalId);
   writeMatch(sourceId, animeId, entry.provider, entry.externalId, null, true);
   recordCrossMatch(sourceId, animeId, entry);
 }

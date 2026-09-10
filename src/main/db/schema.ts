@@ -174,6 +174,26 @@ export const externalMetadataMatches = sqliteTable(
   ],
 );
 
+// A resolution that completed and found nothing: this provider entry is not on this source, as far
+// as its own search can tell.
+//
+// Its own table rather than a row in externalMetadataMatches, because that one is keyed by the
+// source title id - which is precisely what a failed resolution does not have. Without this, every
+// visit to a catalog card the source does not carry re-ran the same two searches.
+//
+// Kept for a day, not the week a failed *description* is: a source's catalog gains titles far
+// faster than an aggregator gains entries, so this answer goes stale much sooner.
+export const externalMetadataUnresolved = sqliteTable(
+  "external_metadata_unresolved",
+  {
+    sourceId: text("source_id").notNull(),
+    provider: text("provider").notNull(),
+    externalId: integer("external_id").notNull(),
+    attemptedAt: integer("attempted_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.sourceId, t.provider, t.externalId] })],
+);
+
 // The provider entries themselves, keyed by provider and that provider's own id, and shared across
 // sources - two sources carrying the same show cost one cached row and one request, not two.
 export const externalMetadataMedia = sqliteTable(

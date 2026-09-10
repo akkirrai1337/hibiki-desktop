@@ -85,6 +85,13 @@
       "when": 1789035190738,
       "tag": "0011_daily_korath",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1789046585750,
+      "tag": "0012_mushy_wolfpack",
+      "breakpoints": true
     }
   ]
 }
