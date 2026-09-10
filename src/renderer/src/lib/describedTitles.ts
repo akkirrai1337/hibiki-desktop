@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { AnimeTitle } from "@shared/types";
 import { hibiki } from "@/lib/hibiki";
 
@@ -41,7 +41,12 @@ export function useDescribedTitles(
     // A catalog page appended to the bottom is a new question about a longer list, and answering it
     // from scratch would blank the grid someone is in the middle of scrolling. Holding the previous
     // answer keeps the screen still until the longer one is ready.
-    placeholderData: keepPreviousData,
+    //
+    // Only within one source, though: switching source is not a longer version of the same list but
+    // a different catalog entirely, and holding the old one left the previous source's titles on
+    // screen under the new source's name.
+    placeholderData: (previous, previousQuery) =>
+      (previousQuery?.queryKey as [string, string | null | undefined, string] | undefined)?.[1] === sourceId ? previous : undefined,
   });
   // Raised the moment the pass starts and dropped when it finishes, with no grace period: the
   // point is that nothing on screen is final until it does, so showing the source's version first
