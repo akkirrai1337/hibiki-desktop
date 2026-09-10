@@ -96,7 +96,7 @@ export function AggregatorCatalog({ sourceId }: { sourceId: string }) {
   );
 }
 
-function EntryCard({ entry }: { entry: ExternalMetadata }) {
+export function EntryCard({ entry }: { entry: ExternalMetadata }) {
   const title = entry.englishName ?? entry.romajiName ?? entry.nativeName ?? `#${entry.externalId}`;
   return (
     <Link
@@ -113,10 +113,10 @@ function EntryCard({ entry }: { entry: ExternalMetadata }) {
   );
 }
 
-function EntryGridSkeleton() {
+export function EntryGridSkeleton({ count = 18 }: { count?: number }) {
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-x-4 gap-y-6">
-      {Array.from({ length: 18 }).map((_, index) => (
+      {Array.from({ length: count }).map((_, index) => (
         <div key={index}>
           <div className="aspect-[2/3] animate-pulse rounded-xl bg-text/[.06]" />
           <div className="mt-2.5 h-3.5 w-4/5 animate-pulse rounded bg-text/[.06]" />

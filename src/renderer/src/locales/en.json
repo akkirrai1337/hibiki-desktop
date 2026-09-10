@@ -218,7 +218,14 @@
       "trending": "Trending",
       "season": "This season",
       "popular": "Popular",
-      "unavailable": "No aggregator answered. The source's own catalog is still available in Settings."
+      "unavailable": "No aggregator answered. The source's own catalog is still available in Settings.",
+      "seasonOf": "{{season}} {{year}}",
+      "seasons": {
+        "winter": "Winter",
+        "spring": "Spring",
+        "summer": "Summer",
+        "fall": "Fall"
+      }
     }
   },
   "history": {

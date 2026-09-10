@@ -1,15 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { AnimatePresence, motion } from "motion/react";
-import { ChevronDown, Radio, Play } from "lucide-react";
+import { Play, Radio } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
 import { useCachedTitleList } from "@/lib/cachedTitleList";
 import { AnimeCard, SkeletonCard, animeTitle } from "@/components/AnimeCard";
 import { ContinueWatchingFrameRow } from "@/components/ContinueWatchingRow";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { useDescribedTitles } from "@/lib/describedTitles";
+import { HERO_ACTION_CLASS, HeroCarousel, type HeroSlide } from "@/components/Hero";
+import { AggregatorHome } from "@/components/AggregatorHome";
 import { useContinueWatching } from "@/lib/continueWatching";
 import { useUiStore } from "@/stores/uiStore";
 import type { AnimeTitle } from "@shared/types";
@@ -21,7 +22,6 @@ const POOL_WINDOW = 24;
 // visit instead of always reshuffling the same top N titles.
 const MAX_POOL_OFFSET = 100;
 const HERO_SLIDE_COUNT = 5;
-const HERO_INTERVAL_MS = 7000;
 // A genre row only earns its place if enough of the pool actually shares a genre - otherwise
 // it'd just be a near-duplicate of "you might like" with 2-3 items.
 const MIN_GENRE_MATCHES = 4;
@@ -74,6 +74,7 @@ export function CatalogPage() {
   // Shared with the profile page's own "continue watching" row - see useContinueWatching, which
   // caches per-title lookups under query keys both pages agree on so whichever loads first does
   // the actual work.
+  const aggregatorCatalog = useUiStore((s) => s.aggregatorCatalog);
   const { hasHistory } = useContinueWatching();
   // Both rows are described by the metadata provider once the whole row is - see
   // useDescribedTitles for why it is all at once rather than card by card.
@@ -98,7 +99,23 @@ export function CatalogPage() {
   return <div className="min-h-full bg-app-bg pb-12">
     {sources.isLoading && <HeroSkeleton />}{sources.data?.length === 0 && <EmptySources />}{sources.isError && <ErrorBanner message={(sources.error as Error).message} className="m-8" />}
     {source && <>
-      {heroSlides.length > 0 && !describingHero ? <HeroCarousel slides={heroSlides} sourceName={source.name} /> : (hero.isLoading || describingHero) && <HeroSkeleton />}
+      {/* The aggregator's home replaces everything except continue-watching, which is about
+          episodes already started - the source's own titles, with the source's own progress. */}
+      {aggregatorCatalog && source.useExternalMetadata ? (
+        <>
+          {!isNew && (
+            <div className="space-y-12 px-8 pt-10">
+              <Section title={t("catalog.continueWatching")} action={t("catalog.viewHistory")} to="/history">
+                <ContinueWatchingFrameRow sourceById={sourceById} />
+              </Section>
+            </div>
+          )}
+          <AggregatorHome sourceId={source.id} />
+        </>
+      ) : <>
+      {heroSlides.length > 0 && !describingHero
+        ? <HeroCarousel slides={heroSlides.map((slide) => toHeroSlide(slide, t("catalog.openTitle")))} label={t("catalog.trendingOn", { source: source.name })} />
+        : (hero.isLoading || describingHero) && <HeroSkeleton />}
       <div className="space-y-12 px-8 pt-10">
         {pool.isError && <ErrorBanner message={(pool.error as Error).message} />}
         {/* Always the frame row: swapping to poster cards below a threshold meant the section
@@ -114,89 +131,30 @@ export function CatalogPage() {
           <Grid>{genreSection.items.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</Grid>
         </Section>}
       </div>
+      </>}
     </>}
   </div>;
 }
-function HeroCarousel({ slides, sourceName }: { slides: AnimeTitle[]; sourceName: string }) {
-  const [index, setIndex] = useState(0);
-  const [paused, setPaused] = useState(false);
-  const slideKey = slides.map((s) => `${s.sourceId}:${s.id}`).join(",");
-  useEffect(() => { setIndex(0); }, [slideKey]);
-  useEffect(() => {
-    if (paused || slides.length <= 1) return;
-    const id = setInterval(() => setIndex((i) => (i + 1) % slides.length), HERO_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, [paused, slides.length, slideKey]);
-  const current = slides[Math.min(index, slides.length - 1)];
-  if (!current) return null;
-  return <div className="relative" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
-    <AnimatePresence mode="wait">
-      <motion.div key={`${current.sourceId}:${current.id}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4, ease: "easeOut" }}>
-        <Hero anime={current} sourceName={sourceName} />
-      </motion.div>
-    </AnimatePresence>
-    {slides.length > 1 && <div className="absolute bottom-8 right-8 z-10 flex items-center gap-2">
-      {slides.map((slide, i) => (
-        <button
-          key={`${slide.sourceId}:${slide.id}`}
-          onClick={() => setIndex(i)}
-          aria-label={`${i + 1}`}
-          className={`h-1.5 rounded-full transition-[width,background-color] duration-300 ${i === index ? "w-6 bg-white" : "w-1.5 bg-white/30 hover:bg-white/50"}`}
-        />
-      ))}
-    </div>}
-  </div>;
+/** A source title as the shared carousel wants it - see HeroSlide for why this mapping exists at
+ * all rather than the carousel taking an AnimeTitle. */
+function toHeroSlide(anime: AnimeTitle, openLabel: string): HeroSlide {
+  return {
+    key: `${anime.sourceId}:${anime.id}`,
+    title: animeTitle(anime),
+    description: anime.description,
+    posterUrl: anime.posterUrl,
+    type: anime.type,
+    year: anime.year,
+    episodeCount: anime.availableEpisodeCount,
+    action: (
+      <Link to="/anime/$sourceId/$animeId" params={{ sourceId: anime.sourceId, animeId: anime.id }} className={HERO_ACTION_CLASS}>
+        <Play className="h-4 w-4 fill-current" strokeWidth={0} />
+        {openLabel}
+      </Link>
+    ),
+  };
 }
-function Hero({ anime, sourceName }: { anime: AnimeTitle; sourceName: string }) {
-  const { t } = useTranslation();
-  const title = animeTitle(anime);
-  const [descriptionOpen, setDescriptionOpen] = useState(false);
-  const description = anime.description || t("catalog.heroFallbackDescription");
-  const descriptionRef = useRef<HTMLParagraphElement>(null);
-  const [collapsedHeight] = useState(72); // ~3 lines at text-sm/leading-6
-  const [maxHeight, setMaxHeight] = useState(collapsedHeight);
-  useEffect(() => {
-    const full = descriptionRef.current?.scrollHeight ?? collapsedHeight;
-    setMaxHeight(descriptionOpen ? full : Math.min(collapsedHeight, full));
-  }, [descriptionOpen, description, collapsedHeight]);
-  return <section className="relative isolate min-h-[420px] overflow-hidden border-b border-white/[.04] px-8 py-16">
-    <div className="absolute inset-0 -z-10 overflow-hidden opacity-75">
-      {anime.posterUrl && (
-        <motion.img
-          src={anime.posterUrl}
-          alt=""
-          initial={{ scale: 1 }}
-          animate={{ scale: 1.1 }}
-          transition={{ duration: HERO_INTERVAL_MS / 1000 + 1, ease: "linear" }}
-          className="h-full w-full object-cover object-[center_25%] blur-[2px]"
-        />
-      )}
-      <div className="absolute inset-0" style={{ backgroundImage: [
-        "linear-gradient(180deg, #17161b 0px, transparent 64px)",
-        "linear-gradient(90deg, rgba(23,22,27,.82) 0%, rgba(23,22,27,.54) 42%, rgba(23,22,27,.08) 100%)",
-        "linear-gradient(0deg, #17161b 0px, rgba(23,22,27,.82) 48px, transparent 58%)",
-      ].join(", ") }} />
-    </div>
-    <div className="max-w-2xl">
-      <p className="mb-4 text-xs font-bold uppercase tracking-[.18em] text-accent-text">{t("catalog.trendingOn", { source: sourceName })}</p>
-      {/* The min-h wrapper reserves space for a full 2-line title regardless of how long this
-          slide's title actually is - without it, switching from a 2-line to a 1-line title (or
-          back) between carousel slides abruptly resizes this block and everything below it.
-          min-height has to live on a wrapper, not the line-clamped element itself - combining
-          -webkit-line-clamp with a min-height on the same element makes Chromium clip the text
-          to nothing instead of just capping it at 2 lines. */}
-      <div className="min-h-[2.1em]">
-        <h1 className="line-clamp-2 max-w-xl select-text text-4xl font-bold leading-[1.05] tracking-[-.04em] text-white md:text-6xl">{title}</h1>
-      </div>
-      <div className="mt-5 max-w-lg overflow-hidden transition-[max-height] duration-300 ease-in-out" style={{ maxHeight }}>
-        <p ref={descriptionRef} className="select-text text-sm leading-6 text-zinc-200">{description}</p>
-      </div>
-      {anime.description && <button onClick={() => setDescriptionOpen((value) => !value)} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-zinc-300 transition hover:text-white">{descriptionOpen ? t("common.hideDescription") : t("common.readDescription")}<ChevronDown className={`h-3.5 w-3.5 transition-transform duration-300 ${descriptionOpen ? "rotate-180" : ""}`} strokeWidth={2.5} /></button>}
-      <div className="mt-5 flex items-center gap-3 text-xs font-medium text-zinc-200"><span className="rounded-md bg-white/15 px-2 py-1">{anime.type?.toUpperCase() || t("common.typeFallback")}</span>{anime.year && <span>{anime.year}</span>}{anime.availableEpisodeCount && <span>{t("common.episodesShort", { count: anime.availableEpisodeCount })}</span>}</div>
-      <Link to="/anime/$sourceId/$animeId" params={{ sourceId: anime.sourceId, animeId: anime.id }} className="mt-8 inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-zinc-900 transition-transform hover:scale-[1.02] active:scale-[0.98]"><Play className="h-4 w-4 fill-current" strokeWidth={0} />{t("catalog.openTitle")}</Link>
-    </div>
-  </section>;
-}
+
 function Section({ title, action, to, children }: { title: string; action: string; to: "/catalog" | "/history"; children: React.ReactNode }) { return <section><div className="mb-5 flex items-center justify-between"><h2 className="text-2xl font-bold tracking-[-.02em] text-text">{title}</h2><Link to={to} className="text-sm font-semibold text-muted transition-colors hover:text-accent-text">{action} →</Link></div>{children}</section>; }
 // Matches the anime detail page's own related-titles grid: 5 columns until the window is wide
 // enough (xl, 1280px+ - roughly "maximized on a normal display") to comfortably fit a 6th without
