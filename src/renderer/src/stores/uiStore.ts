@@ -57,10 +57,9 @@ interface UiState {
   // default: it answers a question most people never ask, and the page reads cleaner without it.
   // Turning it on is also what makes the manual rebind reachable, since the line is what opens it.
   externalMetadataShowBinding: boolean;
-  // Whether the catalog page browses the aggregator's own catalog instead of the source's (see
-  // docs/aggregator-first-catalog.md). Off by default while the resolution it depends on - turning
-  // an aggregator entry back into something the source can play - is still new: the source's
-  // catalog is the way back if that turns out worse than expected.
+  // Whether Home, Catalog, and Search browse aggregator entries and resolve them to a playable
+  // source title only when opened (see docs/aggregator-first-catalog.md). On by default now that
+  // the staged resolver rollout is complete; Settings remains the way back to source-native pages.
   aggregatorCatalog: boolean;
   // Which aggregator to prefer. AniList is the default for the fuller entry: it carries banner
   // artwork and a next-episode timestamp, neither of which MAL publishes.
@@ -109,7 +108,7 @@ export const useUiStore = create<UiState>()(
       externalMetadataEnabled: true,
       externalMetadataOverrides: {},
       externalMetadataShowBinding: false,
-      aggregatorCatalog: false,
+      aggregatorCatalog: true,
       externalMetadataProvider: "anilist",
       externalMetadataFallback: true,
       setTheme: (theme) => set({ theme }),
@@ -136,6 +135,16 @@ export const useUiStore = create<UiState>()(
           return { externalMetadataOverrides: overrides };
         }),
     }),
-    { name: "hibiki-ui" },
+    {
+      name: "hibiki-ui",
+      version: 1,
+      // Versions before the aggregator-first rollout persisted its experimental default (`false`)
+      // for every existing profile. Flip that value once during the rollout; after migration, an
+      // explicit opt-out is stored at version 1 and remains respected on subsequent launches.
+      migrate: (persistedState, version) => {
+        const state = persistedState as UiState;
+        return version < 1 ? { ...state, aggregatorCatalog: true } : state;
+      },
+    },
   ),
 );

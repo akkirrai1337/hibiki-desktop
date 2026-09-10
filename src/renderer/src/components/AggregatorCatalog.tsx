@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { PROVIDER_RATING_SOURCE, type ExternalCatalogRequest, type ExternalMetadata } from "@shared/externalMetadata";
 import { hibiki } from "@/lib/hibiki";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { PosterCard, PosterGrid, PosterGridSkeleton } from "@/components/AnimeCard";
 import { cn } from "@/lib/cn";
 
 const PAGE_SIZE = 24;
@@ -77,14 +78,14 @@ export function AggregatorCatalog({ sourceId }: { sourceId: string }) {
 
       {catalog.isError && <ErrorBanner message={(catalog.error as Error).message} />}
       {catalog.isPending ? (
-        <EntryGridSkeleton />
+        <PosterGridSkeleton count={18} />
       ) : entries.length === 0 ? (
         <p className="py-12 text-center text-sm text-muted">{t("catalogPage.aggregator.unavailable")}</p>
       ) : (
         <>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-x-4 gap-y-6">
+          <PosterGrid>
             {entries.map((entry) => <EntryCard key={`${entry.provider}:${entry.externalId}`} entry={entry} />)}
-          </div>
+          </PosterGrid>
           {hasNextPage && (
             <div ref={loadMoreRef} className="mt-8 flex justify-center">
               {isFetchingNextPage && <div className="h-7 w-7 animate-spin rounded-full border-2 border-border border-t-accent" />}
@@ -102,27 +103,18 @@ export function EntryCard({ entry }: { entry: ExternalMetadata }) {
     <Link
       to="/entry/$provider/$externalId"
       params={{ provider: entry.provider, externalId: String(entry.externalId) }}
-      className="group block"
+      className="group block w-full [contain-intrinsic-size:auto_440px] [content-visibility:auto]"
     >
-      <div className="aspect-[2/3] overflow-hidden rounded-xl bg-surface ring-1 ring-border transition-transform duration-200 group-hover:scale-[1.02]">
-        {entry.posterUrl && <img src={entry.posterUrl} alt="" loading="lazy" className="h-full w-full object-cover" />}
-      </div>
-      <p className="mt-2.5 line-clamp-2 text-sm font-semibold leading-tight text-text">{title}</p>
-      <p className="mt-1 truncate text-xs text-muted">{[entry.year, entry.type].filter(Boolean).join(" · ")}</p>
+      <PosterCard
+        title={title}
+        posterUrl={entry.posterUrl}
+        type={entry.type}
+        year={entry.year}
+        episodeCount={entry.episodeCount}
+        rating={entry.score}
+        genres={entry.genres}
+        description={entry.description}
+      />
     </Link>
-  );
-}
-
-export function EntryGridSkeleton({ count = 18 }: { count?: number }) {
-  return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-x-4 gap-y-6">
-      {Array.from({ length: count }).map((_, index) => (
-        <div key={index}>
-          <div className="aspect-[2/3] animate-pulse rounded-xl bg-text/[.06]" />
-          <div className="mt-2.5 h-3.5 w-4/5 animate-pulse rounded bg-text/[.06]" />
-          <div className="mt-1.5 h-3 w-2/5 animate-pulse rounded bg-text/[.05]" />
-        </div>
-      ))}
-    </div>
   );
 }

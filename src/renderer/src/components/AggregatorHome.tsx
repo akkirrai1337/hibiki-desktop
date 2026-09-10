@@ -5,7 +5,8 @@ import { Play } from "lucide-react";
 import { seasonOf, type ExternalMetadata } from "@shared/externalMetadata";
 import { hibiki } from "@/lib/hibiki";
 import { HERO_ACTION_CLASS, HeroCarousel, type HeroSlide } from "@/components/Hero";
-import { EntryCard, EntryGridSkeleton } from "@/components/AggregatorCatalog";
+import { EntryCard } from "@/components/AggregatorCatalog";
+import { PosterGrid, PosterGridSkeleton } from "@/components/AnimeCard";
 
 const HERO_SLIDE_COUNT = 5;
 const ROW_LIMIT = 12;
@@ -14,12 +15,12 @@ const ROW_LIMIT = 12;
  * The home screen, built from the aggregator instead of from the source (see
  * docs/aggregator-first-catalog.md).
  *
- * Continue-watching is not here on purpose: it is about episodes already started, which are the
- * source's own titles with the source's own progress, and it stays exactly as it is above this
- * (see home.tsx). Everything below it is the aggregator's, and every card leads to the resolution
- * screen rather than to a title page.
+ * Continue-watching is supplied by home.tsx as `children`: it is about episodes already started,
+ * so it keeps the source's own titles/progress, but is inserted after the aggregator hero and
+ * before its catalog rows. Every aggregator card leads to the resolution screen rather than to a
+ * source title page.
  */
-export function AggregatorHome({ sourceId }: { sourceId: string }) {
+export function AggregatorHome({ sourceId, children }: { sourceId: string; children?: React.ReactNode }) {
   const { t } = useTranslation();
   const season = seasonOf(new Date());
 
@@ -50,12 +51,13 @@ export function AggregatorHome({ sourceId }: { sourceId: string }) {
           />
         )
       )}
+      {children}
       <div className="space-y-12 px-8 pt-10">
         <Row title={t("catalogPage.aggregator.trending")}>
-          {trending.isPending ? <EntryGridSkeleton count={ROW_LIMIT} /> : <EntryGrid entries={rowEntries} />}
+          {trending.isPending ? <PosterGridSkeleton count={ROW_LIMIT} /> : <EntryGrid entries={rowEntries} />}
         </Row>
         <Row title={t("catalogPage.aggregator.seasonOf", { season: t(`catalogPage.aggregator.seasons.${season.season}`), year: season.year })}>
-          {seasonal.isPending ? <EntryGridSkeleton count={ROW_LIMIT} /> : <EntryGrid entries={seasonal.data?.results ?? []} />}
+          {seasonal.isPending ? <PosterGridSkeleton count={ROW_LIMIT} /> : <EntryGrid entries={seasonal.data?.results ?? []} />}
         </Row>
       </div>
     </>
@@ -81,9 +83,9 @@ function EntryGrid({ entries }: { entries: ExternalMetadata[] }) {
   const { t } = useTranslation();
   if (entries.length === 0) return <p className="text-sm text-muted">{t("catalogPage.aggregator.unavailable")}</p>;
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-x-4 gap-y-6">
+    <PosterGrid>
       {entries.map((entry) => <EntryCard key={`${entry.provider}:${entry.externalId}`} entry={entry} />)}
-    </div>
+    </PosterGrid>
   );
 }
 

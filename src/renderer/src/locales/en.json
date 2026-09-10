@@ -120,8 +120,7 @@
       "searchUnavailable": "No provider's search is answering right now. Paste a link instead.",
       "noneFound": "Nothing found.",
       "reset": "Match automatically again",
-      "idsRead": "A bare id is read as {{provider}}",
-      "openEntry": "Open as an aggregator entry"
+      "idsRead": "A bare id is read as {{provider}}"
     }
   },
   "entry": {
@@ -160,6 +159,11 @@
     "prompt": "Start typing an anime title",
     "empty": "No results for \"{{query}}\"",
     "resultsFor": "Results for \"{{query}}\"",
+    "aggregator": {
+      "searchSource": "Search {{source}} instead",
+      "searchAggregators": "Search aggregators",
+      "unavailable": "No aggregator answered. Try the source search instead."
+    },
     "filters": {
       "button": "Filters",
       "type": "Type",
@@ -457,8 +461,8 @@
       "fallbackHint": "When the chosen one is unavailable or has no entry",
       "showBinding": "Show the metadata entry on a title",
       "showBindingHint": "A line naming the provider and entry, and the way to correct a wrong match",
-      "aggregatorCatalog": "Browse the aggregator's catalog",
-      "aggregatorCatalogHint": "The catalog page lists the aggregator's titles instead of the source's"
+      "aggregatorCatalog": "Browse through the aggregator",
+      "aggregatorCatalogHint": "Home, catalog, and search use aggregator titles; playback still comes from the source"
     },
     "catalogAutoLoad": {
       "enabled": "Auto-load catalog",

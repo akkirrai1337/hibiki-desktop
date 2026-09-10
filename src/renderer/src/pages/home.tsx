@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Play, Radio } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
 import { useCachedTitleList } from "@/lib/cachedTitleList";
-import { AnimeCard, SkeletonCard, animeTitle } from "@/components/AnimeCard";
+import { AnimeCard, PosterGrid, PosterGridSkeleton, animeTitle } from "@/components/AnimeCard";
 import { ContinueWatchingFrameRow } from "@/components/ContinueWatchingRow";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { useDescribedTitles } from "@/lib/describedTitles";
@@ -13,6 +13,7 @@ import { HERO_ACTION_CLASS, HeroCarousel, type HeroSlide } from "@/components/He
 import { AggregatorHome } from "@/components/AggregatorHome";
 import { useContinueWatching } from "@/lib/continueWatching";
 import { useUiStore } from "@/stores/uiStore";
+import { useAggregatorBrowsing } from "@/lib/aggregatorBrowsing";
 import type { AnimeTitle } from "@shared/types";
 
 const RECOMMENDED_COUNT = 20;
@@ -46,11 +47,12 @@ export function CatalogPage() {
   const sources = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });
   const activeSourceId = useUiStore((s) => s.activeSourceId);
   const source = sources.data?.find((s) => s.id === activeSourceId) ?? sources.data?.[0];
+  const aggregatorBrowsing = useAggregatorBrowsing(source);
   const sortMode = source?.supportedSorts.includes("RATING") ? "RATING" : undefined;
   const hero = useCachedTitleList({
     queryKey: ["hero", source?.id],
     cacheKey: source ? `hero:${source.id}` : null,
-    enabled: !!source,
+    enabled: !!source && !aggregatorBrowsing,
     queryFn: () => hibiki.sources.search(source!.id, { limit: HERO_SLIDE_COUNT, sort: sortMode }),
   });
   // Compute the source's window in the same render that enables the query. Keeping this in state
@@ -62,7 +64,7 @@ export function CatalogPage() {
     // Deliberately without the offset: this visit's slice is meant to be a different one, so the
     // useful thing to paint while it loads is the slice from last time.
     cacheKey: source ? `popular-pool:${source.id}` : null,
-    enabled: !!source,
+    enabled: !!source && !aggregatorBrowsing,
     queryFn: async () => {
       const window = await hibiki.sources.search(source!.id, { offset: poolOffset, limit: POOL_WINDOW, sort: sortMode });
       // A short catalog can have fewer titles than our random offset - fall back to the start
@@ -74,12 +76,11 @@ export function CatalogPage() {
   // Shared with the profile page's own "continue watching" row - see useContinueWatching, which
   // caches per-title lookups under query keys both pages agree on so whichever loads first does
   // the actual work.
-  const aggregatorCatalog = useUiStore((s) => s.aggregatorCatalog);
   const { hasHistory } = useContinueWatching();
   // Both rows are described by the metadata provider once the whole row is - see
   // useDescribedTitles for why it is all at once rather than card by card.
-  const { titles: heroSlides, describing: describingHero } = useDescribedTitles(source?.id, hero.data);
-  const { titles: poolTitles, describing: describingPool } = useDescribedTitles(source?.id, pool.data);
+  const { titles: heroSlides, describing: describingHero } = useDescribedTitles(source?.id, aggregatorBrowsing ? undefined : hero.data);
+  const { titles: poolTitles, describing: describingPool } = useDescribedTitles(source?.id, aggregatorBrowsing ? undefined : pool.data);
   const isNew = !hasHistory;
   const sourceById = useMemo(() => new Map((sources.data ?? []).map((s) => [s.id, s])), [sources.data]);
   // Re-shuffled each time a fresh pool comes in (new source, new random offset, ...) so this
@@ -101,8 +102,8 @@ export function CatalogPage() {
     {source && <>
       {/* The aggregator's home replaces everything except continue-watching, which is about
           episodes already started - the source's own titles, with the source's own progress. */}
-      {aggregatorCatalog && source.useExternalMetadata ? (
-        <>
+      {aggregatorBrowsing ? (
+        <AggregatorHome sourceId={source.id}>
           {!isNew && (
             <div className="space-y-12 px-8 pt-10">
               <Section title={t("catalog.continueWatching")} action={t("catalog.viewHistory")} to="/history">
@@ -110,8 +111,7 @@ export function CatalogPage() {
               </Section>
             </div>
           )}
-          <AggregatorHome sourceId={source.id} />
-        </>
+        </AggregatorHome>
       ) : <>
       {heroSlides.length > 0 && !describingHero
         ? <HeroCarousel slides={heroSlides.map((slide) => toHeroSlide(slide, t("catalog.openTitle")))} label={t("catalog.trendingOn", { source: source.name })} />
@@ -125,10 +125,10 @@ export function CatalogPage() {
           <ContinueWatchingFrameRow sourceById={sourceById} />
         </Section>}
         <Section title={isNew ? t("catalog.popularNow") : t("catalog.becauseYouWatched")} action={t("catalog.openCatalog")} to="/catalog">
-          {pool.isLoading || describingPool ? <GridSkeleton /> : <Grid>{recommended.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</Grid>}
+          {pool.isLoading || describingPool ? <PosterGridSkeleton count={15} /> : <PosterGrid>{recommended.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</PosterGrid>}
         </Section>
         {genreSection && !describingPool && <Section title={t("catalog.genreSection", { genre: genreSection.genre })} action={t("catalog.openCatalog")} to="/catalog">
-          <Grid>{genreSection.items.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</Grid>
+          <PosterGrid>{genreSection.items.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</PosterGrid>
         </Section>}
       </div>
       </>}
@@ -156,10 +156,5 @@ function toHeroSlide(anime: AnimeTitle, openLabel: string): HeroSlide {
 }
 
 function Section({ title, action, to, children }: { title: string; action: string; to: "/catalog" | "/history"; children: React.ReactNode }) { return <section><div className="mb-5 flex items-center justify-between"><h2 className="text-2xl font-bold tracking-[-.02em] text-text">{title}</h2><Link to={to} className="text-sm font-semibold text-muted transition-colors hover:text-accent-text">{action} →</Link></div>{children}</section>; }
-// Matches the anime detail page's own related-titles grid: 5 columns until the window is wide
-// enough (xl, 1280px+ - roughly "maximized on a normal display") to comfortably fit a 6th without
-// the cards getting cramped.
-function Grid({ children }: { children: React.ReactNode }) { return <div className="grid grid-cols-5 gap-x-4 gap-y-6 xl:grid-cols-6">{children}</div>; }
-function GridSkeleton() { return <Grid>{Array.from({ length: 15 }).map((_, i) => <SkeletonCard key={i} />)}</Grid>; }
 function HeroSkeleton() { return <div className="min-h-[420px] animate-pulse border-b border-white/[.04] bg-white/[.03] px-8 py-16"><div className="h-3 w-40 rounded bg-white/[.08]" /><div className="mt-5 h-12 w-96 rounded bg-white/[.08]" /><div className="mt-5 h-3 w-full max-w-lg rounded bg-white/[.06]" /><div className="mt-2 h-3 w-4/5 max-w-lg rounded bg-white/[.06]" /></div>; }
 function EmptySources() { const { t } = useTranslation(); return <div className="flex min-h-[calc(100vh-76px)] items-center justify-center p-8"><div className="max-w-sm text-center"><div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-text/[.06]"><Radio className="h-6 w-6 text-muted" strokeWidth={1.75} /></div><h1 className="text-xl font-bold text-text">{t("catalog.emptySourcesTitle")}</h1><p className="mt-3 text-sm leading-6 text-muted">{t("catalog.emptySourcesText")}</p><Link to="/sources" className="mt-6 inline-block rounded-xl bg-accent px-4 py-2.5 text-sm font-bold text-accent-fg">{t("catalog.openSources")}</Link></div></div>; }

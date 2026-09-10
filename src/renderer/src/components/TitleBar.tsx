@@ -11,6 +11,7 @@ import { activeFilterCount } from "@/lib/searchFilters";
 import { SearchFiltersPanel } from "@/components/SearchFiltersPanel";
 import { UpdateButton } from "@/components/UpdateButton";
 import { cn } from "@/lib/cn";
+import { useAggregatorBrowsing } from "@/lib/aggregatorBrowsing";
 import appIcon from "@/assets/app-icon.png";
 
 const SEARCH_HIDDEN_ON = ["/settings", "/profile", "/sources"];
@@ -31,7 +32,9 @@ export function TitleBar() {
   useEffect(() => router.history.subscribe(() => setCanGoBack(router.history.canGoBack())), [router]);
 
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const searchQuery = useRouterState({ select: (s) => (s.location.search as { q?: string }).q ?? "" });
+  const searchParams = useRouterState({ select: (s) => s.location.search as { q?: string; source?: boolean } });
+  const searchQuery = searchParams.q ?? "";
+  const sourceSearchOnly = searchParams.source === true;
   const isSearchPage = pathname === "/search";
   // There's nothing yet to search, and nowhere else to jump "home" to, while onboarding still owns
   // the whole screen (see __root.tsx) - both would just be dead chrome floating over it.
@@ -50,9 +53,13 @@ export function TitleBar() {
     if (!isSearchPage) return;
     const trimmed = value.trim();
     if (trimmed === searchQuery) return;
-    const timer = setTimeout(() => navigate({ to: "/search", search: { q: trimmed }, replace: true }), 400);
+    const timer = setTimeout(() => navigate({
+      to: "/search",
+      search: { q: trimmed, source: sourceSearchOnly ? true : undefined },
+      replace: true,
+    }), 400);
     return () => clearTimeout(timer);
-  }, [value, isSearchPage, searchQuery, navigate]);
+  }, [value, isSearchPage, searchQuery, sourceSearchOnly, navigate]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && value.trim() && !isSearchPage) {
@@ -63,7 +70,9 @@ export function TitleBar() {
   const activeSourceId = useUiStore((s) => s.activeSourceId);
   const sources = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });
   const source = sources.data?.find((s) => s.id === activeSourceId) ?? sources.data?.[0];
-  const showFilterButton = !searchHidden && !!source && source.supportedFilters.length > 0;
+  const aggregatorBrowsing = useAggregatorBrowsing(source);
+  const aggregatorSearch = isSearchPage && aggregatorBrowsing && !sourceSearchOnly;
+  const showFilterButton = !searchHidden && !aggregatorSearch && !!source && source.supportedFilters.length > 0;
 
   const filters = useSearchFiltersStore((s) => s.filters);
   const setFilters = useSearchFiltersStore((s) => s.setFilters);

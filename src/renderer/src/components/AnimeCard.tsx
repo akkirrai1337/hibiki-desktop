@@ -16,6 +16,15 @@ function formatRating(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
+/** The one poster-grid rhythm used by Home, Catalog, and both search modes. */
+export function PosterGrid({ children }: { children: React.ReactNode }) {
+  return <div className="grid grid-cols-5 gap-x-4 gap-y-6 xl:grid-cols-6">{children}</div>;
+}
+
+export function PosterGridSkeleton({ count = 12 }: { count?: number }) {
+  return <PosterGrid>{Array.from({ length: count }).map((_, index) => <SkeletonCard key={index} />)}</PosterGrid>;
+}
+
 // Matches AnimeCard's own poster/title/meta proportions so a grid mixing loaded cards and
 // still-loading slots doesn't visibly hitch when a skeleton flips over to the real thing.
 export function SkeletonCard() {
@@ -63,23 +72,31 @@ export function SourceBadge({ source }: { source?: AnimeCardSource }) {
   );
 }
 
-export const AnimeCard = memo(function AnimeCard({ anime, progress, source }: { anime: AnimeTitle; progress?: number; source?: AnimeCardSource }) {
+interface PosterCardProps {
+  title: string;
+  posterUrl?: string | null;
+  type?: string | null;
+  year?: number | null;
+  episodeCount?: number | null;
+  rating?: number | null;
+  genres?: string[];
+  description?: string | null;
+  progress?: number;
+  source?: AnimeCardSource;
+}
+
+/** Shared visual body for source titles and provider entries; navigation stays with each caller. */
+export function PosterCard({ title, posterUrl, type, year, episodeCount, rating, genres, description, progress, source }: PosterCardProps) {
   const { t } = useTranslation();
-  const title = animeTitle(anime);
-  const rating = anime.ratings?.[0]?.value;
   const meta = [
-    anime.year,
-    anime.availableEpisodeCount && t("common.episodesShort", { count: anime.availableEpisodeCount }),
-    rating && `★ ${formatRating(rating)}`,
+    year,
+    episodeCount && t("common.episodesShort", { count: episodeCount }),
+    rating != null && `★ ${formatRating(rating)}`,
   ].filter(Boolean).join(" · ");
-  return <Link
-    to="/anime/$sourceId/$animeId"
-    params={{ sourceId: anime.sourceId, animeId: anime.id }}
-    className="group block w-full [contain-intrinsic-size:auto_440px] [content-visibility:auto]"
-  >
+  return <>
     <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-surface ring-1 ring-border">
-      {anime.posterUrl ? <SmoothImage
-        src={anime.posterUrl}
+      {posterUrl ? <SmoothImage
+        src={posterUrl}
         alt={title}
         loading="lazy"
         // `will-change` only while actually hovered, not unconditionally - applied to every card
@@ -93,16 +110,16 @@ export const AnimeCard = memo(function AnimeCard({ anime, progress, source }: { 
       <SourceBadge source={source} />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-1.5 p-3 opacity-0 transition-[opacity,transform] duration-300 group-hover:translate-y-0 group-hover:opacity-100">
-        {anime.genres && anime.genres.length > 0 && (
+        {genres && genres.length > 0 && (
           <div className="mb-1.5 flex flex-wrap gap-1">
-            {anime.genres.slice(0, 3).map((genre) => (
+            {genres.slice(0, 3).map((genre) => (
               <span key={genre} className="rounded-md bg-white/20 px-1.5 py-0.5 text-[11px] font-medium text-white shadow-sm">{genre}</span>
             ))}
           </div>
         )}
-        {anime.description ? (
-          <p className="line-clamp-4 select-text text-xs leading-relaxed text-zinc-300">{anime.description}</p>
-        ) : !anime.genres?.length ? (
+        {description ? (
+          <p className="line-clamp-4 select-text text-xs leading-relaxed text-zinc-300">{description}</p>
+        ) : !genres?.length ? (
           <p className="line-clamp-2 select-text text-base font-semibold leading-snug text-white">{title}</p>
         ) : null}
       </div>
@@ -110,8 +127,30 @@ export const AnimeCard = memo(function AnimeCard({ anime, progress, source }: { 
     </div>
     <p className="mt-3 line-clamp-2 select-text text-base font-semibold leading-snug tracking-[-.01em] text-text/90 transition-colors group-hover:text-text">{title}</p>
     <div className="mt-1 flex items-center gap-1.5">
-      {anime.type && <span className="shrink-0 rounded-md bg-text/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted">{anime.type}</span>}
+      {type && <span className="shrink-0 rounded-md bg-text/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted">{type}</span>}
       <p className="line-clamp-1 text-sm text-muted">{meta || t("common.anime")}</p>
     </div>
+  </>;
+}
+
+export const AnimeCard = memo(function AnimeCard({ anime, progress, source }: { anime: AnimeTitle; progress?: number; source?: AnimeCardSource }) {
+  const title = animeTitle(anime);
+  return <Link
+    to="/anime/$sourceId/$animeId"
+    params={{ sourceId: anime.sourceId, animeId: anime.id }}
+    className="group block w-full [contain-intrinsic-size:auto_440px] [content-visibility:auto]"
+  >
+    <PosterCard
+      title={title}
+      posterUrl={anime.posterUrl}
+      type={anime.type}
+      year={anime.year}
+      episodeCount={anime.availableEpisodeCount}
+      rating={anime.ratings?.[0]?.value}
+      genres={anime.genres}
+      description={anime.description}
+      progress={progress}
+      source={source}
+    />
   </Link>;
 });

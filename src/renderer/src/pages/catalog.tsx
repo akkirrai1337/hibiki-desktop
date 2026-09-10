@@ -6,11 +6,12 @@ import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowUpDown, Check, Radio } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
-import { AnimeCard } from "@/components/AnimeCard";
+import { AnimeCard, PosterGrid, PosterGridSkeleton } from "@/components/AnimeCard";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { useUiStore } from "@/stores/uiStore";
 import { useDescribedTitles } from "@/lib/describedTitles";
 import { AggregatorCatalog } from "@/components/AggregatorCatalog";
+import { useAggregatorBrowsing } from "@/lib/aggregatorBrowsing";
 import { usePopoverTheme } from "@/lib/usePopoverTheme";
 import type { AnimeTitle, SourceInfo } from "@shared/types";
 
@@ -54,6 +55,7 @@ export function CatalogBrowsePage() {
   const sources = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });
   const activeSourceId = useUiStore((s) => s.activeSourceId);
   const source = sources.data?.find((s) => s.id === activeSourceId) ?? sources.data?.[0];
+  const aggregatorBrowsing = useAggregatorBrowsing(source);
   const setRequestedMode = (next: SortMode) => navigate({ to: "/catalog", search: { sort: next }, replace: true });
 
   const modes = useMemo(() => (source ? availableSortModes(source) : []), [source]);
@@ -61,7 +63,7 @@ export function CatalogBrowsePage() {
 
   const browse = useInfiniteQuery({
     queryKey: ["catalog", source?.id, mode === "alphabetical" ? "TITLE" : "RELEVANCE"],
-    enabled: !!source && mode !== "recent",
+    enabled: !!source && !aggregatorBrowsing && mode !== "recent",
     initialPageParam: 0,
     queryFn: ({ pageParam }) =>
       hibiki.sources.search(source!.id, { offset: pageParam, limit: PAGE_SIZE, sort: mode === "alphabetical" ? "TITLE" : "RELEVANCE" }),
@@ -73,7 +75,7 @@ export function CatalogBrowsePage() {
   // it has no offset param, so there's no "load more" for it.
   const recent = useQuery({
     queryKey: ["catalog-recent", source?.id],
-    enabled: !!source && mode === "recent",
+    enabled: !!source && !aggregatorBrowsing && mode === "recent",
     queryFn: () => hibiki.sources.latest(source!.id, RECENT_LIMIT),
   });
 
@@ -81,13 +83,15 @@ export function CatalogBrowsePage() {
   // Described as a whole, including every page loaded so far: a newly appended page that named its
   // titles differently from the ones above it would be the same mixed-list problem, one scroll
   // further down.
-  const { titles: items, describing, refreshing: describingMore } = useDescribedTitles(source?.id, sourceItems);
+  const { titles: items, describing, refreshing: describingMore } = useDescribedTitles(
+    source?.id,
+    aggregatorBrowsing ? undefined : sourceItems,
+  );
   const isLoading = mode === "recent" ? recent.isLoading : browse.isLoading;
   const isError = mode === "recent" ? recent.isError : browse.isError;
   const error = mode === "recent" ? recent.error : browse.error;
 
   const catalogAutoLoad = useUiStore((s) => s.catalogAutoLoad);
-  const aggregatorCatalog = useUiStore((s) => s.aggregatorCatalog);
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = browse;
   const loadMoreRef = useRef<HTMLDivElement>(null);
   // Fires fetchNextPage itself once the sentinel below the grid scrolls into view, instead of
@@ -111,7 +115,7 @@ export function CatalogBrowsePage() {
   // The aggregator's catalog replaces this one wholesale rather than sitting beside it: the two
   // list different things (entries against this source's titles), and a screen that mixed them
   // would be back to the problem whole-screen description exists to avoid.
-  if (aggregatorCatalog && source?.useExternalMetadata) {
+  if (aggregatorBrowsing && source) {
     return (
       <div className="min-h-full bg-app-bg px-8 py-8 pb-16">
         <AggregatorCatalog sourceId={source.id} />
@@ -121,7 +125,7 @@ export function CatalogBrowsePage() {
 
   return (
     <div className="min-h-full bg-app-bg px-8 py-8 pb-16">
-      {sources.isLoading && <GridSkeleton />}
+      {sources.isLoading && <PosterGridSkeleton count={15} />}
       {sources.isError && <ErrorBanner message={(sources.error as Error).message} />}
       {sources.data?.length === 0 && <EmptySources />}
       {source && (
@@ -133,7 +137,7 @@ export function CatalogBrowsePage() {
           )}
 
           {isLoading || describing ? (
-            <GridSkeleton />
+            <PosterGridSkeleton count={15} />
           ) : items.length === 0 ? (
             <EmptyState text={t("catalogPage.empty")} />
           ) : (
@@ -210,17 +214,12 @@ function SortMenu({ mode, modes, onChange }: { mode: SortMode; modes: SortMode[]
   );
 }
 
-// Matches the anime detail page's own related-titles grid: 5 columns until the window is wide
-// enough (xl, 1280px+ - roughly "maximized on a normal display") to comfortably fit a 6th without
-// the cards getting cramped.
-function Grid({ children }: { children: React.ReactNode }) { return <div className="grid grid-cols-5 gap-x-4 gap-y-6 xl:grid-cols-6">{children}</div>; }
-
 const GRID_COLUMNS_DEFAULT = 5;
 const GRID_COLUMNS_XL = 6;
 const GRID_XL_QUERY = "(min-width: 1280px)";
-const GRID_GAP_Y = 24; // px, matches Grid's own `gap-y-6`
+const GRID_GAP_Y = 24; // px, matches PosterGrid's own `gap-y-6`
 
-/** Same column-count rule as the plain `Grid` above (grid-cols-5, xl:grid-cols-6) - kept in sync
+/** Same column-count rule as PosterGrid (grid-cols-5, xl:grid-cols-6) - kept in sync
  * manually since VirtualGrid needs the count as a number (to group items into rows) rather than
  * just a CSS class. */
 function useGridColumnCount(): number {
@@ -235,7 +234,7 @@ function useGridColumnCount(): number {
   return columns;
 }
 
-// Row-virtualized version of Grid, for the actual (potentially hundreds-of-cards-deep, once
+// Row-virtualized version of PosterGrid, for the actual (potentially hundreds-of-cards-deep, once
 // enough pages have loaded) catalog list - `content-visibility: auto` on each AnimeCard (see that
 // component) already skips paint/layout for off-screen cards, but every one of them still exists
 // as a real, permanently-mounted DOM subtree the whole time. Scrolling fast enough crosses many
@@ -282,7 +281,7 @@ function VirtualGrid({ items }: { items: AnimeTitle[] }) {
         // first render) - the real grid, unvirtualized, so there's an actual mounted node for that
         // callback to fire against; the resulting state update switches to the virtualized branch
         // immediately after, and this one never shows again.
-        <Grid>{items.map((item) => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</Grid>
+        <PosterGrid>{items.map((item) => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</PosterGrid>
       ) : (
         rowVirtualizer.getVirtualItems().map((virtualRow) => (
           <div
@@ -300,6 +299,5 @@ function VirtualGrid({ items }: { items: AnimeTitle[] }) {
     </div>
   );
 }
-function GridSkeleton() { return <Grid>{Array.from({ length: 15 }).map((_, i) => <div key={i}><div className="aspect-[2/3] animate-pulse rounded-xl bg-text/[.06]" /><div className="mt-2.5 h-3.5 w-4/5 animate-pulse rounded bg-text/[.06]" /><div className="mt-1.5 h-3 w-2/5 animate-pulse rounded bg-text/[.05]" /></div>)}</Grid>; }
 function EmptyState({ text }: { text: string }) { return <div className="py-16 text-center text-sm text-muted">{text}</div>; }
 function EmptySources() { const { t } = useTranslation(); return <div className="flex min-h-[calc(100vh-76px)] items-center justify-center"><div className="max-w-sm text-center"><div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-text/[.06]"><Radio className="h-6 w-6 text-muted" strokeWidth={1.75} /></div><h1 className="text-xl font-bold text-text">{t("catalog.emptySourcesTitle")}</h1><p className="mt-3 text-sm leading-6 text-muted">{t("catalog.emptySourcesText")}</p><Link to="/sources" className="mt-6 inline-block rounded-xl bg-accent px-4 py-2.5 text-sm font-bold text-accent-fg">{t("catalog.openSources")}</Link></div></div>; }
