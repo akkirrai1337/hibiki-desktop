@@ -3,16 +3,15 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
-import { AnimatePresence, motion } from "motion/react";
-import { ArrowUpDown, Check, Radio } from "lucide-react";
+import { Radio } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
 import { AnimeCard, PosterGrid, PosterGridSkeleton } from "@/components/AnimeCard";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { useUiStore } from "@/stores/uiStore";
 import { useDescribedTitles } from "@/lib/describedTitles";
 import { AggregatorCatalog } from "@/components/AggregatorCatalog";
+import { CatalogModeMenu } from "@/components/CatalogModeMenu";
 import { useAggregatorBrowsing, useMetadataProviderKey } from "@/lib/aggregatorBrowsing";
-import { usePopoverTheme } from "@/lib/usePopoverTheme";
 import type { AnimeTitle, SourceInfo } from "@shared/types";
 
 // Only three ways to browse make sense to expose: by relevance, alphabetically, or the source's
@@ -170,50 +169,8 @@ export function CatalogBrowsePage() {
 }
 
 function SortMenu({ mode, modes, onChange }: { mode: SortMode; modes: SortMode[]; onChange: (mode: SortMode) => void }) {
-  const popoverTheme = usePopoverTheme();
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-lg bg-text/[.06] px-3.5 py-2 text-sm font-semibold text-text/80 transition-colors hover:bg-text/[.1]"
-      >
-        <ArrowUpDown className="h-4 w-4" strokeWidth={2} />
-        {t(SORT_LABEL_KEYS[mode])}
-      </button>
-      <AnimatePresence>
-        {open && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-            {/* No `scale` - see LibraryButton in anime.$sourceId.$animeId.tsx for why: scaling a
-                block of small bold text makes Chromium re-rasterize it at a slightly different
-                subpixel size every frame, reading as the text shimmering while the menu settles. */}
-            <motion.div
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ type: "spring", stiffness: 500, damping: 45 }}
-              // Paint the selected theme independently of the content behind the popup.
-              className="absolute right-0 top-11 z-50 w-52 overflow-hidden rounded-xl border border-border bg-app-popover shadow-2xl"
-              style={popoverTheme}
-            >
-              {modes.map((option) => (
-                <button
-                  key={option}
-                  onClick={() => { onChange(option); setOpen(false); }}
-                  className="flex w-full items-center justify-between px-3.5 py-2.5 text-left text-sm text-text transition-colors hover:bg-text/[.06]"
-                >
-                  {t(SORT_LABEL_KEYS[option])}
-                  {option === mode && <Check className="h-4 w-4 text-accent-text" strokeWidth={2.5} />}
-                </button>
-              ))}
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-    </div>
-  );
+  return <CatalogModeMenu value={mode} options={modes.map((value) => ({ value, label: t(SORT_LABEL_KEYS[value]) }))} onChange={onChange} />;
 }
 
 const GRID_COLUMNS_DEFAULT = 5;

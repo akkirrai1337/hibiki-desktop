@@ -8,7 +8,7 @@ import { hibiki } from "@/lib/hibiki";
 import { useMetadataProviderKey } from "@/lib/aggregatorBrowsing";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { PosterCard, PosterGrid, PosterGridSkeleton } from "@/components/AnimeCard";
-import { cn } from "@/lib/cn";
+import { CatalogModeMenu } from "@/components/CatalogModeMenu";
 
 const PAGE_SIZE = 24;
 
@@ -62,24 +62,15 @@ export function AggregatorCatalog({ source }: { source: SourceInfo }) {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between gap-3">
-        <div className="flex rounded-lg bg-text/[.05] p-0.5">
-          {MODES.map((candidate) => (
-            <button
-              key={candidate}
-              onClick={() => setMode(candidate)}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
-                candidate === mode ? "bg-accent text-accent-fg" : "text-muted hover:text-text",
-              )}
-            >
-              {t(`catalogPage.aggregator.${candidate}`)}
-            </button>
-          ))}
-        </div>
+      <div className="mb-6 flex items-center justify-end gap-3">
         {/* Which provider answered, because it is not always the preferred one - they go down
             independently and the catalog falls through to whichever is up. */}
         {provider && <span className="text-xs text-muted">{PROVIDER_RATING_SOURCE[provider]}</span>}
+        <CatalogModeMenu
+          value={mode}
+          options={MODES.map((value) => ({ value, label: t(`catalogPage.aggregator.${value}`) }))}
+          onChange={setMode}
+        />
       </div>
 
       {catalog.isError && <ErrorBanner message={(catalog.error as Error).message} />}
