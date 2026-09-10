@@ -6,7 +6,9 @@ import {
   metadataEntryUrl,
   normalizeTitleForMatch,
   parseMetadataReference,
+  pickSourceTitleFor,
   searchQueriesFor,
+  sourceSearchQueriesFor,
   pickBestMatch,
   PROVIDER_RATING_SOURCE,
   sanitizeDescription,
@@ -223,6 +225,58 @@ describe("parseMetadataReference", () => {
     for (const provider of ["anilist", "mal"] as const) {
       expect(parseMetadataReference(metadataEntryUrl(provider, 1234), provider)).toEqual({ provider, externalId: 1234 });
     }
+  });
+});
+
+describe("pickSourceTitleFor", () => {
+  // What a source's search actually returns: a name, sometimes a year, rarely a type - which is why
+  // this direction is the weaker one.
+  const entry = external({
+    romajiName: "Sousou no Frieren",
+    englishName: "Frieren: Beyond Journey's End",
+    year: 2023,
+    type: "tv",
+  });
+
+  it("picks the title whose name is the entry's, by any of its names", () => {
+    const picked = pickSourceTitleFor(entry, [
+      { id: "a", englishName: "Bocchi the Rock!" },
+      { id: "b", englishName: "Sousou no Frieren" },
+    ]);
+    expect(picked?.animeId).toBe("b");
+  });
+
+  it("separates a season from its sequel when the source says which year it is", () => {
+    const picked = pickSourceTitleFor(entry, [
+      { id: "s2", englishName: "Frieren: Beyond Journey's End", year: 2026 },
+      { id: "s1", englishName: "Frieren: Beyond Journey's End", year: 2023 },
+    ]);
+    expect(picked?.animeId).toBe("s1");
+  });
+
+  it("refuses a sequel offered for the entry's own first season", () => {
+    expect(pickSourceTitleFor(entry, [{ id: "s2", englishName: "Frieren: Beyond Journey's End Season 2" }])).toBeNull();
+  });
+
+  it("returns nothing rather than the closest of several unrelated titles", () => {
+    expect(pickSourceTitleFor(entry, [{ id: "x", englishName: "Death Note" }, { id: "y", englishName: "One Piece" }])).toBeNull();
+  });
+
+  it("has nothing to decide on when the source returned nothing", () => {
+    expect(pickSourceTitleFor(entry, [])).toBeNull();
+  });
+});
+
+describe("sourceSearchQueriesFor", () => {
+  it("asks a source for the romaji name first, then the English one", () => {
+    expect(sourceSearchQueriesFor(external({ romajiName: "Sousou no Frieren", englishName: "Frieren: Beyond Journey's End" }))).toEqual([
+      "Sousou no Frieren",
+      "Frieren: Beyond Journey's End",
+    ]);
+  });
+
+  it("counts one name written twice as one query", () => {
+    expect(sourceSearchQueriesFor(external({ romajiName: "Death Note", englishName: "Death Note" }))).toEqual(["Death Note"]);
   });
 });
 

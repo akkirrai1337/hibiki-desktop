@@ -306,6 +306,19 @@ export interface MetadataMatchInfo {
   confidence: number | null;
 }
 
+/**
+ * Which title of a source a provider entry resolved to, for a catalog browsed from the aggregator
+ * (see docs/aggregator-first-catalog.md). `via` says how it was found, so a screen can be honest
+ * about a match that was decided by name alone.
+ */
+export interface ResolvedSourceTitle {
+  animeId: string;
+  /** 0..100 for a match the app made, null for one the user set by hand. */
+  confidence: number | null;
+  manual: boolean;
+  via: "recorded" | "cross-provider" | "search";
+}
+
 /** A manual-picker search, plus which provider actually answered it - null means none did, and the
  * picker says so instead of showing an empty list as if nothing matched. */
 export interface MetadataSearchResult {

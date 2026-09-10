@@ -1,7 +1,7 @@
 import { ipcMain } from "electron";
 import { IPC } from "@shared/ipc";
-import type { AnimeTitle, ExternalMetadataPreferences, MetadataBindingState, PlaybackGroup, PlayerLink, PlayerLinkPreference } from "@shared/types";
-import { mergeExternalMetadata, type MetadataProviderId } from "@shared/externalMetadata";
+import type { AnimeTitle, ExternalMetadataPreferences, MetadataBindingState, ResolvedSourceTitle, PlaybackGroup, PlayerLink, PlayerLinkPreference } from "@shared/types";
+import { mergeExternalMetadata, type ExternalMetadata, type MetadataProviderId } from "@shared/externalMetadata";
 import type { ExtensionRuntime } from "../extensions/runtime";
 import {
   clearMatch,
@@ -9,8 +9,10 @@ import {
   describeMany,
   fetchEntry,
   getExternalMetadata,
+  resolveSourceTitle,
   searchProviders,
   setManualMatch,
+  setManualSourceTitle,
 } from "../metadata/externalMetadataService";
 import { providerOrderFor, setExternalMetadataPreferences } from "../metadata/metadataPreferences";
 import { cacheAnime, cachePlaybackGroups, cacheSourceQuery, getCachedAnime, getCachedAnimeMany, getCachedPlaybackGroups, getCachedPlaybackGroupsEntry, getCachedSourceQuery } from "../offlineCache";
@@ -72,6 +74,17 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
     IPC.metadataSetMatch,
     (_e, sourceId: string, animeId: string, provider: MetadataProviderId, externalId: number) =>
       setManualMatch(sourceId, animeId, provider, externalId),
+  );
+  // The source's own search, as the resolver sees it - one query in, its titles out. Kept here
+  // rather than in the service so that layer stays free of the extension runtime.
+  ipcMain.handle(
+    IPC.metadataResolveSource,
+    (_e, sourceId: string, entry: ExternalMetadata): Promise<ResolvedSourceTitle | null> =>
+      resolveSourceTitle(sourceId, entry, (query) => runtime.search(sourceId, { query, limit: 20 })),
+  );
+  ipcMain.handle(
+    IPC.metadataSetSourceTitle,
+    (_e, sourceId: string, animeId: string, entry: ExternalMetadata) => setManualSourceTitle(sourceId, animeId, entry),
   );
   ipcMain.handle(IPC.metadataClearMatch, (_e, sourceId: string, animeId: string) => clearMatch(sourceId, animeId));
   ipcMain.handle(IPC.sourcesList, () => runtime.list());

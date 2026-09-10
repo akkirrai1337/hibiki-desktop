@@ -90,6 +90,10 @@ export const IPC = {
   metadataSearch: "metadata:search",
   metadataEntry: "metadata:entry",
   metadataSetMatch: "metadata:setMatch",
+  // The reverse direction: which title of a source is this provider entry (see
+  // docs/aggregator-first-catalog.md).
+  metadataResolveSource: "metadata:resolveSource",
+  metadataSetSourceTitle: "metadata:setSourceTitle",
   metadataClearMatch: "metadata:clearMatch",
 
   discordSetEnabled: "discord:setEnabled",

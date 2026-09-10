@@ -14,6 +14,7 @@ import type {
   InstalledVersions,
   MetadataBindingState,
   MetadataSearchResult,
+  ResolvedSourceTitle,
   LibraryEntry,
   MarketplaceExtension,
   PlaybackGroup,
@@ -119,6 +120,8 @@ export interface HibikiApi {
     search(sourceId: string, query: string): Promise<MetadataSearchResult>;
     entry(provider: MetadataProviderId, reference: { externalId?: number; slug?: string }): Promise<ExternalMetadata | null>;
     setMatch(sourceId: string, animeId: string, provider: MetadataProviderId, externalId: number): Promise<ExternalMetadata | null>;
+    resolveSource(sourceId: string, entry: ExternalMetadata): Promise<ResolvedSourceTitle | null>;
+    setSourceTitle(sourceId: string, animeId: string, entry: ExternalMetadata): Promise<void>;
     clearMatch(sourceId: string, animeId: string): Promise<void>;
   };
   discord: {

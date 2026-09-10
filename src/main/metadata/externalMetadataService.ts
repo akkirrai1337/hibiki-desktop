@@ -9,12 +9,14 @@ import {
   MATCH_CONFIDENCE_THRESHOLD,
   METADATA_PROVIDER_IDS,
   pickBestMatch,
+  pickSourceTitleFor,
   searchQueriesFor,
+  sourceSearchQueriesFor,
   type ExternalMetadata,
   type MatchCandidate,
   type MetadataProviderId,
 } from "@shared/externalMetadata";
-import type { AnimeTitle } from "@shared/types";
+import type { AnimeTitle, ResolvedSourceTitle } from "@shared/types";
 import { getDb } from "../db";
 import { externalMetadataMatches, externalMetadataMedia } from "../db/schema";
 import { logger } from "../logger";
@@ -301,6 +303,99 @@ export async function fetchEntry(
   if (media) writeCachedMedia(media);
   if (media) return media;
   return reference.externalId != null ? (readCachedMedia(provider, reference.externalId)?.media ?? null) : null;
+}
+
+/** What a source title looks like to the resolver below - a source's search results carry these
+ * five fields and often only the first two. */
+export type SourceSearch = (query: string) => Promise<AnimeTitle[]>;
+
+/**
+ * Which title of a source is a given provider entry: the reverse direction, for a catalog browsed
+ * from the aggregator and resolved to something playable only when a title is opened.
+ *
+ * Four tiers, cheapest first, and only the third costs a request:
+ *
+ * 1. A match already recorded. Everything ever opened, described on a screen, or kept in the
+ *    library is in that table already, so this is the common case by a wide margin.
+ * 2. The same, reached through another provider's id - Kitsu publishes both of the others', AniList
+ *    publishes MAL's, so a title matched through any one of them resolves through all of them.
+ * 3. A live search of the source, scored by the same rules as the forward direction and recorded
+ *    afterwards, which makes it tier 1 from then on.
+ * 4. The user picks (see the picker's own path - this function returns null and the screen offers
+ *    the source's own results).
+ */
+export async function resolveSourceTitle(
+  sourceId: string,
+  entry: ExternalMetadata,
+  searchSource: SourceSearch,
+): Promise<ResolvedSourceTitle | null> {
+  const recorded = readRecordedSourceTitle(sourceId, entry.provider, entry.externalId);
+  if (recorded) return { ...recorded, via: "recorded" };
+
+  for (const [provider, externalId] of crossIdsOf(entry)) {
+    const viaOther = readRecordedSourceTitle(sourceId, provider, externalId);
+    if (viaOther) return { ...viaOther, via: "cross-provider" };
+  }
+
+  for (const query of sourceSearchQueriesFor(entry)) {
+    const results = await searchSource(query).catch((error) => {
+      logger.warn("metadata", `${sourceId} search failed while resolving ${entry.provider}#${entry.externalId}: ${String(error)}`);
+      return null;
+    });
+    // The source is unreachable rather than lacking the title - say nothing, record nothing, and
+    // let the screen offer to try again or pick by hand.
+    if (!results) return null;
+    const best = pickSourceTitleFor(entry, results);
+    if (!best) continue;
+    writeCachedMedia(entry);
+    writeMatch(sourceId, best.animeId, entry.provider, entry.externalId, Math.round(best.confidence * 100), false);
+    recordCrossMatch(sourceId, best.animeId, entry);
+    logger.debug("metadata", `${sourceId} resolved ${entry.provider}#${entry.externalId} to ${best.animeId} (${Math.round(best.confidence * 100)}%)`);
+    return { animeId: best.animeId, confidence: Math.round(best.confidence * 100), manual: false, via: "search" };
+  }
+  return null;
+}
+
+/** Binds a provider entry to a title of this source by hand, from the resolution screen. */
+export function setManualSourceTitle(sourceId: string, animeId: string, entry: ExternalMetadata): void {
+  writeCachedMedia(entry);
+  writeMatch(sourceId, animeId, entry.provider, entry.externalId, null, true);
+  recordCrossMatch(sourceId, animeId, entry);
+}
+
+function crossIdsOf(entry: ExternalMetadata): Array<[MetadataProviderId, number]> {
+  const pairs: Array<[MetadataProviderId, number | null | undefined]> = [
+    ["anilist", entry.anilistId],
+    ["mal", entry.malId],
+    ["kitsu", entry.kitsuId],
+  ];
+  return pairs.filter(
+    (pair): pair is [MetadataProviderId, number] => pair[0] !== entry.provider && pair[1] != null,
+  );
+}
+
+/** The recorded match for one entry, read backwards. A "no match" row (null externalId) can never
+ * be selected here, since it is keyed by a null this query never asks for. */
+function readRecordedSourceTitle(
+  sourceId: string,
+  provider: MetadataProviderId,
+  externalId: number,
+): { animeId: string; confidence: number | null; manual: boolean } | null {
+  const rows = getDb()
+    .select()
+    .from(externalMetadataMatches)
+    .where(
+      and(
+        eq(externalMetadataMatches.sourceId, sourceId),
+        eq(externalMetadataMatches.provider, provider),
+        eq(externalMetadataMatches.externalId, externalId),
+      ),
+    )
+    .all();
+  // A source can carry the same show twice (a dub entry beside a subbed one), and both may have
+  // been matched to this entry. A binding the user made by hand is the one they meant.
+  const row = rows.find((candidate) => candidate.manual) ?? rows[0];
+  return row ? { animeId: row.animeId, confidence: row.confidence, manual: row.manual } : null;
 }
 
 /**

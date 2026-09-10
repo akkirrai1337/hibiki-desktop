@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, primaryKey, index } from "drizzle-orm/sqlite-core";
 
 export const library = sqliteTable(
   "library",
@@ -164,7 +164,14 @@ export const externalMetadataMatches = sqliteTable(
     manual: integer("manual", { mode: "boolean" }).notNull().default(false),
     matchedAt: integer("matched_at").notNull(),
   },
-  (t) => [primaryKey({ columns: [t.sourceId, t.animeId, t.provider] })],
+  (t) => [
+    primaryKey({ columns: [t.sourceId, t.animeId, t.provider] }),
+    // The same table read backwards answers "which title of this source is this provider entry",
+    // which is how a catalog browsed from the aggregator finds something to play (see
+    // docs/aggregator-first-catalog.md). Without the index that read is a full scan of every match
+    // ever made, on a click.
+    index("external_metadata_matches_entry_idx").on(t.provider, t.externalId),
+  ],
 );
 
 // The provider entries themselves, keyed by provider and that provider's own id, and shared across

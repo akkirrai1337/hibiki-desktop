@@ -286,26 +286,48 @@ export function scoreCandidate(
   anime: Pick<AnimeTitle, "englishName" | "originalName" | "russianName" | "synonyms" | "year" | "type">,
   candidate: MatchCandidate,
 ): number {
-  const wanted = candidateNames(anime);
-  if (wanted.length === 0) return 0;
-  const offered = candidate.names.map(normalizeTitleForMatch).filter((name) => name.length > 0);
-  if (offered.length === 0) return 0;
+  return scoreNames(
+    { names: candidateNames(anime), year: anime.year, type: anime.type },
+    { names: candidate.names.map(normalizeTitleForMatch), year: candidate.year, type: candidate.type },
+  );
+}
+
+/** One side of a comparison: every name a record is known by, already normalized, plus the two
+ * facts that separate a sequel from its own first season. */
+interface ComparableTitle {
+  names: string[];
+  year?: number | null;
+  type?: AnimeType | null;
+}
+
+/**
+ * How sure a match between two records is, 0..1 - the whole comparison, and the only place it
+ * happens.
+ *
+ * Direction-free on purpose: the same rules decide "which provider entry is this source title" and
+ * "which title of this source is this provider entry", so the two can never drift into disagreeing
+ * about the same pair.
+ */
+export function scoreNames(wanted: ComparableTitle, offered: ComparableTitle): number {
+  const wantedNames = wanted.names.filter((name) => name.length > 0);
+  const offeredNames = offered.names.filter((name) => name.length > 0);
+  if (wantedNames.length === 0 || offeredNames.length === 0) return 0;
 
   // A subtitle is where the two records most often part ways: a source names a season "Classroom of
   // the Elite IV" and the aggregator files it as "Classroom of the Elite 4th Season: Second Year,
-  // First Semester". Comparing the part before the subtitle as well lets those meet, while the
-  // season number - normalized above - still keeps a sequel apart from its own first season.
-  const offeredParts = offered.map(titleParts);
+  // First Semester". Comparing show and season separately lets those meet, while the season number
+  // still keeps a sequel apart from its own first season.
+  const offeredParts = offeredNames.map(titleParts);
   let nameScore: number;
-  if (wanted.some((name) => offered.includes(name))) nameScore = 1;
+  if (wantedNames.some((name) => offeredNames.includes(name))) nameScore = 1;
   else if (
-    wanted
+    wantedNames
       .map(titleParts)
       .some((part) => offeredParts.some((other) => other.show === part.show && other.season === part.season))
   ) {
     // Same show, same season, different wording around it.
     nameScore = 0.95;
-  } else if (wanted.some((name) => offered.some((other) => other.startsWith(name) || name.startsWith(other)))) {
+  } else if (wantedNames.some((name) => offeredNames.some((other) => other.startsWith(name) || name.startsWith(other)))) {
     // A prefix and nothing more - which is also what a first season looks like next to its sequel,
     // so this never clears the threshold on its own.
     nameScore = 0.7;
@@ -313,10 +335,10 @@ export function scoreCandidate(
 
   // A year that is one off is not evidence against a match: a late-season show airs in December on
   // one site and January on another, and the two disagree by a calendar year every time.
-  const yearScore = anime.year == null || candidate.year == null
+  const yearScore = wanted.year == null || offered.year == null
     ? 0
-    : Math.abs(anime.year - candidate.year) <= 1 ? 1 : -1;
-  const typeScore = anime.type == null || candidate.type == null ? 0 : anime.type === candidate.type ? 1 : -1;
+    : Math.abs(wanted.year - offered.year) <= 1 ? 1 : -1;
+  const typeScore = wanted.type == null || offered.type == null ? 0 : wanted.type === offered.type ? 1 : -1;
 
   // Rounded because these weights sum to 0.9999999999999999 in binary floating point, and a score
   // is also persisted as a percentage - two reasons for a perfect match to read as exactly 1.
@@ -340,6 +362,54 @@ export function pickBestMatch(
     }
   }
   return best;
+}
+
+/** Every name a provider entry is known by, normalized - the aggregator's side of a comparison. */
+export function entryNames(entry: ExternalMetadata): string[] {
+  const names = [entry.romajiName, entry.englishName, entry.nativeName, ...(entry.synonyms ?? [])]
+    .filter((name): name is string => typeof name === "string" && name.trim().length > 0)
+    .map(normalizeTitleForMatch)
+    .filter((name) => name.length > 0);
+  return [...new Set(names)];
+}
+
+/**
+ * Which title of a source is this provider entry - the reverse of the matcher above, for a catalog
+ * browsed from the aggregator and resolved to a source only when a title is opened.
+ *
+ * Harder than the forward direction, and worth knowing why: a source's *search results* carry a
+ * name and often nothing else, while the entry being resolved has a year and a type. So most of
+ * these are decided by the name alone, which is exactly the case that cannot tell a sequel from its
+ * first season - hence the same threshold, and hence a manual pick has to stay part of the normal
+ * flow rather than an error path.
+ */
+export function pickSourceTitleFor(
+  entry: ExternalMetadata,
+  titles: Array<Pick<AnimeTitle, "id" | "englishName" | "originalName" | "russianName" | "synonyms" | "year" | "type">>,
+): { animeId: string; confidence: number } | null {
+  const wanted = { names: entryNames(entry), year: entry.year, type: entry.type };
+  let best: { animeId: string; confidence: number } | null = null;
+  for (const title of titles) {
+    const confidence = scoreNames(wanted, { names: candidateNames(title), year: title.year, type: title.type });
+    if (confidence >= MATCH_CONFIDENCE_THRESHOLD && (!best || confidence > best.confidence)) {
+      best = { animeId: title.id, confidence };
+    }
+  }
+  return best;
+}
+
+/** The queries to try against a *source's* search for a provider entry, best first. A source
+ * indexes what it publishes, which is usually the romaji name and sometimes the English one, so
+ * both are worth asking for - and neither is worth dressing up the way searchQueriesFor has to
+ * undress a source's own titles. */
+export function sourceSearchQueriesFor(entry: ExternalMetadata, limit = 2): string[] {
+  const names = [entry.romajiName, entry.englishName, entry.nativeName]
+    .filter((name): name is string => typeof name === "string" && name.trim().length > 0);
+  const queries: string[] = [];
+  for (const name of names) {
+    if (!queries.some((existing) => existing.toLowerCase() === name.toLowerCase())) queries.push(name);
+  }
+  return queries.slice(0, limit);
 }
 
 /** Replaces whatever this layer wrote before rather than appending - a title refetched five times,

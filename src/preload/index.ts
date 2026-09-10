@@ -31,6 +31,7 @@ import type {
   ExternalMetadataPreferences,
   MetadataBindingState,
   MetadataSearchResult,
+  ResolvedSourceTitle,
   XpEvent,
 } from "@shared/types";
 
@@ -167,6 +168,10 @@ const api = {
       ipcRenderer.invoke(IPC.metadataEntry, provider, reference),
     setMatch: (sourceId: string, animeId: string, provider: MetadataProviderId, externalId: number): Promise<ExternalMetadata | null> =>
       ipcRenderer.invoke(IPC.metadataSetMatch, sourceId, animeId, provider, externalId),
+    resolveSource: (sourceId: string, entry: ExternalMetadata): Promise<ResolvedSourceTitle | null> =>
+      ipcRenderer.invoke(IPC.metadataResolveSource, sourceId, entry),
+    setSourceTitle: (sourceId: string, animeId: string, entry: ExternalMetadata): Promise<void> =>
+      ipcRenderer.invoke(IPC.metadataSetSourceTitle, sourceId, animeId, entry),
     clearMatch: (sourceId: string, animeId: string): Promise<void> =>
       ipcRenderer.invoke(IPC.metadataClearMatch, sourceId, animeId),
   },
