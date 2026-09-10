@@ -13,6 +13,7 @@ import type {
   ExternalMetadataPreferences,
   InstalledVersions,
   MetadataBindingState,
+  RatingSyncResult,
   MetadataSearchResult,
   ResolvedSourceTitle,
   LibraryEntry,
@@ -94,7 +95,7 @@ export interface HibikiApi {
   };
   ratings: {
     get(sourceId: string, animeId: string): Promise<number | null>;
-    set(sourceId: string, animeId: string, rating: number | null): Promise<void>;
+    set(sourceId: string, animeId: string, rating: number | null): Promise<RatingSyncResult>;
   };
   library: {
     list(): Promise<LibraryEntry[]>;

@@ -1,7 +1,7 @@
 import { ipcMain } from "electron";
 import { eq, and, gte, desc, sql } from "drizzle-orm";
 import { IPC } from "@shared/ipc";
-import type { DailyActivity, LibraryEntry, WatchProgress } from "@shared/types";
+import type { DailyActivity, LibraryEntry, RatingSyncResult, WatchProgress } from "@shared/types";
 import { getDb } from "../db";
 import { library, watchProgress, dailyActivity, titleRatings } from "../db/schema";
 import type { ExtensionRuntime } from "../extensions/runtime";
@@ -52,11 +52,26 @@ function pushToAccount(
  * The category matters: a source reads `syncLibraryEntry` as one statement about a title, and
  * YummyAnime removes it from its lists when that statement carries no category. So a rating sent
  * without one would quietly un-list a title the user only meant to score. The local library answers
- * that for anything in it, and for anything else the source's own list is asked once - and if that
- * cannot be reached, nothing is sent at all rather than something wrong.
+ * that for anything in it, and for anything else the source's own list is asked once.
+ *
+ * Deliberately not gated on the library-sync switch, unlike the library pushes above. That switch
+ * is about mirroring lists in the background, and this is someone pressing a number: an explicit
+ * act deserves to reach the account it is obviously meant for. What it does need is the transport
+ * (a source that syncs libraries at all) and an account to send it to - and it says which of those
+ * was missing rather than failing silently, which is how a rating that never left this machine
+ * looked exactly like one that did.
  */
-async function pushRating(runtime: ExtensionRuntime, sourceId: string, animeId: string, rating: number): Promise<void> {
-  if (!runtime.isLibrarySyncEnabled(sourceId)) return;
+async function pushRating(
+  runtime: ExtensionRuntime,
+  sourceId: string,
+  animeId: string,
+  rating: number,
+): Promise<RatingSyncResult> {
+  const source = runtime.list().find((candidate) => candidate.id === sourceId);
+  if (!source?.capabilities.includes("LIBRARY_SYNC")) return { synced: false, reason: "unsupported" };
+  const account = await runtime.getAccount(sourceId).catch(() => null);
+  if (!account) return { synced: false, reason: "signed-out" };
+
   const local = getDb()
     .select()
     .from(library)
@@ -64,10 +79,11 @@ async function pushRating(runtime: ExtensionRuntime, sourceId: string, animeId: 
     .get();
   let category = local?.category ?? null;
   if (!category) {
-    const remote = await runtime.listLibrary(sourceId);
-    category = remote.find((entry) => entry.animeId === animeId)?.category ?? null;
+    category = (await runtime.listLibrary(sourceId)).find((entry) => entry.animeId === animeId)?.category ?? null;
   }
   await runtime.syncLibraryEntry(sourceId, { animeId, category, rating });
+  logger.info("sync", `${sourceId}/${animeId} rated ${rating}`);
+  return { synced: true };
 }
 
 export function registerLibraryHandlers(runtime: ExtensionRuntime): void {
@@ -80,7 +96,7 @@ export function registerLibraryHandlers(runtime: ExtensionRuntime): void {
     return row?.rating ?? null;
   });
 
-  ipcMain.handle(IPC.ratingSet, async (_e, sourceId: string, animeId: string, rating: number | null) => {
+  ipcMain.handle(IPC.ratingSet, async (_e, sourceId: string, animeId: string, rating: number | null): Promise<RatingSyncResult> => {
     const db = getDb();
     if (rating == null) {
       db.delete(titleRatings).where(and(eq(titleRatings.sourceId, sourceId), eq(titleRatings.animeId, animeId))).run();
@@ -94,11 +110,11 @@ export function registerLibraryHandlers(runtime: ExtensionRuntime): void {
     // Kept local first and pushed after: a rating is this app's own record, and a source that is
     // unreachable, signed out, or simply slow must not cost the user their answer. Awaited, unlike
     // the library push, so the screen can say whether the account got it.
-    if (rating != null) {
-      await pushRating(runtime, sourceId, animeId, rating).catch((error: unknown) => {
-        logger.warn("sync", `${sourceId}/${animeId} rating not synced: ${error instanceof Error ? error.message : String(error)}`);
-      });
-    }
+    if (rating == null) return { synced: false, reason: "unsupported" };
+    return pushRating(runtime, sourceId, animeId, rating).catch((error: unknown) => {
+      logger.warn("sync", `${sourceId}/${animeId} rating not synced: ${error instanceof Error ? error.message : String(error)}`);
+      return { synced: false, reason: "failed" } as const;
+    });
   });
 
   ipcMain.handle(IPC.libraryList, (): LibraryEntry[] => {

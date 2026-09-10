@@ -379,6 +379,19 @@ export interface SearchRequest {
 
 export type LibraryCategory = "watching" | "planned" | "completed" | "dropped" | "on_hold" | "favorite";
 
+/**
+ * What became of a rating beyond this machine.
+ *
+ * A score is always kept locally; whether it reached the source's account is a separate answer, and
+ * one worth showing - a rating that never left looked exactly like one that did.
+ */
+export interface RatingSyncResult {
+  synced: boolean;
+  /** "unsupported": the source has no account library to rate into. "signed-out": it has one and
+   * nobody is signed in. "failed": it was tried and the source refused or could not be reached. */
+  reason?: "unsupported" | "signed-out" | "failed";
+}
+
 export interface LibraryEntry {
   animeId: string;
   sourceId: string;

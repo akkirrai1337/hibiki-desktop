@@ -154,6 +154,11 @@
         "8": "Great",
         "9": "Superb",
         "10": "Masterpiece"
+      },
+      "localOnly": {
+        "unsupported": "Saved here only",
+        "signed-out": "Saved here - sign in to sync",
+        "failed": "Saved here - the source did not accept it"
       }
     }
   },

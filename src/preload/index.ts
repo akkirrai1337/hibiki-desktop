@@ -30,6 +30,7 @@ import type {
   WatchProgress,
   ExternalMetadataPreferences,
   MetadataBindingState,
+  RatingSyncResult,
   MetadataSearchResult,
   ResolvedSourceTitle,
   XpEvent,
@@ -118,7 +119,7 @@ const api = {
   ratings: {
     get: (sourceId: string, animeId: string): Promise<number | null> => ipcRenderer.invoke(IPC.ratingGet, sourceId, animeId),
     /** null clears it. Resolves once the source's account has been told, when it can be. */
-    set: (sourceId: string, animeId: string, rating: number | null): Promise<void> =>
+    set: (sourceId: string, animeId: string, rating: number | null): Promise<RatingSyncResult> =>
       ipcRenderer.invoke(IPC.ratingSet, sourceId, animeId, rating),
   },
   library: {

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
 import { Star } from "lucide-react";
+import type { RatingSyncResult } from "@shared/types";
 import { hibiki } from "@/lib/hibiki";
 import { cn } from "@/lib/cn";
 
@@ -30,6 +31,10 @@ export function RatingButton({ sourceId, animeId }: { sourceId: string; animeId:
     queryFn: () => hibiki.ratings.get(sourceId, animeId),
   });
 
+  // What became of the last score sent - a rating always lands locally, and whether it reached the
+  // account is the part worth saying out loud.
+  const [sync, setSync] = useState<RatingSyncResult | null>(null);
+
   const save = useMutation({
     mutationFn: (value: number | null) => hibiki.ratings.set(sourceId, animeId, value),
     // Written before the source is told, and shown before either finishes: the score is this app's
@@ -39,6 +44,7 @@ export function RatingButton({ sourceId, animeId }: { sourceId: string; animeId:
       setOpen(false);
       setHovered(null);
     },
+    onSuccess: (result, value) => setSync(value == null ? null : result),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["rating", sourceId, animeId] }),
   });
 
@@ -115,7 +121,11 @@ export function RatingButton({ sourceId, animeId }: { sourceId: string; animeId:
 
               <div className="mt-2 flex items-center justify-between gap-4 border-t border-border pt-2">
                 <span className="px-1 text-[11px] text-muted">
-                  {current != null ? t("detail.rating.yours", { rating: current }) : t("detail.rating.notRated")}
+                  {current == null
+                    ? t("detail.rating.notRated")
+                    : sync && !sync.synced
+                      ? t(`detail.rating.localOnly.${sync.reason ?? "failed"}`)
+                      : t("detail.rating.yours", { rating: current })}
                 </span>
                 {current != null && (
                   <button
