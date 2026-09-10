@@ -168,18 +168,74 @@ export function sanitizeDescription(raw: string | null | undefined): string | nu
   return text || null;
 }
 
-/** Comparison form for title matching: case, punctuation, and the ordinal season wording that
- * differs between every site ("2nd Season" vs "Season 2") all removed, so the only thing left to
- * differ is the words themselves. Latin, Cyrillic, kana and CJK all survive; everything else is
- * treated as a separator. */
+// A season named in Roman numerals on one site and in digits on the other is the single most common
+// way two records of the same show fail to look alike ("Classroom of the Elite IV" against
+// "Classroom of the Elite 4th Season"). Only the values a season plausibly takes - a stray "i" or
+// "x" in a real title would otherwise become a number.
+const ROMAN_SEASON_NUMERALS: Record<string, string> = {
+  ii: "2", iii: "3", iv: "4", v: "5", vi: "6", vii: "7", viii: "8", ix: "9", x: "10",
+};
+
+/** Comparison form for title matching: case, punctuation, the ordinal season wording that differs
+ * between every site ("2nd Season" vs "Season 2"), and season numerals all normalized away, so the
+ * only thing left to differ is the words themselves. Latin, Cyrillic, kana and CJK all survive;
+ * everything else is treated as a separator. */
 export function normalizeTitleForMatch(value: string): string {
   return value
     .toLowerCase()
     .replace(/&/g, " and ")
-    .replace(/(\d+)(?:st|nd|rd|th)\s+season/g, "season $1")
     .replace(/[^\p{Letter}\p{Number}]+/gu, " ")
     .trim()
-    .replace(/\s+/g, " ");
+    .replace(/\s+/g, " ")
+    .replace(/(\d+)(?:st|nd|rd|th) season/g, "season $1")
+    .split(" ")
+    // Only ever a *trailing* numeral, and never the whole title: "X" is a show in its own right,
+    // and reading it as a tenth season would match it against anything.
+    .map((word, index, words) => (index > 0 && index === words.length - 1 ? (ROMAN_SEASON_NUMERALS[word] ?? word) : word))
+    .join(" ")
+    .replace(/ season (\d+)$/, " $1");
+}
+
+// Tags a source appends for its own catalog - a dub/uncensored marker, a disambiguating format -
+// which no aggregator has ever heard of and which stop their search from finding the show at all.
+const SOURCE_TAGS = /\s*[([][^)\]]*[)\]]\s*$/;
+const TRAILING_SEASON = /\s+(?:season\s+\d+|\d+(?:st|nd|rd|th)\s+season|part\s+\d+)$/i;
+
+/**
+ * The queries to try against a provider's search, best first.
+ *
+ * A provider's search matches text, not titles: "Jujutsu Kaisen (TV)" finds a New Year's special
+ * and "Re:ZERO -Starting Life in Another World- Season 3" finds an unrelated show, because the
+ * source's own decorations are being searched for as if they were part of the name. Each variant
+ * strips one layer of those - a trailing tag, then a season suffix - so a name a source dressed up
+ * can still reach the entry it belongs to. Scoring still decides what is accepted, so a broader
+ * query only widens the pool it chooses from.
+ */
+export function searchQueriesFor(
+  anime: Pick<AnimeTitle, "englishName" | "originalName" | "synonyms">,
+  limit = 3,
+): string[] {
+  const names = [anime.englishName, anime.originalName, ...(anime.synonyms ?? [])].filter(
+    (name): name is string => typeof name === "string" && name.trim().length > 0,
+  );
+  const queries: string[] = [];
+  for (const name of names) {
+    // Dashes used as brackets ("Re:ZERO -Starting Life in Another World- Season 3") break a text
+    // search outright: Kitsu answers that one with an unrelated show, and with the dashes flattened
+    // it answers with the right one. Stripped before the season suffix is, because the punctuation
+    // is the more common blocker of the two.
+    const plain = name.replace(SOURCE_TAGS, "").replace(/[-–—_]+/g, " ").replace(/\s+/g, " ");
+    for (const variant of [name, plain, plain.replace(TRAILING_SEASON, "")]) {
+      const trimmed = variant.trim();
+      // Compared as written, not in matching form: the whole point of a variant is that a provider's
+      // text search treats two spellings of one name differently, so two queries that normalize to
+      // the same thing are still two questions worth asking.
+      if (trimmed.length > 0 && !queries.some((existing) => existing.toLowerCase() === trimmed.toLowerCase())) {
+        queries.push(trimmed);
+      }
+    }
+  }
+  return queries.slice(0, limit);
 }
 
 /** Every name a source title is known by, in normalized form - a match on any one of them counts,
@@ -194,6 +250,26 @@ export function candidateNames(
     .map(normalizeTitleForMatch)
     .filter((name) => name.length > 0);
   return [...new Set(names)];
+}
+
+/**
+ * A normalized title split into the show and which season of it this is.
+ *
+ * The two records of one season rarely spell it the same way: a source writes "Classroom of the
+ * Elite IV" and the aggregator files it as "Classroom of the Elite 4th Season: Second Year, First
+ * Semester". Reading both as (show, season) lets those meet, while still keeping a sequel apart
+ * from its own first season - which a plain prefix comparison cannot do.
+ */
+function titleParts(normalized: string): { show: string; season: number | null } {
+  // "season N" is what normalizeTitleForMatch leaves every spelling of it as. Everything after it
+  // is a subtitle, and subtitles are where two records disagree most.
+  const seasonMatch = /^(.*?) season (\d+)(?: .*)?$/.exec(normalized);
+  if (seasonMatch) return { show: seasonMatch[1].trim(), season: Number(seasonMatch[2]) };
+  // A number the season wording was dropped from entirely - "Classroom of the Elite 4", and every
+  // Roman numeral normalization turns into one.
+  const trailingNumber = /^(.*?) (\d{1,2})$/.exec(normalized);
+  if (trailingNumber) return { show: trailingNumber[1].trim(), season: Number(trailingNumber[2]) };
+  return { show: normalized, season: null };
 }
 
 export interface MatchCandidate {
@@ -215,10 +291,25 @@ export function scoreCandidate(
   const offered = candidate.names.map(normalizeTitleForMatch).filter((name) => name.length > 0);
   if (offered.length === 0) return 0;
 
+  // A subtitle is where the two records most often part ways: a source names a season "Classroom of
+  // the Elite IV" and the aggregator files it as "Classroom of the Elite 4th Season: Second Year,
+  // First Semester". Comparing the part before the subtitle as well lets those meet, while the
+  // season number - normalized above - still keeps a sequel apart from its own first season.
+  const offeredParts = offered.map(titleParts);
   let nameScore: number;
   if (wanted.some((name) => offered.includes(name))) nameScore = 1;
-  else if (wanted.some((name) => offered.some((other) => other.startsWith(name) || name.startsWith(other)))) nameScore = 0.7;
-  else return 0;
+  else if (
+    wanted
+      .map(titleParts)
+      .some((part) => offeredParts.some((other) => other.show === part.show && other.season === part.season))
+  ) {
+    // Same show, same season, different wording around it.
+    nameScore = 0.95;
+  } else if (wanted.some((name) => offered.some((other) => other.startsWith(name) || name.startsWith(other)))) {
+    // A prefix and nothing more - which is also what a first season looks like next to its sequel,
+    // so this never clears the threshold on its own.
+    nameScore = 0.7;
+  } else return 0;
 
   // A year that is one off is not evidence against a match: a late-season show airs in December on
   // one site and January on another, and the two disagree by a calendar year every time.

@@ -9,6 +9,7 @@ import {
   MATCH_CONFIDENCE_THRESHOLD,
   METADATA_PROVIDER_IDS,
   pickBestMatch,
+  searchQueriesFor,
   type ExternalMetadata,
   type MatchCandidate,
   type MetadataProviderId,
@@ -51,6 +52,8 @@ const TTL_AIRING_MS = 12 * 60 * 60 * 1000;
 // provider does not have re-runs the same fruitless search. Short enough that an entry added later
 // is picked up within a week.
 const TTL_NO_MATCH_MS = 7 * 24 * 60 * 60 * 1000;
+
+const MAX_SEARCHES_PER_PROVIDER = 3;
 
 function ttlFor(media: ExternalMetadata): number {
   return media.status === "released" ? TTL_SETTLED_MS : TTL_AIRING_MS;
@@ -199,11 +202,12 @@ async function metadataForProvider(anime: AnimeTitle, provider: MetadataProvider
     return crossMatched;
   }
 
-  // Two shots at most - a third search costs another request for a title that is very likely simply
-  // absent from this provider.
-  const searchNames = [anime.englishName, anime.originalName, ...(anime.synonyms ?? [])]
-    .filter((name): name is string => typeof name === "string" && name.trim().length > 0)
-    .slice(0, 2);
+  // Three shots at most - each is a request, and a title that has not turned up by then is very
+  // likely simply absent from this provider. See searchQueriesFor for why the later ones are worth
+  // spending: a source's own decorations ("(TV)", "(Uncensored)", a season suffix) are searched for
+  // as if they were part of the name, and are the usual reason a show that is plainly there is not
+  // found.
+  const searchNames = searchQueriesFor(anime, MAX_SEARCHES_PER_PROVIDER);
 
   let searched = false;
   for (const name of searchNames) {

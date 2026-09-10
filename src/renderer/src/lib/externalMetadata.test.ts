@@ -6,6 +6,7 @@ import {
   metadataEntryUrl,
   normalizeTitleForMatch,
   parseMetadataReference,
+  searchQueriesFor,
   pickBestMatch,
   PROVIDER_RATING_SOURCE,
   sanitizeDescription,
@@ -54,6 +55,51 @@ describe("normalizeTitleForMatch", () => {
   });
 });
 
+describe("normalizeTitleForMatch, on seasons", () => {
+  it("reads a Roman season numeral as the number it is", () => {
+    expect(normalizeTitleForMatch("Classroom of the Elite IV")).toBe("classroom of the elite 4");
+    expect(normalizeTitleForMatch("Is It Wrong to Try to Pick Up Girls in a Dungeon? V")).toBe(
+      "is it wrong to try to pick up girls in a dungeon 5",
+    );
+  });
+
+  it("leaves a numeral that is part of the name alone", () => {
+    // Only a trailing one is read as a season, and only from the values a season takes.
+    expect(normalizeTitleForMatch("X")).toBe("x");
+    expect(normalizeTitleForMatch("Ergo Proxy")).toBe("ergo proxy");
+  });
+});
+
+describe("searchQueriesFor", () => {
+  it("offers the name as written first", () => {
+    expect(searchQueriesFor({ englishName: "Frieren: Beyond Journey's End" })[0]).toBe("Frieren: Beyond Journey's End");
+  });
+
+  it("strips a tag the source appended for its own catalog", () => {
+    expect(searchQueriesFor({ englishName: "Jujutsu Kaisen (TV)" })).toEqual(["Jujutsu Kaisen (TV)", "Jujutsu Kaisen"]);
+    expect(searchQueriesFor({ englishName: "Onimai: I'm Now Your Sister! [UNCENSORED]" })[1]).toBe("Onimai: I'm Now Your Sister!");
+  });
+
+  it("flattens dashes used as brackets, which stop a text search finding the show at all", () => {
+    expect(searchQueriesFor({ englishName: "Re:ZERO -Starting Life in Another World- Season 3" })).toEqual([
+      "Re:ZERO -Starting Life in Another World- Season 3",
+      "Re:ZERO Starting Life in Another World Season 3",
+      "Re:ZERO Starting Life in Another World",
+    ]);
+  });
+
+  it("counts two spellings of one query as one", () => {
+    expect(searchQueriesFor({ englishName: "Death Note" })).toEqual(["Death Note"]);
+  });
+
+  it("falls back to the other names a title carries", () => {
+    expect(searchQueriesFor({ englishName: "Frieren", originalName: "Sousou no Frieren" })).toEqual([
+      "Frieren",
+      "Sousou no Frieren",
+    ]);
+  });
+});
+
 describe("scoreCandidate", () => {
   const anime = title({ englishName: "Frieren: Beyond Journey's End", year: 2023, type: "tv" });
 
@@ -67,6 +113,20 @@ describe("scoreCandidate", () => {
     const off = scoreCandidate(anime, { externalId: 1, names: ["Frieren: Beyond Journey's End"], year: 2018, type: "tv" });
     expect(near).toBe(1);
     expect(off).toBeLessThan(near);
+  });
+
+  it("matches the same season written two different ways", () => {
+    const fourthSeason = title({ englishName: "Classroom of the Elite IV", year: null, type: null });
+    const score = scoreCandidate(fourthSeason, {
+      externalId: 5,
+      names: ["Classroom of the Elite 4th Season: Second Year, First Semester"],
+    });
+    expect(score).toBeGreaterThan(0.6);
+  });
+
+  it("still refuses a sequel offered for its own first season", () => {
+    const firstSeason = title({ englishName: "Frieren: Beyond Journey's End", year: 2023, type: "tv" });
+    expect(scoreCandidate(firstSeason, { externalId: 6, names: ["Sousou no Frieren 2nd Season"], year: 2026, type: "tv" })).toBe(0);
   });
 
   it("refuses a candidate that shares no name", () => {
