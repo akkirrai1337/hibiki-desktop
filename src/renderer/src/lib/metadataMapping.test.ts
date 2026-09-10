@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { toExternalMetadata as fromAniList, toMatchCandidate as aniListCandidate, type AniListMedia } from "@shared/anilistMapping";
 import { mapMalStatus, mapMalType, toExternalMetadata as fromMal, toMatchCandidate as malCandidate, type JikanAnime } from "@shared/malMapping";
+import {
+  mapKitsuStatus,
+  mapKitsuSubtype,
+  toExternalMetadata as fromKitsu,
+  toMatchCandidate as kitsuCandidate,
+  type KitsuAnime,
+  type KitsuIncluded,
+} from "@shared/kitsuMapping";
 
 // Both fixtures are the real fields the clients ask for, trimmed from live responses for the same
 // show (AniList media 154587 / MAL 52991) - so the two mappings can be compared against each other
@@ -149,5 +157,99 @@ describe("the two providers described the same show", () => {
     expect([a.year, a.type, a.status, a.episodeCount]).toEqual([m.year, m.type, m.status, m.episodeCount]);
     expect(a.englishName).toBe(m.englishName);
     expect(a.studios).toEqual(m.studios);
+  });
+});
+
+// Kitsu answers JSON:API, so the fields an entry points at arrive in one flat `included` array
+// shared by every result of a search - the linkage below is what says which are this title's.
+const kitsuAnime: KitsuAnime = {
+  id: "46474",
+  attributes: {
+    slug: "sousou-no-frieren",
+    synopsis: "The adventure is over but life goes on.",
+    canonicalTitle: "Sousou no Frieren",
+    titles: { en: "Frieren: Beyond Journey's End", en_jp: "Sousou no Frieren", ja_jp: "葬送のフリーレン", it_it: "Frieren: Oltre la Fine del Viaggio" },
+    abbreviatedTitles: ["Frieren at the Funeral"],
+    averageRating: "88.81",
+    userCount: 21_050,
+    startDate: "2023-09-29",
+    nextRelease: null,
+    ageRating: "PG",
+    ageRatingGuide: "Teens 13 or Older",
+    subtype: "TV",
+    status: "finished",
+    posterImage: { original: "https://kitsu/poster.jpg", large: "https://kitsu/poster-large.jpg" },
+    coverImage: { original: "https://kitsu/cover.jpg" },
+    episodeCount: 28,
+    nsfw: false,
+  },
+  relationships: {
+    categories: { data: [{ type: "categories", id: "156" }, { type: "categories", id: "10" }] },
+    mappings: { data: [{ type: "mappings", id: "332791" }, { type: "mappings", id: "321557" }] },
+  },
+};
+
+const kitsuIncluded: KitsuIncluded[] = [
+  { id: "156", type: "categories", attributes: { title: "Fantasy" } },
+  { id: "10", type: "categories", attributes: { title: "Adventure" } },
+  { id: "999", type: "categories", attributes: { title: "Someone else's category" } },
+  { id: "332791", type: "mappings", attributes: { externalSite: "myanimelist/anime", externalId: "52991" } },
+  { id: "321557", type: "mappings", attributes: { externalSite: "anilist/anime", externalId: "154587" } },
+  { id: "343007", type: "mappings", attributes: { externalSite: "myanimelist/anime", externalId: "59978" } },
+];
+
+describe("Kitsu mapping", () => {
+  const mapped = fromKitsu(kitsuAnime, kitsuIncluded);
+
+  it("publishes both other providers' ids, which is why it can match without searching them", () => {
+    expect(mapped.provider).toBe("kitsu");
+    expect(mapped.externalId).toBe(46474);
+    expect(mapped.malId).toBe(52991);
+    expect(mapped.anilistId).toBe(154587);
+  });
+
+  it("takes only the included entries this title actually points at", () => {
+    expect(mapped.genres).toEqual(["Fantasy", "Adventure"]);
+    expect(mapped.malId).not.toBe(59978);
+  });
+
+  it("carries banner art and an age rating, which no single other provider does", () => {
+    expect(mapped.bannerUrl).toBe("https://kitsu/cover.jpg");
+    expect(mapped.ageRating).toBe("PG - Teens 13 or Older");
+  });
+
+  it("converts the hundred-point score and reports how many rated it", () => {
+    expect(mapped.score).toBe(8.9);
+    expect(mapped.scoreVotes).toBe(21_050);
+  });
+
+  it("reads a next-episode time as a timestamp rather than a date string", () => {
+    const airing = fromKitsu({
+      ...kitsuAnime,
+      attributes: { ...kitsuAnime.attributes, status: "current", nextRelease: "2026-01-16T15:00:00.000Z" },
+    });
+    expect(airing.nextEpisodeAt).toBe(Date.parse("2026-01-16T15:00:00.000Z"));
+    expect(airing.status).toBe("ongoing");
+  });
+
+  it("offers every localized title to the matcher", () => {
+    const names = kitsuCandidate(kitsuAnime).names;
+    expect(names).toContain("Frieren: Oltre la Fine del Viaggio");
+    expect(names).toContain("Frieren at the Funeral");
+    expect(kitsuCandidate(kitsuAnime).year).toBe(2023);
+  });
+
+  it("maps Kitsu's own words for subtype and status", () => {
+    expect(mapKitsuSubtype("TV")).toBe("tv");
+    expect(mapKitsuSubtype("ONA")).toBe("ona");
+    expect(mapKitsuStatus("current")).toBe("ongoing");
+    expect(mapKitsuStatus("upcoming")).toBe("announced");
+    expect(mapKitsuStatus("something new")).toBeNull();
+  });
+
+  it("agrees with the other two about the facts the title page prints", () => {
+    const a = fromAniList(anilistMedia);
+    expect([mapped.year, mapped.type, mapped.status, mapped.episodeCount]).toEqual([a.year, a.type, a.status, a.episodeCount]);
+    expect(mapped.englishName).toBe(fromMal(jikanAnime).englishName);
   });
 });

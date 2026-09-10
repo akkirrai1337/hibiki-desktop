@@ -110,9 +110,9 @@ describe("metadataProviderOrder", () => {
     expect(metadataProviderOrder(preferences, "ani-liberty", false)).toEqual([]);
   });
 
-  it("puts the preferred provider first and the other behind it", () => {
-    expect(metadataProviderOrder(preferences, "anichi", true)).toEqual(["anilist", "mal"]);
-    expect(metadataProviderOrder({ ...preferences, provider: "mal" }, "anichi", true)).toEqual(["mal", "anilist"]);
+  it("puts the preferred provider first and the others behind it", () => {
+    expect(metadataProviderOrder(preferences, "anichi", true)).toEqual(["anilist", "mal", "kitsu"]);
+    expect(metadataProviderOrder({ ...preferences, provider: "kitsu" }, "anichi", true)).toEqual(["kitsu", "anilist", "mal"]);
   });
 
   it("asks only the preferred provider when fallback is off", () => {
@@ -121,7 +121,7 @@ describe("metadataProviderOrder", () => {
 
   it("follows the global switch, and a per-source override over it", () => {
     expect(metadataProviderOrder({ ...preferences, enabled: false }, "anichi", true)).toEqual([]);
-    expect(metadataProviderOrder({ ...preferences, enabled: false, overrides: { anichi: true } }, "anichi", true)).toEqual(["anilist", "mal"]);
+    expect(metadataProviderOrder({ ...preferences, enabled: false, overrides: { anichi: true } }, "anichi", true)).toEqual(["anilist", "mal", "kitsu"]);
     expect(metadataProviderOrder({ ...preferences, overrides: { anichi: false } }, "anichi", true)).toEqual([]);
   });
 });
@@ -141,6 +141,17 @@ describe("parseMetadataReference", () => {
   it("reads a bare id as the selected provider's, since the two number spaces are unrelated", () => {
     expect(parseMetadataReference("52991", "mal")).toEqual({ provider: "mal", externalId: 52991 });
     expect(parseMetadataReference(" 154587 ", "anilist")).toEqual({ provider: "anilist", externalId: 154587 });
+  });
+
+  it("reads a Kitsu link on either of its domains, by slug or by id", () => {
+    expect(parseMetadataReference("https://kitsu.app/anime/sousou-no-frieren", "mal")).toEqual({
+      provider: "kitsu",
+      slug: "sousou-no-frieren",
+    });
+    expect(parseMetadataReference("https://kitsu.io/anime/46474", "mal")).toEqual({
+      provider: "kitsu",
+      externalId: 46474,
+    });
   });
 
   it("returns nothing for a plain title, which is a search and not a reference", () => {

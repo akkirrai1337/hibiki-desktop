@@ -68,8 +68,8 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   ipcMain.handle(IPC.metadataSearch, (_e, sourceId: string, query: string) =>
     searchProviders(query, orderFor(sourceId)),
   );
-  ipcMain.handle(IPC.metadataEntry, (_e, provider: MetadataProviderId, externalId: number) =>
-    fetchEntry(provider, externalId),
+  ipcMain.handle(IPC.metadataEntry, (_e, provider: MetadataProviderId, reference: { externalId?: number; slug?: string }) =>
+    fetchEntry(provider, reference),
   );
   ipcMain.handle(
     IPC.metadataSetMatch,

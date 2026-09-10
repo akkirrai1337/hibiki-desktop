@@ -276,9 +276,9 @@ export interface ExternalMetadataPreferences {
   enabled: boolean;
   /** Per-source answers that win over `enabled` in both directions, keyed by source id. */
   overrides: Record<string, boolean>;
-  /** Which aggregator to describe titles from - a MetadataProviderId (see
-   * shared/externalMetadata.ts, which is where this is interpreted). */
-  provider: "anilist" | "mal";
+  /** Which aggregator to describe titles from (see shared/externalMetadata.ts, which is where this
+   * is interpreted). */
+  provider: import("./externalMetadata").MetadataProviderId;
   /** Whether the other provider is tried when the preferred one has nothing or cannot be reached.
    * Both APIs have outages, and a page that quietly falls back still looks right. */
   fallbackEnabled: boolean;
@@ -292,14 +292,14 @@ export interface ExternalMetadataPreferences {
  * that is exactly when someone needs the manual picker, since a missing match usually means the
  * provider's search could not answer. */
 export interface MetadataBindingState {
-  providers: Array<"anilist" | "mal">;
+  providers: Array<import("./externalMetadata").MetadataProviderId>;
   match: MetadataMatchInfo | null;
 }
 
 /** Which provider entry is describing this title, and whether the user picked it by hand (in which
  * case the matcher will never change it). */
 export interface MetadataMatchInfo {
-  provider: "anilist" | "mal";
+  provider: import("./externalMetadata").MetadataProviderId;
   externalId: number;
   manual: boolean;
   /** 0..100 for an automatic match, null for a manual one, which is certain by definition. */
@@ -310,7 +310,7 @@ export interface MetadataMatchInfo {
  * picker says so instead of showing an empty list as if nothing matched. */
 export interface MetadataSearchResult {
   results: import("./externalMetadata").ExternalMetadata[];
-  searchedProvider: "anilist" | "mal" | null;
+  searchedProvider: import("./externalMetadata").MetadataProviderId | null;
 }
 
 // A source-declared (id, display title) pair - options come from the source itself (e.g. its own

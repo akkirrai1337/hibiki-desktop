@@ -97,8 +97,8 @@ function MetadataPicker({ sourceId, animeId, onClose }: { sourceId: string; anim
   // is the state both were in when this was written.
   const reference = parseMetadataReference(query, preferredProvider);
   const pasted = useQuery({
-    queryKey: ["metadataEntry", reference?.provider, reference?.externalId],
-    queryFn: () => hibiki.metadata.entry(reference!.provider, reference!.externalId),
+    queryKey: ["metadataEntry", reference?.provider, reference?.externalId ?? reference?.slug],
+    queryFn: () => hibiki.metadata.entry(reference!.provider, { externalId: reference!.externalId, slug: reference!.slug }),
     enabled: reference != null,
   });
   const searched = useQuery({

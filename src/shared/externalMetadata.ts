@@ -11,16 +11,17 @@
 import type { AnimeStatus, AnimeTitle, AnimeType, ExternalMetadataPreferences, TitleRating } from "./types";
 
 /** The aggregators the app can describe a title from. "mal" is reached through Jikan, MAL's own
- * unofficial read-only API, which needs no key. */
-export type MetadataProviderId = "anilist" | "mal";
+ * unofficial read-only API, which needs no key; "kitsu" through Kitsu's own public JSON:API. */
+export type MetadataProviderId = "anilist" | "mal" | "kitsu";
 
-export const METADATA_PROVIDER_IDS: MetadataProviderId[] = ["anilist", "mal"];
+export const METADATA_PROVIDER_IDS: MetadataProviderId[] = ["anilist", "mal", "kitsu"];
 
 /** How each provider's score is labelled in AnimeTitle.ratings - the same shape a source uses for
  * its own ("Shikimori", "MAL", ...). */
 export const PROVIDER_RATING_SOURCE: Record<MetadataProviderId, string> = {
   anilist: "AniList",
   mal: "MAL",
+  kitsu: "Kitsu",
 };
 
 // Every label this layer may have written before. The merge clears all of them rather than only
@@ -39,6 +40,7 @@ export interface ExternalMetadata {
    * again - which matters because search is the fragile, rate-limited half of both APIs. */
   anilistId?: number | null;
   malId?: number | null;
+  kitsuId?: number | null;
   romajiName?: string | null;
   englishName?: string | null;
   nativeName?: string | null;
@@ -89,10 +91,12 @@ export function metadataProviderOrder(
   return [preferred, ...METADATA_PROVIDER_IDS.filter((id) => id !== preferred)];
 }
 
-/** One provider's entry, as identified by the user rather than by the matcher. */
+/** One provider's entry, as identified by the user rather than by the matcher. Kitsu's own web
+ * URLs name a title by slug rather than by id, so a reference carries one or the other. */
 export interface MetadataReference {
   provider: MetadataProviderId;
-  externalId: number;
+  externalId?: number;
+  slug?: string;
 }
 
 /**
@@ -113,6 +117,13 @@ export function parseMetadataReference(
   if (anilist) return { provider: "anilist", externalId: Number(anilist[1]) };
   const mal = /myanimelist\.net\/anime\/(\d+)/i.exec(text);
   if (mal) return { provider: "mal", externalId: Number(mal[1]) };
+  // kitsu.io is the old domain and kitsu.app the current one; both are still in circulation, and a
+  // link is pasted as it was found.
+  const kitsu = /kitsu\.(?:io|app)\/anime\/([A-Za-z0-9-]+)/i.exec(text);
+  if (kitsu) {
+    const id = kitsu[1];
+    return /^\d+$/.test(id) ? { provider: "kitsu", externalId: Number(id) } : { provider: "kitsu", slug: id };
+  }
   // A bare number is an id for whichever provider is currently in charge - the ids are unrelated
   // between the two, so guessing the other one would bind the title to a different show entirely.
   if (/^\d+$/.test(text)) return { provider: defaultProvider, externalId: Number(text) };
@@ -121,7 +132,9 @@ export function parseMetadataReference(
 
 /** Where to send someone who wants to look at the entry a title is bound to. */
 export function metadataEntryUrl(provider: MetadataProviderId, externalId: number): string {
-  return provider === "anilist" ? `https://anilist.co/anime/${externalId}` : `https://myanimelist.net/anime/${externalId}`;
+  if (provider === "anilist") return `https://anilist.co/anime/${externalId}`;
+  if (provider === "mal") return `https://myanimelist.net/anime/${externalId}`;
+  return `https://kitsu.app/anime/${externalId}`;
 }
 
 /**

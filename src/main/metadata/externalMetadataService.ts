@@ -7,6 +7,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import {
   MATCH_CONFIDENCE_THRESHOLD,
+  METADATA_PROVIDER_IDS,
   pickBestMatch,
   type ExternalMetadata,
   type MatchCandidate,
@@ -17,19 +18,30 @@ import { getDb } from "../db";
 import { externalMetadataMatches, externalMetadataMedia } from "../db/schema";
 import { logger } from "../logger";
 import * as anilist from "./anilistClient";
+import * as kitsu from "./kitsuClient";
 import * as mal from "./malClient";
 
 interface ProviderClient {
   fetchById(externalId: number): Promise<ExternalMetadata | null>;
   search(name: string): Promise<Array<{ candidate: MatchCandidate; media: ExternalMetadata }> | null>;
+  /** Looks a title up by its MAL id, which is the id every provider here either *is* or publishes -
+   * the common currency that lets one provider's match become another's without a search. MAL's own
+   * client needs no such method: its id is that currency. */
+  fetchByMalId?(malId: number): Promise<ExternalMetadata | null>;
+  /** Only Kitsu names titles by slug in its web URLs, so only Kitsu can resolve one. */
+  fetchBySlug?(slug: string): Promise<ExternalMetadata | null>;
 }
 
 const CLIENTS: Record<MetadataProviderId, ProviderClient> = {
-  anilist: { fetchById: anilist.fetchById, search: anilist.search },
+  anilist: { fetchById: anilist.fetchById, search: anilist.search, fetchByMalId: anilist.fetchByMalId },
   mal: { fetchById: mal.fetchById, search: mal.search },
+  kitsu: {
+    fetchById: kitsu.fetchById,
+    search: kitsu.search,
+    fetchByMalId: kitsu.fetchByMalId,
+    fetchBySlug: kitsu.fetchBySlug,
+  },
 };
-
-const OTHER_PROVIDER: Record<MetadataProviderId, MetadataProviderId> = { anilist: "mal", mal: "anilist" };
 
 // A finished show's metadata is effectively frozen; an airing one moves every week and carries the
 // next-episode countdown the title page prints.
@@ -115,6 +127,7 @@ function recordCrossMatch(sourceId: string, animeId: string, media: ExternalMeta
   const pairs: Array<[MetadataProviderId, number | null | undefined]> = [
     ["anilist", media.anilistId],
     ["mal", media.malId],
+    ["kitsu", media.kitsuId],
   ];
   for (const [provider, externalId] of pairs) {
     if (provider === media.provider || externalId == null) continue;
@@ -123,22 +136,33 @@ function recordCrossMatch(sourceId: string, animeId: string, media: ExternalMeta
   }
 }
 
+/** The MAL id this title is already known by, from any provider that has been matched to it - the
+ * common currency between all three. */
+function knownMalId(sourceId: string, animeId: string): number | null {
+  for (const provider of METADATA_PROVIDER_IDS) {
+    const match = readMatch(sourceId, animeId, provider);
+    if (!match?.externalId) continue;
+    if (provider === "mal") return match.externalId;
+    const malId = readCachedMedia(provider, match.externalId)?.media.malId;
+    if (malId != null) return malId;
+  }
+  return null;
+}
+
 /**
- * Establishes this provider's entry from what the *other* provider already knows, rather than by
+ * Establishes this provider's entry from what another provider already knows, rather than by
  * searching for the title's name again.
  *
- * Worth a request of its own because search is the fragile, heavily rate-limited half of both APIs
- * and the half that guesses; a lookup by id is neither. AniList indexes MAL ids directly, and a
- * stored AniList entry carries the MAL id that MAL itself can be asked for - so a title matched
- * through one provider can be bound to the other exactly, both ways.
+ * Worth a request of its own because search is the fragile, heavily rate-limited half of every one
+ * of these APIs, and the half that guesses; a lookup by id is neither. AniList and Kitsu both index
+ * MAL ids, and both publish one, so a title matched through any provider can be bound to the others
+ * exactly.
  */
 async function crossLookup(sourceId: string, animeId: string, provider: MetadataProviderId): Promise<ExternalMetadata | null> {
-  const other = OTHER_PROVIDER[provider];
-  const otherMatch = readMatch(sourceId, animeId, other);
-  if (!otherMatch?.externalId) return null;
-  const malId = other === "mal" ? otherMatch.externalId : readCachedMedia(other, otherMatch.externalId)?.media.malId;
+  const malId = knownMalId(sourceId, animeId);
   if (malId == null) return null;
-  return provider === "anilist" ? anilist.fetchByMalId(malId) : mal.fetchById(malId);
+  if (provider === "mal") return mal.fetchById(malId);
+  return CLIENTS[provider].fetchByMalId?.(malId) ?? null;
 }
 
 /** The provider entry bound to this title, refreshing a stale one and falling back to what is
@@ -171,7 +195,7 @@ async function metadataForProvider(anime: AnimeTitle, provider: MetadataProvider
     writeCachedMedia(crossMatched);
     writeMatch(sourceId, animeId, provider, crossMatched.externalId, null, false);
     recordCrossMatch(sourceId, animeId, crossMatched);
-    logger.debug("metadata", `${provider} bound ${sourceId}:${animeId} to ${crossMatched.externalId} via ${OTHER_PROVIDER[provider]}`);
+    logger.debug("metadata", `${provider} bound ${sourceId}:${animeId} to ${crossMatched.externalId} by cross-reference`);
     return crossMatched;
   }
 
@@ -257,12 +281,22 @@ export async function searchProviders(
   return { results: [], searchedProvider: null };
 }
 
-/** One entry by id, for the picker's paste-a-URL path - the way a title gets rebound while every
- * search endpoint is down. */
-export async function fetchEntry(provider: MetadataProviderId, externalId: number): Promise<ExternalMetadata | null> {
-  const media = await CLIENTS[provider].fetchById(externalId).catch(() => null);
+/** One entry by id or by Kitsu slug, for the picker's paste-a-URL path - the way a title gets
+ * rebound while every search endpoint is down. */
+export async function fetchEntry(
+  provider: MetadataProviderId,
+  reference: { externalId?: number; slug?: string },
+): Promise<ExternalMetadata | null> {
+  const client = CLIENTS[provider];
+  const media = await (reference.slug
+    ? (client.fetchBySlug?.(reference.slug) ?? Promise.resolve(null))
+    : reference.externalId != null
+      ? client.fetchById(reference.externalId)
+      : Promise.resolve(null)
+  ).catch(() => null);
   if (media) writeCachedMedia(media);
-  return media ?? readCachedMedia(provider, externalId)?.media ?? null;
+  if (media) return media;
+  return reference.externalId != null ? (readCachedMedia(provider, reference.externalId)?.media ?? null) : null;
 }
 
 /** Binds a title to a provider entry by hand, from the title page. Marked manual, which is what

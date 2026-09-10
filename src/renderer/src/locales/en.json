@@ -114,10 +114,10 @@
       "notMatched": "Not matched to a metadata entry",
       "change": "Change",
       "pickerTitle": "Metadata entry",
-      "pickerHint": "Search, or paste an AniList / MAL link",
+      "pickerHint": "Search, or paste an AniList / MAL / Kitsu link",
       "searchPlaceholder": "Title, link, or id",
       "searching": "Looking…",
-      "searchUnavailable": "Neither provider's search is answering right now. Paste a link instead.",
+      "searchUnavailable": "No provider's search is answering right now. Paste a link instead.",
       "noneFound": "Nothing found.",
       "reset": "Match automatically again",
       "idsRead": "A bare id is read as {{provider}}"
@@ -425,7 +425,7 @@
       "enabled": "Describe titles from an aggregator",
       "hint": "For sources that ask for it - a fuller description, poster and genres",
       "provider": "Metadata source",
-      "providerHint": "AniList carries banner art and airing times; MAL carries age ratings",
+      "providerHint": "AniList has banner art and airing times, MAL has age ratings, Kitsu has all three",
       "fallback": "Try the other one",
       "fallbackHint": "When the chosen one is unavailable or has no entry"
     },

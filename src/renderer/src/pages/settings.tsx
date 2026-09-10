@@ -654,6 +654,7 @@ export function SettingsPage() {
                       labelled by the site people know, not by Jikan, the API it is read through. */}
                   <ProviderOption active={externalMetadataProvider === "anilist"} label="AniList" onClick={() => setExternalMetadataProvider("anilist")} />
                   <ProviderOption active={externalMetadataProvider === "mal"} label="MAL" onClick={() => setExternalMetadataProvider("mal")} />
+                  <ProviderOption active={externalMetadataProvider === "kitsu"} label="Kitsu" onClick={() => setExternalMetadataProvider("kitsu")} />
                 </div>
               </div>
               <div className="flex items-center justify-between gap-3">
