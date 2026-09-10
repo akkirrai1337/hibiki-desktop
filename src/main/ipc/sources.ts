@@ -6,6 +6,7 @@ import type { ExtensionRuntime } from "../extensions/runtime";
 import {
   clearMatch,
   currentMatch,
+  describeMany,
   fetchEntry,
   getExternalMetadata,
   searchProviders,
@@ -50,6 +51,16 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   ipcMain.handle(IPC.metadataMatch, (_e, sourceId: string, animeId: string): MetadataBindingState => {
     const providers = orderFor(sourceId);
     return { providers, match: currentMatch(sourceId, animeId, providers) };
+  });
+  ipcMain.handle(IPC.metadataDescribeList, async (_e, sourceId: string, titles: AnimeTitle[]): Promise<AnimeTitle[]> => {
+    const order = orderFor(sourceId);
+    if (order.length === 0 || titles.length === 0) return titles;
+    try {
+      const described = new Map((await describeMany(titles, order)).map((entry) => [entry.animeId, entry.media]));
+      return titles.map((title) => mergeExternalMetadata(title, described.get(title.id) ?? null));
+    } catch {
+      return titles;
+    }
   });
   ipcMain.handle(IPC.metadataSearch, (_e, sourceId: string, query: string) =>
     searchProviders(query, orderFor(sourceId)),

@@ -299,6 +299,29 @@ export async function fetchEntry(
   return reference.externalId != null ? (readCachedMedia(provider, reference.externalId)?.media ?? null) : null;
 }
 
+/**
+ * Describes a whole screenful of titles, in one pass, as a background job.
+ *
+ * All at once rather than title by title on purpose: a list where some cards are named by the
+ * provider and the rest by their source reads as broken even when every entry is right, so the
+ * caller swaps the whole screen over at the end or not at all.
+ *
+ * Sequential, because both queues are serialized anyway (see requestQueue.ts) and a screen of
+ * uncached titles is a request each; running them "in parallel" would only queue them in a less
+ * predictable order. Titles already matched cost nothing but a cache read.
+ */
+export async function describeMany(
+  titles: AnimeTitle[],
+  order: MetadataProviderId[],
+): Promise<Array<{ animeId: string; media: ExternalMetadata }>> {
+  const described: Array<{ animeId: string; media: ExternalMetadata }> = [];
+  for (const title of titles) {
+    const media = await getExternalMetadata(title, order);
+    if (media) described.push({ animeId: title.id, media });
+  }
+  return described;
+}
+
 /** Binds a title to a provider entry by hand, from the title page. Marked manual, which is what
  * stops the automatic matcher from ever overwriting it again. */
 export async function setManualMatch(

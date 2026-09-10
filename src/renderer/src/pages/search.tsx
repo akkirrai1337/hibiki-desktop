@@ -6,6 +6,7 @@ import { hibiki, searchSource } from "@/lib/hibiki";
 import { animeTitle } from "@/components/AnimeCard";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { useUiStore } from "@/stores/uiStore";
+import { useDescribedTitles } from "@/lib/describedTitles";
 import { useSearchFiltersStore } from "@/stores/searchFiltersStore";
 import { toSearchRequestFilters } from "@/lib/searchFilters";
 import type { AnimeTitle } from "@shared/types";
@@ -44,6 +45,8 @@ export function SearchPage() {
     queryFn: ({ signal }) => searchSource(source!.id, { query: trimmedQuery, limit: 30, ...toSearchRequestFilters(filters, filterCatalog.data) }, signal),
   });
 
+  const items = useDescribedTitles(source?.id, results.data);
+
   return <div className="min-h-full bg-app-bg px-8 py-8 pb-12">
     {!trimmedQuery && <EmptyState text={t("search.prompt")} />}
     {trimmedQuery && <>
@@ -51,8 +54,8 @@ export function SearchPage() {
       {results.isLoading && <ResultsSkeleton />}
       {results.isError && <ErrorBanner message={(results.error as Error).message} />}
       {results.data && results.data.length === 0 && <EmptyState text={t("search.empty", { query: trimmedQuery })} />}
-      {results.data && results.data.length > 0 && <div className="grid grid-cols-[repeat(auto-fit,minmax(460px,1fr))] gap-x-4 gap-y-1">
-        {results.data.map((item) => <ResultRow key={`${item.sourceId}:${item.id}`} anime={item} />)}
+      {items.length > 0 && <div className="grid grid-cols-[repeat(auto-fit,minmax(460px,1fr))] gap-x-4 gap-y-1">
+        {items.map((item) => <ResultRow key={`${item.sourceId}:${item.id}`} anime={item} />)}
       </div>}
     </>}
   </div>;

@@ -9,6 +9,7 @@ import { useCachedTitleList } from "@/lib/cachedTitleList";
 import { AnimeCard, SkeletonCard, animeTitle } from "@/components/AnimeCard";
 import { ContinueWatchingFrameRow } from "@/components/ContinueWatchingRow";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { useDescribedTitles } from "@/lib/describedTitles";
 import { useContinueWatching } from "@/lib/continueWatching";
 import { useUiStore } from "@/stores/uiStore";
 import type { AnimeTitle } from "@shared/types";
@@ -74,22 +75,25 @@ export function CatalogPage() {
   // caches per-title lookups under query keys both pages agree on so whichever loads first does
   // the actual work.
   const { hasHistory } = useContinueWatching();
-  const heroSlides = hero.data ?? []; const isNew = !hasHistory;
+  // Both rows are described by the metadata provider once the whole row is - see
+  // useDescribedTitles for why it is all at once rather than card by card.
+  const heroSlides = useDescribedTitles(source?.id, hero.data); const isNew = !hasHistory;
+  const poolTitles = useDescribedTitles(source?.id, pool.data);
   const sourceById = useMemo(() => new Map((sources.data ?? []).map((s) => [s.id, s])), [sources.data]);
   // Re-shuffled each time a fresh pool comes in (new source, new random offset, ...) so this
   // section doesn't always show the same titles in the same order.
-  const recommended = useMemo(() => shuffled(pool.data ?? []).slice(0, RECOMMENDED_COUNT), [pool.data]);
+  const recommended = useMemo(() => shuffled(poolTitles).slice(0, RECOMMENDED_COUNT), [poolTitles]);
   // Most common genre in the current pool, with at least MIN_GENRE_MATCHES titles sharing it -
   // gives a themed row using only data we already fetched, no extra request.
   const genreSection = useMemo(() => {
-    const items = pool.data ?? [];
+    const items = poolTitles;
     const counts = new Map<string, number>();
     for (const item of items) for (const genre of item.genres ?? []) counts.set(genre, (counts.get(genre) ?? 0) + 1);
     let topGenre: string | null = null; let topCount = 0;
     for (const [genre, count] of counts) if (count > topCount) { topGenre = genre; topCount = count; }
     if (!topGenre || topCount < MIN_GENRE_MATCHES) return null;
     return { genre: topGenre, items: items.filter((item) => item.genres?.includes(topGenre!)) };
-  }, [pool.data]);
+  }, [poolTitles]);
   return <div className="min-h-full bg-app-bg pb-12">
     {sources.isLoading && <HeroSkeleton />}{sources.data?.length === 0 && <EmptySources />}{sources.isError && <ErrorBanner message={(sources.error as Error).message} className="m-8" />}
     {source && <>

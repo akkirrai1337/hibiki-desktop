@@ -115,6 +115,7 @@ export interface HibikiApi {
   metadata: {
     setPreferences(preferences: ExternalMetadataPreferences): Promise<void>;
     match(sourceId: string, animeId: string): Promise<MetadataBindingState>;
+    describeList(sourceId: string, titles: AnimeTitle[]): Promise<AnimeTitle[]>;
     search(sourceId: string, query: string): Promise<MetadataSearchResult>;
     entry(provider: MetadataProviderId, reference: { externalId?: number; slug?: string }): Promise<ExternalMetadata | null>;
     setMatch(sourceId: string, animeId: string, provider: MetadataProviderId, externalId: number): Promise<ExternalMetadata | null>;

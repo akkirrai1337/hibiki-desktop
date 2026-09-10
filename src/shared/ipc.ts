@@ -84,6 +84,9 @@ export const IPC = {
   metadataSetPreferences: "metadata:setPreferences",
   // The title page's own metadata line: what describes this title, and the manual rebind behind it.
   metadataMatch: "metadata:match",
+  // Describes a whole list screen in the background, so its cards and the title pages they lead to
+  // agree - see describeMany.
+  metadataDescribeList: "metadata:describeList",
   metadataSearch: "metadata:search",
   metadataEntry: "metadata:entry",
   metadataSetMatch: "metadata:setMatch",

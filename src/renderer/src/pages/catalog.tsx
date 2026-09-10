@@ -9,6 +9,7 @@ import { hibiki } from "@/lib/hibiki";
 import { AnimeCard } from "@/components/AnimeCard";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { useUiStore } from "@/stores/uiStore";
+import { useDescribedTitles } from "@/lib/describedTitles";
 import { usePopoverTheme } from "@/lib/usePopoverTheme";
 import type { AnimeTitle, SourceInfo } from "@shared/types";
 
@@ -75,7 +76,11 @@ export function CatalogBrowsePage() {
     queryFn: () => hibiki.sources.latest(source!.id, RECENT_LIMIT),
   });
 
-  const items = mode === "recent" ? (recent.data ?? []) : (browse.data?.pages.flat() ?? []);
+  const sourceItems = mode === "recent" ? (recent.data ?? []) : (browse.data?.pages.flat() ?? []);
+  // Described as a whole, including every page loaded so far: a newly appended page that named its
+  // titles differently from the ones above it would be the same mixed-list problem, one scroll
+  // further down.
+  const items = useDescribedTitles(source?.id, sourceItems);
   const isLoading = mode === "recent" ? recent.isLoading : browse.isLoading;
   const isError = mode === "recent" ? recent.isError : browse.isError;
   const error = mode === "recent" ? recent.error : browse.error;

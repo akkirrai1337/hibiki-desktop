@@ -159,6 +159,8 @@ const api = {
       ipcRenderer.invoke(IPC.metadataSetPreferences, preferences),
     match: (sourceId: string, animeId: string): Promise<MetadataBindingState> =>
       ipcRenderer.invoke(IPC.metadataMatch, sourceId, animeId),
+    describeList: (sourceId: string, titles: AnimeTitle[]): Promise<AnimeTitle[]> =>
+      ipcRenderer.invoke(IPC.metadataDescribeList, sourceId, titles),
     search: (sourceId: string, query: string): Promise<MetadataSearchResult> =>
       ipcRenderer.invoke(IPC.metadataSearch, sourceId, query),
     entry: (provider: MetadataProviderId, reference: { externalId?: number; slug?: string }): Promise<ExternalMetadata | null> =>
