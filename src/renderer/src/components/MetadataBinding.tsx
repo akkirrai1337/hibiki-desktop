@@ -27,28 +27,36 @@ import { cn } from "@/lib/cn";
 export function MetadataBinding({ sourceId, animeId, titleLoadedAt }: { sourceId: string; animeId: string; titleLoadedAt: number }) {
   const { t } = useTranslation();
   const [picking, setPicking] = useState(false);
+  const shown = useUiStore((s) => s.externalMetadataShowBinding);
   // Keyed on when the title itself last arrived, because the match is made *by* that fetch: asking
   // first (they run in parallel) answers "not matched" for a title that is about to be matched, and
   // the answer would otherwise stand until something else invalidated it.
   const binding = useQuery({
     queryKey: ["metadataMatch", sourceId, animeId, titleLoadedAt],
     queryFn: () => hibiki.metadata.match(sourceId, animeId),
-    enabled: titleLoadedAt > 0,
+    enabled: shown && titleLoadedAt > 0,
   });
 
-  // No provider may describe this title at all: either the source does not use external metadata,
-  // or the user turned it off. That is the only case with nothing to say - an *unmatched* title
-  // still needs its line, since a missing match usually means the provider's search could not
-  // answer and the manual picker is the way through.
-  if (!binding.data || binding.data.providers.length === 0) return null;
+  // Off by default (see the Settings row this follows). No provider may describe this title is the
+  // other reason to say nothing: either the source does not use external metadata, or the user
+  // turned it off.
+  if (!shown || !binding.data || binding.data.providers.length === 0) return null;
   const match = binding.data.match;
 
   return (
     <>
+      {/* The line is itself the way into the picker - it is the only thing on the page that names
+          the entry, so a separate "change" button beside it was a second control saying the same
+          thing. An unmatched title still gets a line, since that is exactly when a match has to be
+          set by hand. */}
       <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted">
-        <Globe className="h-3.5 w-3.5" strokeWidth={2} />
-        {match ? (
-          <>
+        <button
+          onClick={() => setPicking(true)}
+          className="inline-flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-text/[.06] hover:text-text"
+          title={t("detail.metadata.change")}
+        >
+          <Globe className="h-3.5 w-3.5" strokeWidth={2} />
+          {match ? (
             <span>
               {t("detail.metadata.describedBy", { provider: PROVIDER_RATING_SOURCE[match.provider] })}
               {match.manual
@@ -56,23 +64,23 @@ export function MetadataBinding({ sourceId, animeId, titleLoadedAt }: { sourceId
                 : match.confidence != null
                   ? ` · ${t("detail.metadata.confidence", { percent: match.confidence })}`
                   : ""}
+              {` · #${match.externalId}`}
             </span>
-            <a
-              href={metadataEntryUrl(match.provider, match.externalId)}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 font-semibold transition-colors hover:text-text"
-            >
-              #{match.externalId}
-              <ExternalLink className="h-3 w-3" strokeWidth={2.5} />
-            </a>
-          </>
-        ) : (
-          <span>{t("detail.metadata.notMatched")}</span>
-        )}
-        <button onClick={() => setPicking(true)} className="font-semibold transition-colors hover:text-text">
-          {t("detail.metadata.change")}
+          ) : (
+            <span>{t("detail.metadata.notMatched")}</span>
+          )}
         </button>
+        {match && (
+          <a
+            href={metadataEntryUrl(match.provider, match.externalId)}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center transition-colors hover:text-text"
+            title={metadataEntryUrl(match.provider, match.externalId)}
+          >
+            <ExternalLink className="h-3 w-3" strokeWidth={2.5} />
+          </a>
+        )}
       </div>
       <AnimatePresence>
         {picking && <MetadataPicker sourceId={sourceId} animeId={animeId} onClose={() => setPicking(false)} />}

@@ -53,6 +53,10 @@ interface UiState {
   // everywhere, and the reverse works too. Absent means "follow the global switch", which is why
   // this is a sparse map rather than a value per installed source.
   externalMetadataOverrides: Record<string, boolean>;
+  // Whether the title page prints the line naming which provider entry describes it. Off by
+  // default: it answers a question most people never ask, and the page reads cleaner without it.
+  // Turning it on is also what makes the manual rebind reachable, since the line is what opens it.
+  externalMetadataShowBinding: boolean;
   // Which aggregator to prefer. AniList is the default for the fuller entry: it carries banner
   // artwork and a next-episode timestamp, neither of which MAL publishes.
   externalMetadataProvider: MetadataProviderId;
@@ -75,6 +79,7 @@ interface UiState {
   setZoomFactor: (factor: number) => void;
   setAutoUpdate: (enabled: boolean) => void;
   setExternalMetadataEnabled: (enabled: boolean) => void;
+  setExternalMetadataShowBinding: (show: boolean) => void;
   setExternalMetadataProvider: (provider: MetadataProviderId) => void;
   setExternalMetadataFallback: (enabled: boolean) => void;
   /** null clears the override, handing the source back to the global switch. */
@@ -97,6 +102,7 @@ export const useUiStore = create<UiState>()(
       autoUpdate: false,
       externalMetadataEnabled: true,
       externalMetadataOverrides: {},
+      externalMetadataShowBinding: false,
       externalMetadataProvider: "anilist",
       externalMetadataFallback: true,
       setTheme: (theme) => set({ theme }),
@@ -111,6 +117,7 @@ export const useUiStore = create<UiState>()(
       setZoomFactor: (zoomFactor) => set({ zoomFactor: normalizeZoom(zoomFactor) }),
       setAutoUpdate: (autoUpdate) => set({ autoUpdate }),
       setExternalMetadataEnabled: (externalMetadataEnabled) => set({ externalMetadataEnabled }),
+      setExternalMetadataShowBinding: (externalMetadataShowBinding) => set({ externalMetadataShowBinding }),
       setExternalMetadataProvider: (externalMetadataProvider) => set({ externalMetadataProvider }),
       setExternalMetadataFallback: (externalMetadataFallback) => set({ externalMetadataFallback }),
       setExternalMetadataOverride: (sourceId, enabled) =>

@@ -554,6 +554,8 @@ export function SettingsPage() {
   const setExternalMetadataProvider = useUiStore((s) => s.setExternalMetadataProvider);
   const externalMetadataFallback = useUiStore((s) => s.externalMetadataFallback);
   const setExternalMetadataFallback = useUiStore((s) => s.setExternalMetadataFallback);
+  const externalMetadataShowBinding = useUiStore((s) => s.externalMetadataShowBinding);
+  const setExternalMetadataShowBinding = useUiStore((s) => s.setExternalMetadataShowBinding);
   return <div className="min-h-full bg-app-bg p-8">
     <div className="mx-auto max-w-xl">
       <h1 className="mb-6 text-xl font-semibold text-text">{t("nav.settings")}</h1>
@@ -663,6 +665,13 @@ export function SettingsPage() {
                   <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.externalMetadata.fallbackHint")}</p>
                 </div>
                 <Switch checked={externalMetadataFallback} onChange={setExternalMetadataFallback} />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-text">{t("settings.externalMetadata.showBinding")}</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.externalMetadata.showBindingHint")}</p>
+                </div>
+                <Switch checked={externalMetadataShowBinding} onChange={setExternalMetadataShowBinding} />
               </div>
             </div>
           )}
