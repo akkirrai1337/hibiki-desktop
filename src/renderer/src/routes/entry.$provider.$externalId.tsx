@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Radio, Search } from "lucide-react";
-import { PROVIDER_RATING_SOURCE, type ExternalMetadata, type MetadataProviderId } from "@shared/externalMetadata";
+import { metadataProviderOrder, PROVIDER_RATING_SOURCE, type ExternalMetadata, type MetadataProviderId } from "@shared/externalMetadata";
 import type { AnimeTitle, SourceInfo } from "@shared/types";
 import { hibiki } from "@/lib/hibiki";
 import { useUiStore } from "@/stores/uiStore";
@@ -29,11 +29,23 @@ function EntryRoute() {
   const activeSourceId = useUiStore((s) => s.activeSourceId);
   const sourcesQuery = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });
   const sources = sourcesQuery.data ?? [];
-  // Only sources that asked to be described by an aggregator take part: it is the same flag that
-  // decides everything else about this feature, and the sources that do not declare it (an NSFW
-  // source, a source with good metadata of its own) are exactly the ones this catalog has nothing
-  // to say about.
-  const describedSources = sources.filter((source) => source.useExternalMetadata);
+  // Only sources an aggregator is actually allowed to describe take part - the source's own flag
+  // *and* the user's answer for it, the same rule the main process applies. Checking the flag alone
+  // offered a source the user had switched this off for, and then wrote a match for it.
+  // Selected field by field, not as one object: a selector that builds a fresh object every call
+  // has no stable snapshot for React to compare, which is a re-render on every unrelated store
+  // change at best and a warning at worst.
+  const enabled = useUiStore((state) => state.externalMetadataEnabled);
+  const overrides = useUiStore((state) => state.externalMetadataOverrides);
+  const preferredProvider = useUiStore((state) => state.externalMetadataProvider);
+  const fallbackEnabled = useUiStore((state) => state.externalMetadataFallback);
+  const preferences = useMemo(
+    () => ({ enabled, overrides, provider: preferredProvider, fallbackEnabled }),
+    [enabled, overrides, preferredProvider, fallbackEnabled],
+  );
+  const describedSources = sources.filter(
+    (candidate) => metadataProviderOrder(preferences, candidate.id, candidate.useExternalMetadata === true).length > 0,
+  );
   const source = describedSources.find((candidate) => candidate.id === activeSourceId) ?? describedSources[0];
 
   const entryQuery = useQuery({
@@ -50,15 +62,23 @@ function EntryRoute() {
 
   // A resolved entry never shows this screen: it is a step on the way, not a destination, and
   // `replace` keeps it out of the back stack so leaving the title page goes back to the catalog.
-  if (source && resolution.data) {
+  //
+  // In an effect, not in the render body where this started: navigating is a side effect, React
+  // runs a component's body speculatively (twice over, in development), and a router asked to
+  // navigate from inside a render it is itself driving is a re-entrancy waiting to happen.
+  const resolvedSourceId = source?.id;
+  const resolvedAnimeId = resolution.data?.animeId;
+  useEffect(() => {
+    if (!resolvedSourceId || !resolvedAnimeId) return;
     void navigate({
       to: "/anime/$sourceId/$animeId",
-      params: { sourceId: source.id, animeId: resolution.data.animeId },
+      params: { sourceId: resolvedSourceId, animeId: resolvedAnimeId },
       replace: true,
     });
-    return <EntrySkeleton />;
-  }
+  }, [navigate, resolvedSourceId, resolvedAnimeId]);
 
+  // Still the skeleton while that effect runs, so the screen it is leaving never flashes.
+  if (resolvedSourceId && resolvedAnimeId) return <EntrySkeleton />;
   if (entryQuery.isLoading || resolution.isLoading) return <EntrySkeleton />;
   if (entryQuery.isError) return <div className="p-8"><ErrorBanner message={(entryQuery.error as Error).message} /></div>;
   if (!entry) return <div className="p-8"><ErrorBanner message={t("entry.notFound")} /></div>;

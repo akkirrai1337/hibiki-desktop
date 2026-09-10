@@ -13,7 +13,7 @@ import { HERO_ACTION_CLASS, HeroCarousel, type HeroSlide } from "@/components/He
 import { AggregatorHome } from "@/components/AggregatorHome";
 import { useContinueWatching } from "@/lib/continueWatching";
 import { useUiStore } from "@/stores/uiStore";
-import { useAggregatorBrowsing } from "@/lib/aggregatorBrowsing";
+import { useAggregatorBrowsing, useMetadataProviderKey } from "@/lib/aggregatorBrowsing";
 import type { AnimeTitle } from "@shared/types";
 
 const RECOMMENDED_COUNT = 20;
@@ -48,6 +48,7 @@ export function CatalogPage() {
   const activeSourceId = useUiStore((s) => s.activeSourceId);
   const source = sources.data?.find((s) => s.id === activeSourceId) ?? sources.data?.[0];
   const aggregatorBrowsing = useAggregatorBrowsing(source);
+  const providerKey = useMetadataProviderKey(source);
   const sortMode = source?.supportedSorts.includes("RATING") ? "RATING" : undefined;
   const hero = useCachedTitleList({
     queryKey: ["hero", source?.id],
@@ -79,8 +80,8 @@ export function CatalogPage() {
   const { hasHistory } = useContinueWatching();
   // Both rows are described by the metadata provider once the whole row is - see
   // useDescribedTitles for why it is all at once rather than card by card.
-  const { titles: heroSlides, describing: describingHero } = useDescribedTitles(source?.id, aggregatorBrowsing ? undefined : hero.data);
-  const { titles: poolTitles, describing: describingPool } = useDescribedTitles(source?.id, aggregatorBrowsing ? undefined : pool.data);
+  const { titles: heroSlides, describing: describingHero } = useDescribedTitles(source?.id, aggregatorBrowsing ? undefined : hero.data, providerKey);
+  const { titles: poolTitles, describing: describingPool } = useDescribedTitles(source?.id, aggregatorBrowsing ? undefined : pool.data, providerKey);
   const isNew = !hasHistory;
   const sourceById = useMemo(() => new Map((sources.data ?? []).map((s) => [s.id, s])), [sources.data]);
   // Re-shuffled each time a fresh pool comes in (new source, new random offset, ...) so this
@@ -103,7 +104,7 @@ export function CatalogPage() {
       {/* The aggregator's home replaces everything except continue-watching, which is about
           episodes already started - the source's own titles, with the source's own progress. */}
       {aggregatorBrowsing ? (
-        <AggregatorHome sourceId={source.id}>
+        <AggregatorHome source={source}>
           {!isNew && (
             <div className="space-y-12 px-8 pt-10">
               <Section title={t("catalog.continueWatching")} action={t("catalog.viewHistory")} to="/history">

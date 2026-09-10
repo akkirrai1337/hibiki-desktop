@@ -3,7 +3,9 @@ import { Link } from "@tanstack/react-router";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { PROVIDER_RATING_SOURCE, type ExternalCatalogRequest, type ExternalMetadata } from "@shared/externalMetadata";
+import type { SourceInfo } from "@shared/types";
 import { hibiki } from "@/lib/hibiki";
+import { useMetadataProviderKey } from "@/lib/aggregatorBrowsing";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { PosterCard, PosterGrid, PosterGridSkeleton } from "@/components/AnimeCard";
 import { cn } from "@/lib/cn";
@@ -23,13 +25,17 @@ const MODES: Mode[] = ["trending", "season", "popular"];
  * doing one per visible card would spend two dozen requests to answer a question about the one card
  * that gets clicked.
  */
-export function AggregatorCatalog({ sourceId }: { sourceId: string }) {
+export function AggregatorCatalog({ source }: { source: SourceInfo }) {
   const { t } = useTranslation();
+  const sourceId = source.id;
+  // Part of every key below: which provider answers is decided in the main process, so a change of
+  // provider has to read as a different question here or the old provider's cards stay put.
+  const providerKey = useMetadataProviderKey(source);
   const [mode, setMode] = useState<Mode>("trending");
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const catalog = useInfiniteQuery({
-    queryKey: ["aggregatorCatalog", sourceId, mode],
+    queryKey: ["aggregatorCatalog", sourceId, providerKey, mode],
     initialPageParam: 0,
     queryFn: ({ pageParam }) => hibiki.metadata.browse(sourceId, { mode, offset: pageParam, limit: PAGE_SIZE }),
     // An empty page means the end - which for "trending" is after the first one, since that is a

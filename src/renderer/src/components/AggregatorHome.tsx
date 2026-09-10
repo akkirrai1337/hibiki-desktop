@@ -3,7 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Play } from "lucide-react";
 import { seasonOf, type ExternalMetadata } from "@shared/externalMetadata";
+import type { SourceInfo } from "@shared/types";
 import { hibiki } from "@/lib/hibiki";
+import { useMetadataProviderKey } from "@/lib/aggregatorBrowsing";
 import { HERO_ACTION_CLASS, HeroCarousel, type HeroSlide } from "@/components/Hero";
 import { EntryCard } from "@/components/AggregatorCatalog";
 import { PosterGrid, PosterGridSkeleton } from "@/components/AnimeCard";
@@ -20,16 +22,18 @@ const ROW_LIMIT = 12;
  * before its catalog rows. Every aggregator card leads to the resolution screen rather than to a
  * source title page.
  */
-export function AggregatorHome({ sourceId, children }: { sourceId: string; children?: React.ReactNode }) {
+export function AggregatorHome({ source, children }: { source: SourceInfo; children?: React.ReactNode }) {
   const { t } = useTranslation();
   const season = seasonOf(new Date());
+  const sourceId = source.id;
+  const providerKey = useMetadataProviderKey(source);
 
   const trending = useQuery({
-    queryKey: ["aggregatorHome", sourceId, "trending"],
+    queryKey: ["aggregatorHome", sourceId, providerKey, "trending"],
     queryFn: () => hibiki.metadata.browse(sourceId, { mode: "trending", offset: 0, limit: HERO_SLIDE_COUNT + ROW_LIMIT }),
   });
   const seasonal = useQuery({
-    queryKey: ["aggregatorHome", sourceId, "season"],
+    queryKey: ["aggregatorHome", sourceId, providerKey, "season"],
     queryFn: () => hibiki.metadata.browse(sourceId, { mode: "season", offset: 0, limit: ROW_LIMIT }),
   });
 

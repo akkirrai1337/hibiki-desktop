@@ -121,6 +121,19 @@ export function seasonOf(date: Date): { season: AnimeSeason; year: number } {
  * worth calling a trending endpoint, so it stays a description provider. */
 export const CATALOG_PROVIDERS: MetadataProviderId[] = ["kitsu", "anilist"];
 
+/**
+ * Whether an aggregator-driven catalog has anything to ask, given the providers allowed for a
+ * source.
+ *
+ * Not the same question as "may this source be described", which is what metadataProviderOrder
+ * answers: MAL can describe a title but cannot be browsed, so preferring it with the fallback
+ * turned off leaves an order that describes fine and browses not at all. Screens that ask the wrong
+ * one of these turned themselves on and then reported that no provider answered.
+ */
+export function canBrowseProviders(order: MetadataProviderId[]): boolean {
+  return order.some((provider) => CATALOG_PROVIDERS.includes(provider));
+}
+
 /** One provider's entry, as identified by the user rather than by the matcher. Kitsu's own web
  * URLs name a title by slug rather than by id, so a reference carries one or the other. */
 export interface MetadataReference {

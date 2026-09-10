@@ -11,7 +11,7 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { useUiStore } from "@/stores/uiStore";
 import { useDescribedTitles } from "@/lib/describedTitles";
 import { AggregatorCatalog } from "@/components/AggregatorCatalog";
-import { useAggregatorBrowsing } from "@/lib/aggregatorBrowsing";
+import { useAggregatorBrowsing, useMetadataProviderKey } from "@/lib/aggregatorBrowsing";
 import { usePopoverTheme } from "@/lib/usePopoverTheme";
 import type { AnimeTitle, SourceInfo } from "@shared/types";
 
@@ -56,6 +56,7 @@ export function CatalogBrowsePage() {
   const activeSourceId = useUiStore((s) => s.activeSourceId);
   const source = sources.data?.find((s) => s.id === activeSourceId) ?? sources.data?.[0];
   const aggregatorBrowsing = useAggregatorBrowsing(source);
+  const providerKey = useMetadataProviderKey(source);
   const setRequestedMode = (next: SortMode) => navigate({ to: "/catalog", search: { sort: next }, replace: true });
 
   const modes = useMemo(() => (source ? availableSortModes(source) : []), [source]);
@@ -86,6 +87,7 @@ export function CatalogBrowsePage() {
   const { titles: items, describing, refreshing: describingMore } = useDescribedTitles(
     source?.id,
     aggregatorBrowsing ? undefined : sourceItems,
+    providerKey,
   );
   const isLoading = mode === "recent" ? recent.isLoading : browse.isLoading;
   const isError = mode === "recent" ? recent.isError : browse.isError;
@@ -118,7 +120,7 @@ export function CatalogBrowsePage() {
   if (aggregatorBrowsing && source) {
     return (
       <div className="min-h-full bg-app-bg px-8 py-8 pb-16">
-        <AggregatorCatalog sourceId={source.id} />
+        <AggregatorCatalog source={source} />
       </div>
     );
   }

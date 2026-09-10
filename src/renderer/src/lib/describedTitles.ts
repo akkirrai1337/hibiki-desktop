@@ -27,12 +27,16 @@ import { hibiki } from "@/lib/hibiki";
 export function useDescribedTitles(
   sourceId: string | null | undefined,
   titles: AnimeTitle[] | undefined,
+  /** Which providers may answer, from useMetadataProviderKey - a change of provider is a change of
+   * answer, and without it in the key the previous provider's names and posters stayed on screen
+   * until the cache went stale. */
+  providerKey = "",
 ): { titles: AnimeTitle[]; describing: boolean; refreshing: boolean } {
   const ids = (titles ?? []).map((title) => title.id).join(",");
   const described = useQuery({
     // Keyed by the exact set of titles on screen: a different slice is a different question, and
     // reusing a previous answer would put the wrong names on the new cards.
-    queryKey: ["describedTitles", sourceId, ids],
+    queryKey: ["describedTitles", sourceId, providerKey, ids],
     queryFn: () => hibiki.metadata.describeList(sourceId!, titles!),
     enabled: !!sourceId && (titles?.length ?? 0) > 0,
     // The answer is as durable as the cache behind it, and re-asking on every remount would put
@@ -44,9 +48,9 @@ export function useDescribedTitles(
     // list, and holding the old answer left the previous query's results sitting under the new
     // query's heading.
     placeholderData: (previous, previousQuery) => {
-      const key = previousQuery?.queryKey as [string, string | null | undefined, string] | undefined;
-      if (!key || key[1] !== sourceId) return undefined;
-      return ids.startsWith(key[2]) ? previous : undefined;
+      const key = previousQuery?.queryKey as [string, string | null | undefined, string, string] | undefined;
+      if (!key || key[1] !== sourceId || key[2] !== providerKey) return undefined;
+      return ids.startsWith(key[3]) ? previous : undefined;
     },
   });
   // Raised the moment the pass starts and dropped when it finishes, with no grace period: the

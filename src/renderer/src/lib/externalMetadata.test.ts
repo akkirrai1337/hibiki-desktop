@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AnimeTitle } from "@shared/types";
 import {
+  canBrowseProviders,
   mergeExternalMetadata,
   metadataProviderOrder,
   metadataEntryUrl,
@@ -185,6 +186,18 @@ describe("metadataProviderOrder", () => {
     expect(metadataProviderOrder({ ...preferences, enabled: false }, "anichi", true)).toEqual([]);
     expect(metadataProviderOrder({ ...preferences, enabled: false, overrides: { anichi: true } }, "anichi", true)).toEqual(["anilist", "mal", "kitsu"]);
     expect(metadataProviderOrder({ ...preferences, overrides: { anichi: false } }, "anichi", true)).toEqual([]);
+  });
+});
+
+describe("canBrowseProviders", () => {
+  it("answers a different question than 'may this be described'", () => {
+    // MAL describes a title fine and has no catalog worth the name, so an order it alone occupies
+    // is one that describes and cannot browse - the case that used to turn a screen on and then
+    // report that nobody answered.
+    expect(canBrowseProviders(["mal"])).toBe(false);
+    expect(canBrowseProviders(["mal", "kitsu"])).toBe(true);
+    expect(canBrowseProviders(["anilist"])).toBe(true);
+    expect(canBrowseProviders([])).toBe(false);
   });
 });
 

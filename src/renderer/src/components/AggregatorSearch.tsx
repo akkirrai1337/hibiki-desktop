@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { PROVIDER_RATING_SOURCE } from "@shared/externalMetadata";
+import type { SourceInfo } from "@shared/types";
 import { hibiki } from "@/lib/hibiki";
+import { useMetadataProviderKey } from "@/lib/aggregatorBrowsing";
 import { EntryCard } from "@/components/AggregatorCatalog";
 import { PosterGrid, PosterGridSkeleton } from "@/components/AnimeCard";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -10,10 +12,12 @@ import { ErrorBanner } from "@/components/ErrorBanner";
  * Search results from the metadata aggregator. Like the aggregator catalog, these cards are kept
  * provider-native and resolve against the active source only after one is opened.
  */
-export function AggregatorSearch({ sourceId, query }: { sourceId: string; query: string }) {
+export function AggregatorSearch({ source, query }: { source: SourceInfo; query: string }) {
   const { t } = useTranslation();
+  const sourceId = source.id;
+  const providerKey = useMetadataProviderKey(source);
   const search = useQuery({
-    queryKey: ["aggregatorSearch", sourceId, query],
+    queryKey: ["aggregatorSearch", sourceId, providerKey, query],
     queryFn: () => hibiki.metadata.search(sourceId, query),
     enabled: query.length > 0,
   });

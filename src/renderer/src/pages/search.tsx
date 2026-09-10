@@ -10,7 +10,7 @@ import { useUiStore } from "@/stores/uiStore";
 import { useDescribedTitles } from "@/lib/describedTitles";
 import { useSearchFiltersStore } from "@/stores/searchFiltersStore";
 import { toSearchRequestFilters } from "@/lib/searchFilters";
-import { useAggregatorBrowsing } from "@/lib/aggregatorBrowsing";
+import { useAggregatorBrowsing, useMetadataProviderKey } from "@/lib/aggregatorBrowsing";
 
 function parseSearchSearch(search: Record<string, unknown>): { q: string; sourceOnly: boolean } {
   return {
@@ -37,6 +37,7 @@ export function SearchPage() {
   const activeSourceId = useUiStore((s) => s.activeSourceId);
   const source = sources.data?.find((s) => s.id === activeSourceId) ?? sources.data?.[0];
   const aggregatorAvailable = useAggregatorBrowsing(source);
+  const providerKey = useMetadataProviderKey(source);
   const useAggregator = aggregatorAvailable && !sourceOnly;
 
   const filters = useSearchFiltersStore((s) => s.filters);
@@ -54,7 +55,7 @@ export function SearchPage() {
 
   // A source search already in React Query's cache stays in `data` after its query is disabled.
   // Do not let switching back to the aggregator describe that now-hidden list in the background.
-  const { titles: items, describing } = useDescribedTitles(source?.id, useAggregator ? undefined : results.data);
+  const { titles: items, describing } = useDescribedTitles(source?.id, useAggregator ? undefined : results.data, providerKey);
 
   return <div className="min-h-full bg-app-bg px-8 py-8 pb-12">
     {!trimmedQuery && <EmptyState text={t("search.prompt")} />}
@@ -78,7 +79,7 @@ export function SearchPage() {
         )}
       </div>
       {useAggregator && source ? (
-        <AggregatorSearch sourceId={source.id} query={trimmedQuery} />
+        <AggregatorSearch source={source} query={trimmedQuery} />
       ) : (
         <>
           {(results.isLoading || describing) && <ResultsSkeleton />}
