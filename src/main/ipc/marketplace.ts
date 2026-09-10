@@ -6,6 +6,7 @@ import { getDb } from "../db";
 import { sourceRepositories } from "../db/schema";
 import { DEFAULT_REPOSITORY_URL, fetchExtensionFiles, fetchRepositoryIndex, fetchRepositoryResult, isHttpsRepositoryUrl } from "../marketplace";
 import type { ExtensionRuntime } from "../extensions/runtime";
+import { logger } from "../logger";
 
 // A source's resolverDependencies (e.g. YummyAnime needs "kodik", "sibnet", ...) are hidden
 // dependencies, not something the user installs themselves - mirrors the Android app, which
@@ -32,6 +33,56 @@ async function installResolverDependencies(dependencyIds: string[], originUrl: s
       console.warn(`Failed to install resolver "${id}":`, error);
     }
   }
+}
+
+/** Retry resolver downloads that previously failed during a best-effort source install.
+ *
+ * Source and resolver files are intentionally separate, so an interrupted resolver download can
+ * leave a usable source installed but make every EMBED link fall through to the iframe. Android
+ * refreshes downloaded resolvers as its registry changes; Desktop used to make only the original
+ * install attempt and then preserve the broken state forever. Normal upgrades remain user-driven.
+ */
+export async function repairMissingResolverDependencies(runtime: ExtensionRuntime): Promise<boolean> {
+  const installed = runtime.installedResolverVersions();
+  const requirementsByOrigin = new Map<string, Set<string>>();
+
+  for (const requirement of runtime.installedResolverRequirements()) {
+    const resolverIds = requirementsByOrigin.get(requirement.originUrl) ?? new Set<string>();
+    for (const id of requirement.resolverIds) {
+      if (installed[id] === undefined) resolverIds.add(id);
+    }
+    if (resolverIds.size > 0) requirementsByOrigin.set(requirement.originUrl, resolverIds);
+  }
+
+  let changed = false;
+  for (const [originUrl, resolverIds] of requirementsByOrigin) {
+    let index: MarketplaceExtension[];
+    try {
+      index = await fetchRepositoryIndex(originUrl);
+    } catch (error) {
+      logger.warn("resolvers", `startup repair could not fetch repository: ${error instanceof Error ? error.message : String(error)}`);
+      continue;
+    }
+
+    const resolversById = new Map(index.filter((entry) => entry.type === "player-resolver").map((entry) => [entry.id, entry]));
+    for (const id of resolverIds) {
+      const extension = resolversById.get(id);
+      if (!extension) {
+        logger.warn("resolvers", `startup repair could not find dependency ${id}`);
+        continue;
+      }
+      try {
+        const { manifestJson, jsPayload } = await fetchExtensionFiles(extension);
+        runtime.installResolver(id, manifestJson, jsPayload);
+        installed[id] = extension.version;
+        changed = true;
+        logger.info("resolvers", `restored missing dependency ${id}`);
+      } catch (error) {
+        logger.warn("resolvers", `startup repair failed for ${id}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  }
+  return changed;
 }
 
 function listRepositoryUrls(): string[] {

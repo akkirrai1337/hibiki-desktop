@@ -47,11 +47,11 @@ export function isExtensionUpdateAvailable(
   if (isExtensionVersionNewer(extension.version, installed)) return true;
 
   return (extension.resolverDependencies ?? []).some((resolverId) => {
-    // Not installed at all is not an update: resolver installs are best-effort, and a source whose
-    // resolver never landed shouldn't sit permanently marked as updatable.
-    const installedResolver = installedResolverVersions[resolverId];
-    if (installedResolver === undefined) return false;
     const available = allExtensions.find((e) => e.id === resolverId && e.type === "player-resolver");
-    return available !== undefined && isExtensionVersionNewer(available.version, installedResolver);
+    if (available === undefined) return false;
+    const installedResolver = installedResolverVersions[resolverId];
+    // Re-running the source install repairs an interrupted best-effort dependency download.
+    // Hiding this state used to leave the source permanently stuck on iframe playback.
+    return installedResolver === undefined || isExtensionVersionNewer(available.version, installedResolver);
   });
 }

@@ -52,7 +52,14 @@ interface Manifest {
   useExternalMetadata?: boolean;
   supportedSorts?: string[];
   supportedFilters?: string[];
+  resolverDependencies?: string[];
   settings?: SourceInfo["settings"];
+}
+
+export interface InstalledResolverRequirement {
+  sourceId: string;
+  originUrl: string;
+  resolverIds: string[];
 }
 
 interface LoadedExtension {
@@ -739,6 +746,20 @@ export class ExtensionRuntime {
    * still has to know their versions to notice that one of them has an update waiting. */
   installedResolverVersions(): Record<string, string> {
     return Object.fromEntries([...this.resolvers].map(([id, manifest]) => [id, manifest.version]));
+  }
+
+  /** The resolver dependencies that installed sources expect to be present. Keeping this on the
+   * runtime means startup repair reads the installed manifest (the actual source contract), not a
+   * possibly stale marketplace index entry. */
+  installedResolverRequirements(): InstalledResolverRequirement[] {
+    const requirements: InstalledResolverRequirement[] = [];
+    for (const [sourceId, { manifest }] of this.extensions) {
+      const resolverIds = [...new Set((manifest.resolverDependencies ?? []).filter(Boolean))];
+      if (resolverIds.length === 0) continue;
+      const originUrl = this.originOf(sourceId);
+      if (originUrl) requirements.push({ sourceId, originUrl, resolverIds });
+    }
+    return requirements;
   }
 
   private originPath(id: string): string {

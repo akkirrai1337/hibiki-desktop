@@ -45,21 +45,19 @@ describe("isExtensionUpdateAvailable", () => {
     expect(isExtensionUpdateAvailable(SOURCE, installed, { kodik: "1.0.2" }, all)).toBe(true);
   });
 
-  it("stays quiet when the source and every resolver are current", () => {
+  it("stays quiet when the source and every available resolver are current", () => {
     const installed = new Map([["yummy-anime", "1.2.0"]]);
     expect(isExtensionUpdateAvailable(SOURCE, installed, { kodik: "1.0.3" }, all)).toBe(false);
   });
 
-  it("ignores a resolver that isn't installed at all", () => {
-    // Resolver installs are best-effort (a failed one just falls back to the embed player), so a
-    // source whose resolver never landed must not sit permanently marked as updatable.
+  it("offers repair when a resolver dependency is missing", () => {
     const installed = new Map([["yummy-anime", "1.2.0"]]);
-    expect(isExtensionUpdateAvailable(SOURCE, installed, {}, all)).toBe(false);
+    expect(isExtensionUpdateAvailable(SOURCE, installed, {}, all)).toBe(true);
   });
 
   it("ignores a resolver the repository no longer publishes", () => {
     const installed = new Map([["yummy-anime", "1.2.0"]]);
-    expect(isExtensionUpdateAvailable(SOURCE, installed, { sibnet: "1.0.0" }, all)).toBe(false);
+    expect(isExtensionUpdateAvailable(SOURCE, installed, { kodik: "1.0.3", sibnet: "1.0.0" }, all)).toBe(false);
   });
 
   it("does not match a resolver id against a source of the same id", () => {

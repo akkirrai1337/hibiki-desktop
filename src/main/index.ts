@@ -11,7 +11,7 @@ import { destroyIdleResolverWindows } from "./extensions/browserResolveHost";
 import { registerSourceHandlers } from "./ipc/sources";
 import { registerLibraryHandlers } from "./ipc/library";
 import { registerXpEventHandlers } from "./ipc/xpEvents";
-import { registerMarketplaceHandlers } from "./ipc/marketplace";
+import { registerMarketplaceHandlers, repairMissingResolverDependencies } from "./ipc/marketplace";
 import { DOWNLOADS_DIR, registerDownloadHandlers } from "./ipc/downloads";
 import { installPlayerHeaderInjector, registerPlayerHeaders, unregisterPlayerHeaders } from "./playerHeaders";
 import { resolveFinalStreamUrl } from "./playerStream";
@@ -308,6 +308,14 @@ app.whenReady().then(() => {
   });
 
   createWindow();
+  // A transient failure while installing a hidden resolver must not permanently turn a source
+  // such as Anichi back into iframe playback. Repair in the background to preserve first paint;
+  // installResolver() reloads the runtime, so the next playback request sees the direct extractor.
+  void repairMissingResolverDependencies(runtime)
+    .then((changed) => {
+      if (changed && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(IPC.sourcesChanged);
+    })
+    .catch((error) => logger.warn("resolvers", `startup repair failed: ${error instanceof Error ? error.message : String(error)}`));
   // After the window exists, not before: warming the worker pool parses a bundle on new threads,
   // and doing that while Chromium is still bringing up the renderer only slows down first paint.
   // Source queries arriving before warm-up finishes still take the normal fresh-worker path.
