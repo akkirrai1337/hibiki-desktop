@@ -27,6 +27,7 @@ import type {
   SourceReview,
   UpdateDownloadProgress,
   WatchProgress,
+  ExternalMetadataPreferences,
   XpEvent,
 } from "@shared/types";
 
@@ -148,6 +149,11 @@ const api = {
     // beats a renderer-side <canvas> capture) - null if the window's gone or the rect is empty.
     captureFrame: (rect: { x: number; y: number; width: number; height: number }): Promise<string | null> =>
       ipcRenderer.invoke(IPC.playerCaptureFrame, rect),
+  },
+  metadata: {
+    // Mirrors the renderer's persisted preference into the main process, which owns the merge.
+    setPreferences: (preferences: ExternalMetadataPreferences): Promise<void> =>
+      ipcRenderer.invoke(IPC.metadataSetPreferences, preferences),
   },
   discord: {
     setEnabled: (enabled: boolean): Promise<void> => ipcRenderer.invoke(IPC.discordSetEnabled, enabled),

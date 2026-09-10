@@ -266,6 +266,24 @@ export interface SourceInfo {
   settings: SourceSetting[];
 }
 
+/**
+ * The user's half of the external-metadata decision (the source's half is its manifest's
+ * `useExternalMetadata`). Lives in the renderer's persisted UI store and is mirrored into main,
+ * which is where the merge happens.
+ */
+export interface ExternalMetadataPreferences {
+  /** The global switch, on by default. */
+  enabled: boolean;
+  /** Per-source answers that win over `enabled` in both directions, keyed by source id. */
+  overrides: Record<string, boolean>;
+  /** Which aggregator to describe titles from - a MetadataProviderId (see
+   * shared/externalMetadata.ts, which is where this is interpreted). */
+  provider: "anilist" | "mal";
+  /** Whether the other provider is tried when the preferred one has nothing or cannot be reached.
+   * Both APIs have outages, and a page that quietly falls back still looks right. */
+  fallbackEnabled: boolean;
+}
+
 // A source-declared (id, display title) pair - options come from the source itself (e.g. its own
 // genre list), never hardcoded on the client. Mirrors Android's SearchFilterOption.
 export interface SearchFilterOption {

@@ -1,10 +1,35 @@
 import { ipcMain } from "electron";
 import { IPC } from "@shared/ipc";
-import type { AnimeTitle, PlaybackGroup, PlayerLink, PlayerLinkPreference } from "@shared/types";
+import type { AnimeTitle, ExternalMetadataPreferences, PlaybackGroup, PlayerLink, PlayerLinkPreference } from "@shared/types";
+import { mergeExternalMetadata } from "@shared/externalMetadata";
 import type { ExtensionRuntime } from "../extensions/runtime";
+import { getExternalMetadata } from "../metadata/externalMetadataService";
+import { providerOrderFor, setExternalMetadataPreferences } from "../metadata/metadataPreferences";
 import { cacheAnime, cachePlaybackGroups, cacheSourceQuery, getCachedAnime, getCachedAnimeMany, getCachedPlaybackGroups, getCachedPlaybackGroupsEntry, getCachedSourceQuery } from "../offlineCache";
 
 export function registerSourceHandlers(runtime: ExtensionRuntime): void {
+  /**
+   * Replaces a title's descriptive fields with a metadata provider's, when both the source asked
+   * for that in its manifest and the user has not turned it off.
+   *
+   * Failures are swallowed on purpose: a provider being unreachable, rate-limiting us, or simply
+   * not carrying this title must cost the better description and nothing else - the source's own
+   * page still renders exactly as it did before this existed.
+   */
+  const describe = async (sourceId: string, anime: AnimeTitle): Promise<AnimeTitle> => {
+    const source = runtime.list().find((info) => info.id === sourceId);
+    const order = providerOrderFor(sourceId, source?.useExternalMetadata === true);
+    if (order.length === 0) return anime;
+    try {
+      return mergeExternalMetadata(anime, await getExternalMetadata(anime, order));
+    } catch {
+      return anime;
+    }
+  };
+
+  ipcMain.handle(IPC.metadataSetPreferences, (_e, preferences: ExternalMetadataPreferences) =>
+    setExternalMetadataPreferences(preferences),
+  );
   ipcMain.handle(IPC.sourcesList, () => runtime.list());
   ipcMain.handle(IPC.sourceSearch, (_e, sourceId: string, request, requestId?: string) => runtime.search(sourceId, request, requestId));
   ipcMain.on(IPC.sourceSearchCancel, (_e, requestId: string) => runtime.cancelRequest(requestId));
@@ -16,7 +41,9 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   // nothing cached still fails exactly as before.
   ipcMain.handle(IPC.sourceGetById, async (_e, sourceId: string, id: string): Promise<AnimeTitle> => {
     try {
-      const anime = await runtime.getById(sourceId, id);
+      const anime = await describe(sourceId, await runtime.getById(sourceId, id));
+      // Cached *after* the merge, so an offline visit shows the same page the online one did
+      // rather than falling back to the source's own thinner description.
       cacheAnime(sourceId, id, anime);
       return anime;
     } catch (err) {

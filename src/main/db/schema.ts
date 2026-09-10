@@ -138,34 +138,44 @@ export const cachedSourceQueries = sqliteTable("cached_source_queries", {
   cachedAt: integer("cached_at").notNull(),
 });
 
-// Which AniList entry a given source title was matched to. Separate from anilistMedia below on
-// purpose: the same AniList entry backs the same show on every installed source, and a match is
-// expensive to establish (a search request plus scoring) while the media it points at is merely a
-// cache line that can be thrown away and refetched.
+// Which entry of which metadata provider a given source title was matched to. Separate from
+// externalMetadataMedia below on purpose: a match is expensive to establish (a search request plus
+// scoring) and worth keeping, while the entry it points at is merely a cache line that can be
+// thrown away and refetched.
+//
+// Keyed by provider as well as by title: someone who switches from AniList to MAL keeps both
+// matches, and switching back costs no searches at all.
 //
 // `manual` marks a binding the user fixed by hand on the title page. Automatic re-matching must
 // never overwrite one - a wrong match on a sequel or a recap is exactly the case the user reached
 // for that button to fix, and silently undoing it on the next refresh would make the button
 // useless.
-export const anilistMatches = sqliteTable(
-  "anilist_matches",
+export const externalMetadataMatches = sqliteTable(
+  "external_metadata_matches",
   {
     sourceId: text("source_id").notNull(),
     animeId: text("anime_id").notNull(),
+    provider: text("provider").notNull(), // a MetadataProviderId - "anilist" | "mal"
     // Null records a *failed* search, which is worth remembering: without it every visit to a
-    // title AniList simply does not have re-runs the same fruitless search.
-    anilistId: integer("anilist_id"),
+    // title the provider simply does not have re-runs the same fruitless search. Only written when
+    // a search actually completed, never when the request failed.
+    externalId: integer("external_id"),
     confidence: integer("confidence"), // 0..100, null for manual bindings
     manual: integer("manual", { mode: "boolean" }).notNull().default(false),
     matchedAt: integer("matched_at").notNull(),
   },
-  (t) => [primaryKey({ columns: [t.sourceId, t.animeId] })],
+  (t) => [primaryKey({ columns: [t.sourceId, t.animeId, t.provider] })],
 );
 
-// The AniList entries themselves, keyed by their own id and shared across sources - two sources
-// carrying the same show cost one cached row and one request, not two.
-export const anilistMedia = sqliteTable("anilist_media", {
-  anilistId: integer("anilist_id").primaryKey(),
-  mediaJson: text("media_json").notNull(), // an ExternalMetadata (see shared/anilistMetadata.ts)
-  cachedAt: integer("cached_at").notNull(),
-});
+// The provider entries themselves, keyed by provider and that provider's own id, and shared across
+// sources - two sources carrying the same show cost one cached row and one request, not two.
+export const externalMetadataMedia = sqliteTable(
+  "external_metadata_media",
+  {
+    provider: text("provider").notNull(),
+    externalId: integer("external_id").notNull(),
+    mediaJson: text("media_json").notNull(), // an ExternalMetadata (see shared/externalMetadata.ts)
+    cachedAt: integer("cached_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.provider, t.externalId] })],
+);

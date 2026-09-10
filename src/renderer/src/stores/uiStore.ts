@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { normalizeZoom } from "@/lib/zoom";
+import type { MetadataProviderId } from "@shared/externalMetadata";
 
 interface UiState {
   theme: "light" | "dark";
@@ -41,6 +42,24 @@ interface UiState {
   // is the number a person would recognise, and because the ladder in lib/zoom.ts is defined in
   // those terms.
   zoomFactor: number;
+  // Whether a source that declares `useExternalMetadata` gets its titles described from a metadata
+  // aggregator instead of from its own pages (see shared/externalMetadata.ts). Defaults to on: a
+  // source only asks for this because its own descriptions are the weak half of what it returns, so
+  // the better page is the right default and Settings is where it is turned *off*. Mirrored into
+  // the main process, which owns the merge, the same way discordRpcEnabled is.
+  externalMetadataEnabled: boolean;
+  // Per-source answers that win over externalMetadataEnabled in both directions - someone whose
+  // favourite source has good Russian descriptions can keep them without turning AniList off
+  // everywhere, and the reverse works too. Absent means "follow the global switch", which is why
+  // this is a sparse map rather than a value per installed source.
+  externalMetadataOverrides: Record<string, boolean>;
+  // Which aggregator to prefer. AniList is the default for the fuller entry: it carries banner
+  // artwork and a next-episode timestamp, neither of which MAL publishes.
+  externalMetadataProvider: MetadataProviderId;
+  // Whether the other aggregator is tried when the preferred one has nothing or cannot be reached.
+  // On by default, and not a decorative setting: AniList disabled its public API outright while
+  // this was written, and a page that quietly fell back to MAL still looked right.
+  externalMetadataFallback: boolean;
   // Off by default: downloading a hundred-plus megabytes and restarting the app is not something
   // to start doing to someone who never asked for it. Settings is where you turn it *on*.
   autoUpdate: boolean;
@@ -55,6 +74,11 @@ interface UiState {
   setCatalogAutoLoad: (enabled: boolean) => void;
   setZoomFactor: (factor: number) => void;
   setAutoUpdate: (enabled: boolean) => void;
+  setExternalMetadataEnabled: (enabled: boolean) => void;
+  setExternalMetadataProvider: (provider: MetadataProviderId) => void;
+  setExternalMetadataFallback: (enabled: boolean) => void;
+  /** null clears the override, handing the source back to the global switch. */
+  setExternalMetadataOverride: (sourceId: string, enabled: boolean | null) => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -71,6 +95,10 @@ export const useUiStore = create<UiState>()(
       catalogAutoLoad: true,
       zoomFactor: 1,
       autoUpdate: false,
+      externalMetadataEnabled: true,
+      externalMetadataOverrides: {},
+      externalMetadataProvider: "anilist",
+      externalMetadataFallback: true,
       setTheme: (theme) => set({ theme }),
       setActiveSourceId: (activeSourceId) => set({ activeSourceId }),
       setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
@@ -82,6 +110,16 @@ export const useUiStore = create<UiState>()(
       setCatalogAutoLoad: (catalogAutoLoad) => set({ catalogAutoLoad }),
       setZoomFactor: (zoomFactor) => set({ zoomFactor: normalizeZoom(zoomFactor) }),
       setAutoUpdate: (autoUpdate) => set({ autoUpdate }),
+      setExternalMetadataEnabled: (externalMetadataEnabled) => set({ externalMetadataEnabled }),
+      setExternalMetadataProvider: (externalMetadataProvider) => set({ externalMetadataProvider }),
+      setExternalMetadataFallback: (externalMetadataFallback) => set({ externalMetadataFallback }),
+      setExternalMetadataOverride: (sourceId, enabled) =>
+        set((state) => {
+          const overrides = { ...state.externalMetadataOverrides };
+          if (enabled === null) delete overrides[sourceId];
+          else overrides[sourceId] = enabled;
+          return { externalMetadataOverrides: overrides };
+        }),
     }),
     { name: "hibiki-ui" },
   ),

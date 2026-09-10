@@ -79,6 +79,10 @@ export const IPC = {
   playerResolveStreamUrl: "player:resolveStreamUrl",
   playerCaptureFrame: "player:captureFrame",
 
+  // AniList metadata: the renderer mirrors its persisted preference into main, which owns the
+  // merge (see metadata/metadataPreferences.ts).
+  metadataSetPreferences: "metadata:setPreferences",
+
   discordSetEnabled: "discord:setEnabled",
   discordUpdatePresence: "discord:updatePresence",
   discordSetIdlePresence: "discord:setIdlePresence",

@@ -85,6 +85,22 @@ function RootLayout() {
   // persisted setting, both on boot and whenever the Settings toggle changes.
   const discordRpcEnabled = useUiStore((s) => s.discordRpcEnabled);
   useEffect(() => { hibiki.discord.setEnabled(discordRpcEnabled); }, [discordRpcEnabled]);
+  // Same arrangement for the external-metadata settings: the main process does the merging, this
+  // only keeps it told what the persisted settings say.
+  const externalMetadataEnabled = useUiStore((s) => s.externalMetadataEnabled);
+  const externalMetadataOverrides = useUiStore((s) => s.externalMetadataOverrides);
+  const externalMetadataProvider = useUiStore((s) => s.externalMetadataProvider);
+  const externalMetadataFallback = useUiStore((s) => s.externalMetadataFallback);
+  useEffect(() => {
+    void hibiki.metadata
+      .setPreferences({
+        enabled: externalMetadataEnabled,
+        overrides: externalMetadataOverrides,
+        provider: externalMetadataProvider,
+        fallbackEnabled: externalMetadataFallback,
+      })
+      .catch(() => undefined);
+  }, [externalMetadataEnabled, externalMetadataOverrides, externalMetadataProvider, externalMetadataFallback]);
   // The player replaces the sidebar/nav chrome with the video itself, but keeps the same TitleBar
   // — it already matches the app's look and gives back/forward navigation + a home for the OS
   // window buttons, so there's no need for the player to grow its own copy of that backdrop.

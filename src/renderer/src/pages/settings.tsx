@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowDownToLine, Ban, Check, CheckCircle2, ChevronDown, ChevronUp, DatabaseBackup, FileText, FolderOpen, Info, Languages, MessageCircle, Moon, Palette, RefreshCw, RotateCcw, ScrollText, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
+import { ArrowDownToLine, Ban, Check, CheckCircle2, ChevronDown, ChevronUp, DatabaseBackup, FileText, FolderOpen, Globe, Info, Languages, MessageCircle, Moon, Palette, RefreshCw, RotateCcw, ScrollText, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Switch } from "@/components/Switch";
 import { SUPPORTED_LOCALES, setLocale } from "@/lib/i18n";
@@ -149,6 +149,23 @@ function ThemeOption({ active, icon: Icon, label, onClick }: { active: boolean; 
       )}
     >
       <Icon className="h-3.5 w-3.5" strokeWidth={2} />
+      {label}
+    </button>
+  );
+}
+
+// Same segmented control as the theme picker above, minus the icon - a provider has no glyph that
+// would read as anything but decoration.
+function ProviderOption({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors",
+        active ? "bg-accent text-accent-fg" : "text-muted hover:text-text",
+      )}
+    >
       {label}
     </button>
   );
@@ -531,6 +548,12 @@ export function SettingsPage() {
   const setBackgroundTheme = useUiStore((s) => s.setBackgroundTheme);
   const catalogAutoLoad = useUiStore((s) => s.catalogAutoLoad);
   const setCatalogAutoLoad = useUiStore((s) => s.setCatalogAutoLoad);
+  const externalMetadataEnabled = useUiStore((s) => s.externalMetadataEnabled);
+  const setExternalMetadataEnabled = useUiStore((s) => s.setExternalMetadataEnabled);
+  const externalMetadataProvider = useUiStore((s) => s.externalMetadataProvider);
+  const setExternalMetadataProvider = useUiStore((s) => s.setExternalMetadataProvider);
+  const externalMetadataFallback = useUiStore((s) => s.externalMetadataFallback);
+  const setExternalMetadataFallback = useUiStore((s) => s.setExternalMetadataFallback);
   return <div className="min-h-full bg-app-bg p-8">
     <div className="mx-auto max-w-xl">
       <h1 className="mb-6 text-xl font-semibold text-text">{t("nav.settings")}</h1>
@@ -607,6 +630,41 @@ export function SettingsPage() {
             </div>
             <Switch checked={discordRpcEnabled} onChange={setDiscordRpcEnabled} />
           </div>
+        </SettingsRow>
+
+        <SettingsRow icon={<Globe className="h-[18px] w-[18px]" strokeWidth={2} />}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-text">{t("settings.externalMetadata.enabled")}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.externalMetadata.hint")}</p>
+            </div>
+            <Switch checked={externalMetadataEnabled} onChange={setExternalMetadataEnabled} />
+          </div>
+          {/* Which aggregator, and whether to try the other one, only mean anything while the
+              switch above is on - so they appear with it rather than sitting greyed out. */}
+          {externalMetadataEnabled && (
+            <div className="mt-4 flex flex-col gap-4 border-t border-border pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-text">{t("settings.externalMetadata.provider")}</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.externalMetadata.providerHint")}</p>
+                </div>
+                <div className="flex shrink-0 rounded-lg bg-text/[.05] p-0.5">
+                  {/* Provider names are proper nouns, so they are not translated - and MAL is
+                      labelled by the site people know, not by Jikan, the API it is read through. */}
+                  <ProviderOption active={externalMetadataProvider === "anilist"} label="AniList" onClick={() => setExternalMetadataProvider("anilist")} />
+                  <ProviderOption active={externalMetadataProvider === "mal"} label="MAL" onClick={() => setExternalMetadataProvider("mal")} />
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-text">{t("settings.externalMetadata.fallback")}</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.externalMetadata.fallbackHint")}</p>
+                </div>
+                <Switch checked={externalMetadataFallback} onChange={setExternalMetadataFallback} />
+              </div>
+            </div>
+          )}
         </SettingsRow>
 
         <SettingsRow icon={<ArrowDownToLine className="h-[18px] w-[18px]" strokeWidth={2} />}>

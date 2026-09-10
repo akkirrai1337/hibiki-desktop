@@ -9,6 +9,7 @@ import type {
   DownloadedEpisode,
   DownloadProgress,
   DownloadRequest,
+  ExternalMetadataPreferences,
   InstalledVersions,
   LibraryEntry,
   MarketplaceExtension,
@@ -107,6 +108,9 @@ export interface HibikiApi {
     unregisterHeaders(sessionId: string): Promise<void>;
     resolveStreamUrl(url: string, headers: Record<string, string> | null | undefined): Promise<string>;
     captureFrame(rect: { x: number; y: number; width: number; height: number }): Promise<string | null>;
+  };
+  metadata: {
+    setPreferences(preferences: ExternalMetadataPreferences): Promise<void>;
   };
   discord: {
     setEnabled(enabled: boolean): Promise<void>;

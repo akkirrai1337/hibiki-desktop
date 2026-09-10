@@ -16,6 +16,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
+import { useUiStore } from "@/stores/uiStore";
 import { Switch } from "@/components/Switch";
 import { cn } from "@/lib/cn";
 import { planSize, planSync, type SyncDirection } from "@/lib/librarySync";
@@ -69,7 +70,10 @@ export function SourceSettingsDialog({ source, onClose }: { source: SourceInfo; 
           </div>
 
           <div className="flex flex-col gap-5 overflow-y-auto p-5">
-            {rows.length === 0 && <p className="py-4 text-center text-sm text-muted">{t("sources.settingsEmpty")}</p>}
+            {source.useExternalMetadata && <ExternalMetadataRow sourceId={source.id} />}
+            {rows.length === 0 && !source.useExternalMetadata && (
+              <p className="py-4 text-center text-sm text-muted">{t("sources.settingsEmpty")}</p>
+            )}
             {rows.map((row) =>
               row.type === "ACCOUNT" ? (
                 <AccountRow key={row.key} sourceId={source.id} row={row} />
@@ -84,6 +88,37 @@ export function SourceSettingsDialog({ source, onClose }: { source: SourceInfo; 
       </div>
     </>,
     document.body,
+  );
+}
+
+/**
+ * The one row here that is the app's own setting rather than the source's: whether this source's
+ * titles are described from a metadata aggregator (see shared/externalMetadata.ts). Only shown for
+ * a source whose manifest asks for it, since for anything else the answer could only ever be "no".
+ *
+ * Which aggregator is a global choice, not a per-source one, and lives in Settings - a source's
+ * page has no reason to be described from a different site than its neighbour's.
+ *
+ * Writes a per-source override, so flipping it here does not disturb the global switch in Settings
+ * or any other source - and the switch starts wherever the global one currently stands.
+ */
+function ExternalMetadataRow({ sourceId }: { sourceId: string }) {
+  const { t } = useTranslation();
+  const globalEnabled = useUiStore((s) => s.externalMetadataEnabled);
+  const override = useUiStore((s) => s.externalMetadataOverrides[sourceId]);
+  const setOverride = useUiStore((s) => s.setExternalMetadataOverride);
+  const enabled = override ?? globalEnabled;
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-text">{t("sources.externalMetadata.title")}</p>
+        <p className="mt-0.5 text-xs text-muted">{t("sources.externalMetadata.hint")}</p>
+      </div>
+      <Switch
+        checked={enabled}
+        onChange={(next) => setOverride(sourceId, next === globalEnabled ? null : next)}
+      />
+    </div>
   );
 }
 
