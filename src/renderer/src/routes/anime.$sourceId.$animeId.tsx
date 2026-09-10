@@ -23,7 +23,7 @@ import { ASSIGNABLE_LIBRARY_CATEGORIES, LIBRARY_CATEGORY_ICONS, LIBRARY_CATEGORY
 import { STATUS_ID_ALIASES } from "@/lib/searchFilters";
 import { episodeFavoriteKey, useEpisodeFavoritesStore } from "@/stores/episodeFavoritesStore";
 import { useUiStore } from "@/stores/uiStore";
-import type { AnimeTitle, DownloadProgress, Episode, LibraryCategory, PlaybackGroup, PlayerLink, RelatedAnimeTitle, WatchProgress } from "@shared/types";
+import type { AnimeTitle, DownloadProgress, Episode, LibraryCategory, PlaybackGroup, PlayerLink, RelatedAnimeTitle, SourceInfo, WatchProgress } from "@shared/types";
 
 // How long a terminal download state (done/error/unsupported) stays shown on the chip before it
 // reverts back to the normal play affordance - long enough to actually read, short enough not to
@@ -341,7 +341,7 @@ function AnimeDetailPage() {
     {(animeQuery.isLoading || describing) && <DetailSkeleton />}
     {animeQuery.isError && <div className="p-8"><ErrorBanner message={(animeQuery.error as Error).message} /></div>}
     {anime && !describing && <>
-      <Overview anime={anime} libraryCategory={libraryEntry?.category ?? null} onSetLibraryCategory={setLibraryCategory} onRemoveFromLibrary={removeFromLibrary} continueTarget={continueTarget ? { groupId: activeGroup!.id, episodeId: continueTarget.episode.id, label: continueTarget.label } : undefined} sourceId={sourceId} animeId={animeId} related={related} titleLoadedAt={animeQuery.dataUpdatedAt} />
+      <Overview anime={anime} libraryCategory={libraryEntry?.category ?? null} onSetLibraryCategory={setLibraryCategory} onRemoveFromLibrary={removeFromLibrary} continueTarget={continueTarget ? { groupId: activeGroup!.id, episodeId: continueTarget.episode.id, label: continueTarget.label } : undefined} sourceId={sourceId} animeId={animeId} source={source} related={related} titleLoadedAt={animeQuery.dataUpdatedAt} />
       <div className="px-8 pt-6">
         <h2 className="mb-4 text-xl font-bold tracking-[-.02em] text-text">{t("detail.episodes")}</h2>
         {groupsQuery.isLoading && <div className="text-sm text-muted">{t("detail.loadingEpisodes")}</div>}
@@ -618,7 +618,7 @@ function EpisodeChip({
   );
 }
 
-function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLibrary, continueTarget, sourceId, animeId, related, titleLoadedAt }: { anime: AnimeTitle; libraryCategory: LibraryCategory | null; onSetLibraryCategory: (category: LibraryCategory) => void; onRemoveFromLibrary: () => void; continueTarget?: { groupId: string; episodeId: string; label: string }; sourceId: string; animeId: string; related: RelatedAnimeTitle[]; titleLoadedAt: number }) {
+function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLibrary, continueTarget, sourceId, animeId, source, related, titleLoadedAt }: { anime: AnimeTitle; libraryCategory: LibraryCategory | null; onSetLibraryCategory: (category: LibraryCategory) => void; onRemoveFromLibrary: () => void; continueTarget?: { groupId: string; episodeId: string; label: string }; sourceId: string; animeId: string; source: SourceInfo | undefined; related: RelatedAnimeTitle[]; titleLoadedAt: number }) {
   const { t, i18n } = useTranslation();
   const title = animeTitle(anime);
   const [descriptionOpen, setDescriptionOpen] = useState(false);
@@ -683,7 +683,7 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
           {continueTarget ? <Link to="/watch/$sourceId/$animeId/$groupId/$episodeId" params={{ sourceId, animeId, groupId: continueTarget.groupId, episodeId: continueTarget.episodeId }} className="inline-flex items-center gap-2 rounded-xl bg-text px-5 py-3 text-sm font-bold text-bg transition-transform hover:scale-[1.02] active:scale-[0.98]"><Play className="h-4 w-4 fill-current" strokeWidth={0} />{continueTarget.label}</Link>
             : <span className="inline-flex items-center gap-2 rounded-xl bg-text/10 px-5 py-3 text-sm font-bold text-muted">{t("detail.noEpisodes")}</span>}
           <LibraryButton category={libraryCategory} onSelect={onSetLibraryCategory} onRemove={onRemoveFromLibrary} />
-          <RatingButton sourceId={sourceId} animeId={animeId} />
+          {source && <RatingButton source={source} animeId={animeId} />}
           {/* Only when the source supplied one: an id here is whatever that site identifies titles
               by, which is often not what its URLs use, so nothing outside the source can build this.
               Opens in the browser - see the window-open handler in main/index.ts. */}

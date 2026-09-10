@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
 import { Star } from "lucide-react";
-import type { RatingSyncResult } from "@shared/types";
+import type { RatingSyncResult, SourceInfo } from "@shared/types";
 import { hibiki } from "@/lib/hibiki";
 import { cn } from "@/lib/cn";
 
@@ -19,9 +19,15 @@ const MAX_RATING = 10;
  * to file it under a status, and dropping it from a list is not a reason to forget the score. It is
  * pushed to the source's account when that source syncs libraries and the title's place in them is
  * known - main decides that, since only it can see both sides (see ipc/library.ts).
+ *
+ * Shown only where a score has somewhere to go. A rating rides on the same syncLibraryEntry call a
+ * library does, so LIBRARY_SYNC is what says a source can carry one; without it the button offered
+ * a number that would never leave this machine, which is not what pressing a star looks like it
+ * means. A source that gains the capability gets the button with no change here.
  */
-export function RatingButton({ sourceId, animeId }: { sourceId: string; animeId: string }) {
+export function RatingButton({ source, animeId }: { source: SourceInfo; animeId: string }) {
   const { t } = useTranslation();
+  const sourceId = source.id;
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [hovered, setHovered] = useState<number | null>(null);
@@ -47,6 +53,10 @@ export function RatingButton({ sourceId, animeId }: { sourceId: string; animeId:
     onSuccess: (result, value) => setSync(value == null ? null : result),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["rating", sourceId, animeId] }),
   });
+
+  // After the hooks, not before: the rules of hooks do not care that this component is about to
+  // render nothing.
+  if (!source.capabilities.includes("LIBRARY_SYNC")) return null;
 
   const current = rating.data ?? null;
   // What the panel is currently talking about: the star under the pointer, or the saved score.
