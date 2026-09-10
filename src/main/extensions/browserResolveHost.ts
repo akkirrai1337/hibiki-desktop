@@ -39,6 +39,29 @@ const PLAYLIST_HEAD_BYTES = 2048;
 // An HLS master playlist lists every rendition, which is exactly what the resolver script spends
 // its time collecting one quality at a time. Finding one means the collecting is already done.
 
+// Transport framing, per-request scope, and conditional/caching headers: all of them describe the
+// one request they were captured from, not the stream. Cookies are dropped here and re-added below
+// from the media CDN's own jar rather than the embed page's.
+const REPLAYABLE_HEADER_DENYLIST = new Set([
+  "host",
+  "connection",
+  "content-length",
+  "accept-encoding",
+  "range",
+  "if-range",
+  "if-none-match",
+  "if-modified-since",
+  "if-match",
+  "if-unmodified-since",
+  "cookie",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+  "priority",
+  "content-type",
+]);
+
 // Not every matching request is real content - a JS video-player library (Plyr, Video.js, ...)
 // commonly has its <video> element point at a tiny placeholder/poster asset on its own CDN before
 // the page ever loads whatever it's actually meant to play, and that placeholder request matches
@@ -708,13 +731,13 @@ async function buildResult(
     const streamCookies = await win.webContents.session.cookies.get({ url: capture.url });
     const capturedHeaders = capturedRequestHeaders.get(capture.url);
     const headers = { ...baseHeaders, ...(capturedHeaders ?? {}) };
-    // Chromium owns these transport/framing headers. Replaying stale values from the hidden
-    // request can make its otherwise-correct identity invalid when hls.js asks for a different
-    // playlist or segment body.
+    // Chromium owns these headers, and a captured value is about the *hidden* request rather than
+    // the one being made. That matters more than it looks: registered headers are spread over every
+    // later request to the same origin (see playerHeaders.ts), so one captured `Range: bytes=0-`
+    // from a progressive MP4 would pin every segment and every seek to the start of the file, and a
+    // captured validator would answer 304 to a request that needs a body.
     for (const name of Object.keys(headers)) {
-      if (["host", "connection", "content-length", "accept-encoding"].includes(name.toLowerCase())) {
-        delete headers[name];
-      }
+      if (REPLAYABLE_HEADER_DENYLIST.has(name.toLowerCase())) delete headers[name];
     }
     if (streamCookies.length > 0) headers.Cookie = streamCookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
     logger.debug(

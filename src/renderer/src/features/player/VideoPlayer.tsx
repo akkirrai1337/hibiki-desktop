@@ -554,7 +554,10 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         // there the whole while (seen live: Kodik listing a 720p that resolves to a file its CDN
         // does not have, answered with a 500 every time). Only the statuses that actually mean
         // "ask again later" are worth the wait; everything else goes straight to the fallback.
-        const RETRYABLE_MANIFEST_STATUSES = new Set([408, 429, 502, 503, 504]);
+        // 500 and Cloudflare's own 52x are in here for the same reason 502/503/504 are: a CDN edge
+        // hiccuping on one segment is not the server saying this stream is gone, and dropping the
+        // whole link over it would move a playable stream to the back of the fallback list.
+        const RETRYABLE_MANIFEST_STATUSES = new Set([408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 527]);
         // recoverMediaError() was uncapped - a stream with a genuinely broken fragment (not a
         // transient decode hiccup) just re-throws the same fatal MEDIA_ERROR immediately after
         // every recovery attempt, forever: error → recover → same error → recover → ... which
