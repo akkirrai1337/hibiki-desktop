@@ -29,6 +29,13 @@ const PERSISTED_PAGES: Record<string, React.LazyExoticComponent<React.ComponentT
   "/search": lazy(() => import("@/pages/search").then((module) => ({ default: module.SearchPage }))),
 };
 
+// A lazy page has no DOM of its own until its chunk arrives. Keep the same page background in
+// place for that brief interval so the app-wide theme gradient never flashes through before the
+// page's `bg-app-bg` root mounts.
+function PageShellFallback() {
+  return <div className="min-h-full bg-app-bg" aria-busy="true" />;
+}
+
 // Development StrictMode intentionally remounts effects once. This is a real account write, not
 // a disposable subscription, so keep it once-per-renderer-session in both dev and production.
 let activityPingStarted = false;
@@ -210,7 +217,7 @@ function RootLayout() {
               isActive ? "flex-1" : "hidden",
             )}
           >
-            <Suspense fallback={null}><Page /></Suspense>
+            <Suspense fallback={<PageShellFallback />}><Page /></Suspense>
           </div>;
         })}
         {/* Param routes (anime details, the player) aren't persisted above - a fresh mount every
