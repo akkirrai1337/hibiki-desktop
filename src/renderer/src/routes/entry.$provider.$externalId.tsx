@@ -235,7 +235,7 @@ function ManualPick({ source, entry }: { source: SourceInfo; entry: ExternalMeta
 function EntrySkeleton() {
   return (
     <div className="min-h-full animate-pulse bg-app-bg px-8 py-8">
-      <div className="mx-auto flex max-w-3xl gap-6">
+      <div className="flex gap-6">
         <div className="aspect-[2/3] w-36 shrink-0 rounded-2xl bg-text/[.06]" />
         <div className="flex-1 pt-1">
           <div className="h-8 w-2/3 rounded bg-text/[.08]" />
