@@ -126,7 +126,6 @@
     "comments": {
       "title": "Коментарі",
       "empty": "Коментарів поки немає.",
-      "signInHint": "Увійдіть в акаунт джерела, щоб залишити коментар:",
       "placeholder": "Написати коментар…",
       "replyPlaceholder": "Написати відповідь…",
       "post": "Надіслати",
@@ -346,7 +345,11 @@
     "syncConfirmPull": "Видалити та продовжити",
     "syncBack": "Назад",
     "syncProgress": "{{done}} з {{total}}",
-    "syncCancel": "Зупинити"
+    "syncCancel": "Зупинити",
+    "signInPrompt": {
+      "title": "Потрібен вхід в акаунт",
+      "body": "Для цієї дії потрібно увійти в акаунт джерела «{{source}}»."
+    }
   },
   "achievements": {
     "unlockedToast": "Досягнення відкрито"

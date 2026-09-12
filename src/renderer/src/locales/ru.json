@@ -126,7 +126,6 @@
     "comments": {
       "title": "Комментарии",
       "empty": "Комментариев пока нет.",
-      "signInHint": "Войдите в аккаунт источника, чтобы оставить комментарий:",
       "placeholder": "Написать комментарий…",
       "replyPlaceholder": "Написать ответ…",
       "post": "Отправить",
@@ -346,7 +345,11 @@
     "syncConfirmPull": "Удалить и продолжить",
     "syncBack": "Назад",
     "syncProgress": "{{done}} из {{total}}",
-    "syncCancel": "Остановить"
+    "syncCancel": "Остановить",
+    "signInPrompt": {
+      "title": "Нужен вход в аккаунт",
+      "body": "Для этого действия нужно войти в аккаунт источника «{{source}}»."
+    }
   },
   "achievements": {
     "unlockedToast": "Достижение открыто"

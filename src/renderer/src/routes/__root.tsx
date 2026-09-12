@@ -13,6 +13,7 @@ import { installGlobalErrorLogging } from "@/lib/log";
 import { useAppZoom } from "@/lib/useAppZoom";
 import { cn } from "@/lib/cn";
 import { Onboarding } from "@/features/onboarding/Onboarding";
+import { SignInPromptProvider } from "@/components/SignInPrompt";
 
 // Every static (paramless) route's own route component is a no-op (see index.tsx) - its real
 // content is one of these, kept alive here instead once first visited (see `visited` below). Lazy
@@ -42,7 +43,20 @@ let activityPingStarted = false;
 
 export const Route = createRootRoute({ component: RootLayout });
 
+/**
+ * Wrapped here rather than inside the layout below because the layout returns early three separate
+ * ways (onboarding, the player, the normal chrome) and the prompt has to outlive all of them: the
+ * detail page and the player alike can refuse an action that needs a source account.
+ */
 function RootLayout() {
+  return (
+    <SignInPromptProvider>
+      <RootLayoutContent />
+    </SignInPromptProvider>
+  );
+}
+
+function RootLayoutContent() {
   const theme = useUiStore((s) => s.theme);
   // useLayoutEffect (not useEffect) - a passive effect only runs after the browser has already
   // painted the frame, which left one extra frame where the page was still showing the old theme;

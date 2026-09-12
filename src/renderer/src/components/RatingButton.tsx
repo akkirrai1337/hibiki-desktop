@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Star } from "lucide-react";
 import type { RatingSyncResult, SourceInfo } from "@shared/types";
 import { hibiki } from "@/lib/hibiki";
+import { useSignInPrompt } from "@/components/SignInPrompt";
 import { cn } from "@/lib/cn";
 
 // Every source here scores out of ten, and so does every aggregator once its own scale is
@@ -29,6 +30,7 @@ export function RatingButton({ source, animeId }: { source: SourceInfo; animeId:
   const { t } = useTranslation();
   const sourceId = source.id;
   const queryClient = useQueryClient();
+  const promptSignIn = useSignInPrompt();
   const [open, setOpen] = useState(false);
   const [hovered, setHovered] = useState<number | null>(null);
 
@@ -130,13 +132,25 @@ export function RatingButton({ source, animeId }: { source: SourceInfo; animeId:
               </div>
 
               <div className="mt-2 flex items-center justify-between gap-4 border-t border-border pt-2">
-                <span className="px-1 text-[11px] text-muted">
-                  {current == null
-                    ? t("detail.rating.notRated")
-                    : sync && !sync.synced
-                      ? t(`detail.rating.localOnly.${sync.reason ?? "failed"}`)
-                      : t("detail.rating.yours", { rating: current })}
-                </span>
+                {/* The signed-out case is the one with something to do about it, so it is the one
+                    that is pressable: the same note as before, leading to the source's sign-in.
+                    "unsupported" and "failed" are not the viewer's to fix, and stay plain text. */}
+                {current != null && sync && !sync.synced && sync.reason === "signed-out" ? (
+                  <button
+                    onClick={() => promptSignIn(source)}
+                    className="rounded-lg px-1 py-0.5 text-left text-[11px] font-semibold text-accent-text transition-colors hover:bg-text/[.06]"
+                  >
+                    {t("detail.rating.localOnly.signed-out")}
+                  </button>
+                ) : (
+                  <span className="px-1 text-[11px] text-muted">
+                    {current == null
+                      ? t("detail.rating.notRated")
+                      : sync && !sync.synced
+                        ? t(`detail.rating.localOnly.${sync.reason ?? "failed"}`)
+                        : t("detail.rating.yours", { rating: current })}
+                  </span>
+                )}
                 {current != null && (
                   <button
                     onClick={() => save.mutate(null)}

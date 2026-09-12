@@ -126,7 +126,6 @@
     "comments": {
       "title": "Comments",
       "empty": "No comments yet.",
-      "signInHint": "Sign in to this source to leave a comment:",
       "placeholder": "Write a comment…",
       "replyPlaceholder": "Write a reply…",
       "post": "Post",
@@ -346,7 +345,11 @@
     "syncConfirmPull": "Remove them and continue",
     "syncBack": "Back",
     "syncProgress": "{{done}} of {{total}}",
-    "syncCancel": "Stop"
+    "syncCancel": "Stop",
+    "signInPrompt": {
+      "title": "Sign-in required",
+      "body": "This action needs an account on {{source}}."
+    }
   },
   "achievements": {
     "unlockedToast": "Achievement unlocked"

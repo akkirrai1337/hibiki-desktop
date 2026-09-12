@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { CornerDownRight, MessageSquare, Send, ThumbsDown, ThumbsUp, UserRound } from "lucide-react";
@@ -7,6 +6,7 @@ import type { SourceComment, SourceInfo } from "@shared/types";
 import { hibiki } from "@/lib/hibiki";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { splitMentions } from "@/lib/commentText";
+import { useSignInPrompt } from "@/components/SignInPrompt";
 import { cn } from "@/lib/cn";
 
 /**
@@ -18,6 +18,10 @@ import { cn } from "@/lib/cn";
  *
  * Reading needs no account and posting does, which is the source's rule, not this component's: it
  * asks for an account only where one is required, so a signed-out visitor still gets the thread.
+ *
+ * Nothing here is hidden or disabled for want of one. A signed-out visitor sees the same box and the
+ * same buttons, and pressing them asks for the account (see SignInPrompt) - a comment field that is
+ * simply absent, and vote buttons that are simply dead, both read as the feature being broken.
  */
 export function CommentsSection({ source, animeId }: { source: SourceInfo; animeId: string }) {
   const { t } = useTranslation();
@@ -45,6 +49,9 @@ export function CommentsSection({ source, animeId }: { source: SourceInfo; anime
 
   if (!hasComments) return null;
 
+  // A source with comments but no account of its own has nobody to sign in as: there is nothing to
+  // prompt for, so its actions go straight through and it answers for them itself.
+  const signedIn = !!account.data || !source.capabilities.includes("ACCOUNT");
   const comments = thread.data?.pages.flat() ?? [];
 
   return (
@@ -54,18 +61,7 @@ export function CommentsSection({ source, animeId }: { source: SourceInfo; anime
         {t("detail.comments.title")}
       </h2>
 
-      {account.data ? (
-        <Composer sourceId={sourceId} animeId={animeId} />
-      ) : (
-        source.capabilities.includes("ACCOUNT") && (
-          <p className="mb-6 text-sm text-muted">
-            {t("detail.comments.signInHint")}{" "}
-            <Link to="/sources" className="font-semibold text-accent-text hover:underline">
-              {t("nav.sources")}
-            </Link>
-          </p>
-        )
-      )}
+      <Composer source={source} animeId={animeId} signedIn={signedIn} />
 
       {thread.isError && <ErrorBanner message={(thread.error as Error).message} />}
       {thread.isPending && <CommentsSkeleton />}
@@ -75,7 +71,7 @@ export function CommentsSection({ source, animeId }: { source: SourceInfo; anime
 
       <div className="flex flex-col gap-5">
         {comments.map((comment) => (
-          <Comment key={comment.id} comment={comment} sourceId={sourceId} animeId={animeId} canReply={!!account.data} />
+          <Comment key={comment.id} comment={comment} source={source} animeId={animeId} signedIn={signedIn} />
         ))}
       </div>
 
@@ -94,18 +90,20 @@ export function CommentsSection({ source, animeId }: { source: SourceInfo; anime
 
 function Comment({
   comment,
-  sourceId,
+  source,
   animeId,
-  canReply,
+  signedIn,
   isReply = false,
 }: {
   comment: SourceComment;
-  sourceId: string;
+  source: SourceInfo;
   animeId: string;
-  canReply: boolean;
+  signedIn: boolean;
   isReply?: boolean;
 }) {
   const { t, i18n } = useTranslation();
+  const sourceId = source.id;
+  const promptSignIn = useSignInPrompt();
   const [repliesOpen, setRepliesOpen] = useState(false);
   const [replying, setReplying] = useState(false);
 
@@ -133,16 +131,16 @@ function Comment({
         </p>
 
         <div className="mt-1.5 flex items-center gap-4">
-          <Votes sourceId={sourceId} animeId={animeId} comment={comment} canVote={canReply} />
-          {canReply && (
+          <Votes source={source} animeId={animeId} comment={comment} signedIn={signedIn} />
+          {
             <button
-              onClick={() => setReplying((open) => !open)}
+              onClick={() => (signedIn ? setReplying((open) => !open) : promptSignIn(source))}
               className="inline-flex items-center gap-1 text-xs font-semibold text-muted transition-colors hover:text-text"
             >
               <CornerDownRight className="h-3 w-3" strokeWidth={2.5} />
               {t("detail.comments.reply")}
             </button>
-          )}
+          }
           {(comment.replyCount ?? 0) > 0 && (
             <button
               onClick={() => setRepliesOpen((open) => !open)}
@@ -157,8 +155,9 @@ function Comment({
 
         {replying && (
           <Composer
-            sourceId={sourceId}
+            source={source}
             animeId={animeId}
+            signedIn={signedIn}
             parentId={comment.id}
             compact
             onPosted={() => {
@@ -173,7 +172,7 @@ function Comment({
             {replies.isPending && <p className="text-xs text-muted">{t("detail.comments.loading")}</p>}
             {replies.isError && <ErrorBanner message={(replies.error as Error).message} />}
             {(replies.data ?? []).map((reply) => (
-              <Comment key={reply.id} comment={reply} sourceId={sourceId} animeId={animeId} canReply={canReply} isReply />
+              <Comment key={reply.id} comment={reply} source={source} animeId={animeId} signedIn={signedIn} isReply />
             ))}
           </div>
         )}
@@ -182,21 +181,30 @@ function Comment({
   );
 }
 
+/**
+ * The box itself is the same signed in or out. What changes is where pressing send goes: to the
+ * source, or to the sign-in prompt. The draft is left in the field either way, so coming back from
+ * signing in means pressing send again rather than typing it again.
+ */
 function Composer({
-  sourceId,
+  source,
   animeId,
+  signedIn,
   parentId,
   compact = false,
   onPosted,
 }: {
-  sourceId: string;
+  source: SourceInfo;
   animeId: string;
+  signedIn: boolean;
   parentId?: string;
   compact?: boolean;
   onPosted?: () => void;
 }) {
   const { t } = useTranslation();
+  const sourceId = source.id;
   const queryClient = useQueryClient();
+  const promptSignIn = useSignInPrompt();
   const [text, setText] = useState("");
 
   const post = useMutation({
@@ -211,13 +219,18 @@ function Composer({
   });
 
   const canSubmit = text.trim().length > 0 && !post.isPending;
+  const submit = () => {
+    if (!canSubmit) return;
+    if (!signedIn) return promptSignIn(source);
+    post.mutate();
+  };
 
   return (
     <form
       className={cn("mb-6", compact && "mb-0 mt-3")}
       onSubmit={(event) => {
         event.preventDefault();
-        if (canSubmit) post.mutate();
+        submit();
       }}
     >
       {/* The send control sits inside the field rather than under it. A button on its own line
@@ -232,7 +245,7 @@ function Composer({
             // it the only way to send is a mouse trip to a corner of the field.
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
-              if (canSubmit) post.mutate();
+              submit();
             }
           }}
           rows={compact ? 2 : 3}
@@ -263,18 +276,23 @@ function Composer({
  * Counts come from the source and so does the viewer's own vote, which is what lets a pressed
  * button look pressed. Pressing the one already chosen takes the vote back, the way every site with
  * these buttons behaves.
+ *
+ * Signed out, the buttons still show the counts and still respond - they ask for the account. They
+ * used to be `disabled`, which is the one state that looks identical to a feature that is broken.
  */
 function Votes({
-  sourceId,
+  source,
   animeId,
   comment,
-  canVote,
+  signedIn,
 }: {
-  sourceId: string;
+  source: SourceInfo;
   animeId: string;
   comment: SourceComment;
-  canVote: boolean;
+  signedIn: boolean;
 }) {
+  const sourceId = source.id;
+  const promptSignIn = useSignInPrompt();
   const queryClient = useQueryClient();
   const [pending, setPending] = useState<number | null>(null);
 
@@ -289,6 +307,7 @@ function Votes({
     },
   });
 
+  const cast = (next: number) => (signedIn ? vote.mutate(next) : promptSignIn(source));
   const current = pending ?? comment.viewerVote ?? 0;
   const likes = (comment.likes ?? 0) + (pending === 1 && comment.viewerVote !== 1 ? 1 : 0);
   const dislikes = (comment.dislikes ?? 0) + (pending === -1 && comment.viewerVote !== -1 ? 1 : 0);
@@ -299,16 +318,16 @@ function Votes({
         icon={ThumbsUp}
         count={likes}
         active={current === 1}
-        disabled={!canVote || vote.isPending}
-        onClick={() => vote.mutate(current === 1 ? 0 : 1)}
+        disabled={vote.isPending}
+        onClick={() => cast(current === 1 ? 0 : 1)}
         activeClassName="text-emerald-400"
       />
       <VoteButton
         icon={ThumbsDown}
         count={dislikes}
         active={current === -1}
-        disabled={!canVote || vote.isPending}
-        onClick={() => vote.mutate(current === -1 ? 0 : -1)}
+        disabled={vote.isPending}
+        onClick={() => cast(current === -1 ? 0 : -1)}
         activeClassName="text-rose-400"
       />
     </span>
