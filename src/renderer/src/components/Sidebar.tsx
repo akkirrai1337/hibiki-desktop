@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { Home, LayoutGrid, Bookmark, Download, Radio, User, Settings } from "lucide-react";
 import { useUiStore } from "@/stores/uiStore";
+import { useSourceUpdateCount } from "@/lib/sourceUpdates";
 import { cn } from "@/lib/cn";
 
 // 236px is the ceiling (the original full design). Below MIN_FULL_WIDTH there isn't room to keep
@@ -27,6 +28,7 @@ export function Sidebar() {
   const setWidth = useUiStore((s) => s.setSidebarWidth);
   const compact = width <= COMPACT_WIDTH;
   const draggingRef = useRef(false);
+  const sourceUpdateCount = useSourceUpdateCount();
 
   // Exposed as a CSS var (not just this element's own inline `width` below) so pages that paint a
   // full-viewport-width fixed background of their own - the anime detail page's blurred-poster
@@ -62,7 +64,7 @@ export function Sidebar() {
 
   return (
     <aside className="relative flex shrink-0 flex-col border-r border-border bg-app-surface px-3 pb-5 pt-4" style={{ width }}>
-      <nav className="flex flex-col gap-0.5">{navigation.map((item) => <NavLink key={item.to} to={item.to} label={t(item.labelKey)} icon={item.icon} compact={compact} />)}</nav>
+      <nav className="flex flex-col gap-0.5">{navigation.map((item) => <NavLink key={item.to} to={item.to} label={t(item.labelKey)} icon={item.icon} compact={compact} badgeCount={item.to === "/sources" ? sourceUpdateCount : 0} />)}</nav>
       <div className="mt-auto flex flex-col gap-0.5 border-t border-border pt-3">
         <NavLink to="/settings" label={t("nav.settings")} icon={Settings} compact={compact} />
         <NavLink to="/profile" label={t("nav.profile")} icon={User} compact={compact} />
@@ -80,13 +82,41 @@ export function Sidebar() {
   );
 }
 
-function NavLink({ to, label, icon: Icon, compact }: { to: "/" | "/catalog" | "/library" | "/downloads" | "/sources" | "/settings" | "/profile"; label: string; icon: typeof Home; compact: boolean }) {
+function NavLink({
+  to,
+  label,
+  icon: Icon,
+  compact,
+  badgeCount = 0,
+}: {
+  to: "/" | "/catalog" | "/library" | "/downloads" | "/sources" | "/settings" | "/profile";
+  label: string;
+  icon: typeof Home;
+  compact: boolean;
+  badgeCount?: number;
+}) {
   return <Link to={to} title={compact ? label : undefined} className={cn("app-no-drag group relative flex items-center rounded-lg py-2 text-[13px] font-medium text-muted transition-colors hover:bg-text/[.05] hover:text-text", compact ? "justify-center px-0" : "gap-3 px-3")} activeProps={{ className: "!text-text" }}>
     {({ isActive }: { isActive: boolean }) => <>
       <span className={cn("absolute -left-3 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-accent transition-opacity", isActive ? "opacity-100" : "opacity-0")} />
       {isActive && <span className="absolute inset-0 rounded-lg bg-text/[.08]" />}
-      <Icon className="relative z-10 h-[17px] w-[17px] shrink-0" strokeWidth={2} />
+      <span className="relative z-10 shrink-0">
+        <Icon className="h-[17px] w-[17px]" strokeWidth={2} />
+        {badgeCount > 0 && <NavBadge count={badgeCount} />}
+      </span>
       {!compact && <span className="relative z-10 truncate">{label}</span>}
     </>}
   </Link>;
+}
+
+/**
+ * The count of installed sources with an update waiting, as a small red circle riding the corner
+ * of the sidebar icon - the same shape and rule as the Android app's bottom-nav badge: a bare
+ * number, or "9+" once double digits would no longer fit a circle this small.
+ */
+function NavBadge({ count }: { count: number }) {
+  return (
+    <span className="absolute -right-1.5 -top-1.5 flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-rose-500 px-[3px] text-[9px] font-bold leading-none text-white">
+      {count > 9 ? "9+" : count}
+    </span>
+  );
 }
