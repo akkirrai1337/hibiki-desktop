@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import type { PlayerLink, VideoSegment } from "@shared/types";
 import { pickLinkForDimension, pickLinkForQuality, playerOptions, qualityOptions, translationOptions } from "@/lib/playerLinks";
+import { playbackUrl } from "@/lib/playbackUrl";
 import { hibiki } from "@/lib/hibiki";
 import { cn } from "@/lib/cn";
 import { log } from "@/lib/log";
@@ -494,6 +495,10 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     let cancelled = false;
     let headerSessionId: string | null = null;
     let networkRetryTimer: number | null = null;
+    // Providers occasionally return `//cdn…` URLs. They are remote HTTPS streams, not local
+    // files; make that explicit before a packaged renderer resolves them relative to `file:`.
+    // Downloaded episodes already use the explicit `hibiki-download:` scheme and remain local.
+    const streamUrl = playbackUrl(link.url);
     const isHls = link.type === "DIRECT_HLS";
     // Aksor (and other resolvers - see extractors/*.js in hibiki-sources) sometimes only has a
     // DASH rendition available, not HLS/MP4 - Android's ExoPlayer handles this via its DASH
@@ -513,7 +518,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     // plain <video src> has no header hook at all) — register them with the main process, which
     // injects them at the session level for every request to this URL's origin (playlist +
     // segments alike), then start playback once that's in place.
-    hibiki.player.registerHeaders(link.url, link.headers).then(async (sessionId) => {
+    hibiki.player.registerHeaders(streamUrl, link.headers).then(async (sessionId) => {
       if (cancelled) {
         void hibiki.player.unregisterHeaders(sessionId);
         return;
@@ -526,12 +531,12 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         if (cancelled) return;
         elementOwnsSourceRef.current = !HlsEngine.isSupported();
         if (!HlsEngine.isSupported()) {
-          video.src = link.url;
+          video.src = streamUrl;
           return;
         }
         // Which stream this player instance is about to own. A switch that silently kept the old
         // stream, or a torn-down instance still loading, is otherwise invisible in an exported log.
-        log.info("player", `attaching hls: ${link.translation ?? "?"}/${link.playerName ?? "?"} ${link.quality ?? "?"} ${link.url}`);
+        log.info("player", `attaching hls: ${link.translation ?? "?"}/${link.playerName ?? "?"} ${link.quality ?? "?"} ${streamUrl}`);
         hls = new HlsEngine();
         // Without this, a failed manifest/segment load (CORS, a dead CDN host, ...) just leaves
         // the "buffering" spinner turning forever with nothing in the console to explain why -
@@ -623,9 +628,9 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
                 // and load that instead, so the retry has nothing left to redirect through.
                 // Relative segment URLs resolve against it as well, keeping the rest of the
                 // stream on the host that answered.
-                void hibiki.player.resolveStreamUrl(link.url, link.headers).then((finalUrl) => {
+                void hibiki.player.resolveStreamUrl(streamUrl, link.headers).then((finalUrl) => {
                   if (cancelled || !hls) return;
-                  if (finalUrl !== link.url) log.info("player", `retrying manifest at its redirect target ${finalUrl}`);
+                  if (finalUrl !== streamUrl) log.info("player", `retrying manifest at its redirect target ${finalUrl}`);
                   hls.loadSource(finalUrl);
                 });
               }, 500 * (2 ** (networkRetries - 1)));
@@ -645,7 +650,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
               hls?.destroy();
           }
         });
-        hls.loadSource(link.url);
+        hls.loadSource(streamUrl);
         hls.attachMedia(video);
       } else if (isDash) {
         const { MediaPlayer: DashMediaPlayer } = await import("dashjs");
@@ -670,10 +675,10 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
             dash?.destroy();
           }
         });
-        dash.initialize(video, link.url, true);
+        dash.initialize(video, streamUrl, true);
       } else {
         elementOwnsSourceRef.current = true;
-        video.src = link.url;
+        video.src = streamUrl;
       }
     }).catch((error) => {
       if (cancelled) return;
@@ -684,7 +689,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     return () => {
       cancelled = true;
       if (networkRetryTimer !== null) window.clearTimeout(networkRetryTimer);
-      if (hls) log.info("player", `detaching hls: ${link.url}`);
+      if (hls) log.info("player", `detaching hls: ${streamUrl}`);
       hls?.destroy();
       dash?.destroy();
       if (headerSessionId) void hibiki.player.unregisterHeaders(headerSessionId);
