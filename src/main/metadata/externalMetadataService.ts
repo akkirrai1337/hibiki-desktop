@@ -240,9 +240,11 @@ async function crossLookup(sourceId: string, animeId: string, provider: Metadata
   return CLIENTS[provider].fetchByMalId?.(malId) ?? null;
 }
 
-/** The provider entry bound to this title, refreshing a stale one and falling back to what is
- * stored when the provider cannot be reached. Null means this provider has nothing for it. */
-async function metadataForProvider(anime: AnimeTitle, provider: MetadataProviderId): Promise<ExternalMetadata | null> {
+/** The provider entry already on record for this title (a prior match, or one reachable through
+ * another provider's id), refreshing a stale one and falling back to what is stored when the
+ * provider cannot be reached. `undefined` means there is nothing on record yet - not "no match",
+ * which is `null` - so the caller knows a live search is the only way left to answer. */
+async function recordedMetadataFor(anime: AnimeTitle, provider: MetadataProviderId): Promise<ExternalMetadata | null | undefined> {
   const { sourceId, id: animeId } = anime;
   const client = CLIENTS[provider];
   const match = readMatch(sourceId, animeId, provider);
@@ -250,19 +252,18 @@ async function metadataForProvider(anime: AnimeTitle, provider: MetadataProvider
   if (match) {
     if (match.externalId == null) {
       // A remembered failure. Manual "no match" is not a thing, so only the TTL retires it.
-      if (Date.now() - match.matchedAt < TTL_NO_MATCH_MS) return null;
-    } else {
-      const cached = readCachedMedia(provider, match.externalId);
-      if (cached?.fresh) return cached.media;
-      const refreshed = await client.fetchById(match.externalId);
-      if (refreshed) {
-        writeCachedMedia(refreshed);
-        recordCrossMatch(sourceId, animeId, refreshed);
-        return refreshed;
-      }
-      // Offline, or the provider is down. A stale entry beats an empty page.
-      return cached?.media ?? null;
+      return Date.now() - match.matchedAt < TTL_NO_MATCH_MS ? null : undefined;
     }
+    const cached = readCachedMedia(provider, match.externalId);
+    if (cached?.fresh) return cached.media;
+    const refreshed = await client.fetchById(match.externalId);
+    if (refreshed) {
+      writeCachedMedia(refreshed);
+      recordCrossMatch(sourceId, animeId, refreshed);
+      return refreshed;
+    }
+    // Offline, or the provider is down. A stale entry beats an empty page.
+    return cached?.media ?? null;
   }
 
   const crossMatched = await crossLookup(sourceId, animeId, provider);
@@ -274,11 +275,17 @@ async function metadataForProvider(anime: AnimeTitle, provider: MetadataProvider
     return crossMatched;
   }
 
-  // Three shots at most - each is a request, and a title that has not turned up by then is very
-  // likely simply absent from this provider. See searchQueriesFor for why the later ones are worth
-  // spending: a source's own decorations ("(TV)", "(Uncensored)", a season suffix) are searched for
-  // as if they were part of the name, and are the usual reason a show that is plainly there is not
-  // found.
+  return undefined;
+}
+
+/** Searches this provider live for a title with nothing on record yet. Three shots at most - each
+ * is a request, and a title that has not turned up by then is very likely simply absent from this
+ * provider. See searchQueriesFor for why the later ones are worth spending: a source's own
+ * decorations ("(TV)", "(Uncensored)", a season suffix) are searched for as if they were part of
+ * the name, and are the usual reason a show that is plainly there is not found. */
+async function liveSearchMetadataFor(anime: AnimeTitle, provider: MetadataProviderId): Promise<ExternalMetadata | null> {
+  const { sourceId, id: animeId } = anime;
+  const client = CLIENTS[provider];
   const searchNames = searchQueriesFor(anime, MAX_SEARCHES_PER_PROVIDER);
 
   let searched = false;
@@ -309,14 +316,34 @@ async function metadataForProvider(anime: AnimeTitle, provider: MetadataProvider
 }
 
 /**
- * Describes one title from the first provider in `order` that can, trying the next when one cannot.
+ * Describes one title from `order`'s providers, in two passes.
+ *
+ * The first pass only reads what is already on record - a match written when a card was resolved
+ * from an aggregator's catalog, say - across *every* provider in `order`, not just the first. Only
+ * once none of them has anything recorded does the second pass fall back to a live search, again in
+ * `order`. Without this split, a title already pinned to (say) Kitsu by the entry screen could still
+ * be re-guessed from AniList because AniList happens to be preferred - landing on a different show
+ * with a similar name and showing a different cover than the one just clicked.
  *
  * Never throws: a caller merges whatever comes back, and null simply means the page keeps the
  * source's own metadata.
  */
 export async function getExternalMetadata(anime: AnimeTitle, order: MetadataProviderId[]): Promise<ExternalMetadata | null> {
+  // A provider that already has *anything* on record for this title - a match, or a still-fresh
+  // "no match" - is settled and must not be re-guessed by a live search in the second pass below.
+  const settled = new Set<MetadataProviderId>();
   for (const provider of order) {
-    const media = await metadataForProvider(anime, provider).catch((error) => {
+    const recorded = await recordedMetadataFor(anime, provider).catch((error) => {
+      logger.warn("metadata", `${provider} lookup failed for ${anime.sourceId}:${anime.id}: ${String(error)}`);
+      return undefined;
+    });
+    if (recorded === undefined) continue;
+    settled.add(provider);
+    if (recorded) return recorded;
+  }
+  for (const provider of order) {
+    if (settled.has(provider)) continue;
+    const media = await liveSearchMetadataFor(anime, provider).catch((error) => {
       logger.warn("metadata", `${provider} lookup failed for ${anime.sourceId}:${anime.id}: ${String(error)}`);
       return null;
     });

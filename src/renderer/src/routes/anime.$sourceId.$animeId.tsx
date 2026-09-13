@@ -30,6 +30,10 @@ import type { AnimeTitle, DownloadProgress, Episode, LibraryCategory, PlaybackGr
 // linger as stale-looking state on a chip you've since moved on from.
 const DOWNLOAD_RESULT_DISPLAY_MS = 4000;
 
+// Same reasoning as the continue-watching row's own card metadata: a match, once found, is stable
+// enough for a day that re-describing every one of these strips on every visit would just be waste.
+const RELATED_METADATA_STALE_MS = 24 * 60 * 60_000;
+
 export const Route = createFileRoute("/anime/$sourceId/$animeId")({
   // Kept in the URL (like /catalog's `sort`) rather than component state - so the chosen
   // dubbing/translation group survives leaving for an episode and coming back, instead of
@@ -94,6 +98,43 @@ function isUpcomingDay(epochMs: number): boolean {
 function dedupeById<T extends { id: string }>(items: T[]): T[] {
   const seen = new Set<string>();
   return items.filter((item) => (seen.has(item.id) ? false : (seen.add(item.id), true)));
+}
+
+/** A related/similar card as a minimal stub of the source's own title shape, for `describeList` -
+ * it only ever needs an id and a name to search with. */
+function toRelatedStub(sourceId: string, item: RelatedAnimeTitle): AnimeTitle {
+  return {
+    id: item.id,
+    sourceId,
+    englishName: item.title,
+    originalName: item.title,
+    posterUrl: item.posterUrl,
+    year: item.year,
+    type: item.type,
+    availableEpisodeCount: item.episodeCount,
+    status: item.status,
+  };
+}
+
+/** Related/similar cards straight off the source carry that source's own name and poster, which can
+ * disagree with the aggregator's cover shown everywhere else on this page (and on the catalog this
+ * title was opened from) - the same inconsistency described() already fixes for the title itself.
+ * `describeList` already merges an aggregator entry over a title when one is found and leaves it
+ * untouched otherwise, so this just needs to feed it stubs and read the merged fields back. */
+function withDescribed(items: RelatedAnimeTitle[], described: Map<string, AnimeTitle>): RelatedAnimeTitle[] {
+  return items.map((item) => {
+    const match = described.get(item.id);
+    if (!match) return item;
+    return {
+      ...item,
+      title: match.englishName || match.originalName || item.title,
+      posterUrl: match.posterUrl ?? item.posterUrl,
+      year: match.year ?? item.year,
+      type: match.type ?? item.type,
+      episodeCount: match.availableEpisodeCount ?? item.episodeCount,
+      status: match.status ?? item.status,
+    };
+  });
 }
 
 // Same "6 full + a peek of the 7th" ratio the old hand-rolled version used (60px = 6 gaps of
@@ -276,6 +317,23 @@ function AnimeDetailPage() {
   const relatedIds = new Set(related.map((r) => r.id));
   const similar = anime ? dedupeById(anime.similarAnime ?? []).filter((r) => r.id !== animeId && !relatedIds.has(r.id)) : [];
 
+  // Same aggregator-description this source already opted into for its own title page, extended to
+  // the strips of other titles below it - otherwise those keep the source's own name/poster even
+  // when the page around them is describing everything from the aggregator.
+  const relatedAndSimilarIds = useMemo(() => [...related, ...similar].map((r) => r.id).join(","), [related, similar]);
+  const describedRelatedQuery = useQuery({
+    queryKey: ["describeRelated", sourceId, relatedAndSimilarIds],
+    queryFn: () => hibiki.metadata.describeList(sourceId, [...related, ...similar].map((item) => toRelatedStub(sourceId, item))),
+    enabled: describesTitles && relatedAndSimilarIds.length > 0,
+    staleTime: RELATED_METADATA_STALE_MS,
+  });
+  const describedById = useMemo(
+    () => new Map((describedRelatedQuery.data ?? []).map((title) => [title.id, title])),
+    [describedRelatedQuery.data],
+  );
+  const describedRelated = withDescribed(related, describedById);
+  const describedSimilar = withDescribed(similar, describedById);
+
   const libraryEntry = libraryQuery.data?.find((e) => e.sourceId === sourceId && e.animeId === animeId);
   const setLibraryCategory = async (category: LibraryCategory) => {
     if (!anime) return;
@@ -341,7 +399,7 @@ function AnimeDetailPage() {
     {(animeQuery.isLoading || describing) && <DetailSkeleton />}
     {animeQuery.isError && <div className="p-8"><ErrorBanner message={(animeQuery.error as Error).message} /></div>}
     {anime && !describing && <>
-      <Overview anime={anime} libraryCategory={libraryEntry?.category ?? null} onSetLibraryCategory={setLibraryCategory} onRemoveFromLibrary={removeFromLibrary} continueTarget={continueTarget ? { groupId: activeGroup!.id, episodeId: continueTarget.episode.id, label: continueTarget.label } : undefined} sourceId={sourceId} animeId={animeId} source={source} related={related} titleLoadedAt={animeQuery.dataUpdatedAt} />
+      <Overview anime={anime} libraryCategory={libraryEntry?.category ?? null} onSetLibraryCategory={setLibraryCategory} onRemoveFromLibrary={removeFromLibrary} continueTarget={continueTarget ? { groupId: activeGroup!.id, episodeId: continueTarget.episode.id, label: continueTarget.label } : undefined} sourceId={sourceId} animeId={animeId} source={source} related={describedRelated} titleLoadedAt={animeQuery.dataUpdatedAt} />
       <div className="px-8 pt-6">
         <h2 className="mb-4 text-xl font-bold tracking-[-.02em] text-text">{t("detail.episodes")}</h2>
         {groupsQuery.isLoading && <div className="text-sm text-muted">{t("detail.loadingEpisodes")}</div>}
@@ -395,7 +453,7 @@ function AnimeDetailPage() {
       </div>
       <div className="px-8 pt-10">
         <TitleStrip
-          items={similar}
+          items={describedSimilar}
           sourceId={sourceId}
           heading={<h2 className="mb-4 text-xl font-bold tracking-[-.02em] text-text">{t("detail.similarTitles")}</h2>}
         />
