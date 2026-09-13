@@ -521,9 +521,11 @@ export function mergeExternalMetadata(anime: AnimeTitle, external: ExternalMetad
   if (!external) return anime;
   return {
     ...anime,
-    englishName: preferExternal(external.englishName, anime.englishName),
-    originalName: preferExternal(external.romajiName ?? external.nativeName, anime.originalName),
-    synonyms: preferExternal(external.synonyms, anime.synonyms) ?? undefined,
+    // A source owns identity and navigation. Provider names are useful for matching only; showing
+    // them on a source card made the same source ID visibly turn into a different title.
+    englishName: anime.englishName,
+    originalName: anime.originalName,
+    synonyms: anime.synonyms,
     description: preferExternal(external.description, anime.description),
     posterUrl: preferExternal(external.posterUrl, anime.posterUrl),
     genres: preferExternal(external.genres, anime.genres) ?? undefined,

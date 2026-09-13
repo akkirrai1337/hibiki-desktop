@@ -57,10 +57,6 @@ interface UiState {
   // default: it answers a question most people never ask, and the page reads cleaner without it.
   // Turning it on is also what makes the manual rebind reachable, since the line is what opens it.
   externalMetadataShowBinding: boolean;
-  // Whether Home, Catalog, and Search browse aggregator entries and resolve them to a playable
-  // source title only when opened (see docs/aggregator-first-catalog.md). On by default now that
-  // the staged resolver rollout is complete; Settings remains the way back to source-native pages.
-  aggregatorCatalog: boolean;
   // Which aggregator to prefer. AniList is the default for the fuller entry: it carries banner
   // artwork and a next-episode timestamp, neither of which MAL publishes.
   externalMetadataProvider: MetadataProviderId;
@@ -84,7 +80,6 @@ interface UiState {
   setAutoUpdate: (enabled: boolean) => void;
   setExternalMetadataEnabled: (enabled: boolean) => void;
   setExternalMetadataShowBinding: (show: boolean) => void;
-  setAggregatorCatalog: (enabled: boolean) => void;
   setExternalMetadataProvider: (provider: MetadataProviderId) => void;
   setExternalMetadataFallback: (enabled: boolean) => void;
   /** null clears the override, handing the source back to the global switch. */
@@ -108,7 +103,6 @@ export const useUiStore = create<UiState>()(
       externalMetadataEnabled: true,
       externalMetadataOverrides: {},
       externalMetadataShowBinding: false,
-      aggregatorCatalog: true,
       externalMetadataProvider: "anilist",
       externalMetadataFallback: true,
       setTheme: (theme) => set({ theme }),
@@ -124,7 +118,6 @@ export const useUiStore = create<UiState>()(
       setAutoUpdate: (autoUpdate) => set({ autoUpdate }),
       setExternalMetadataEnabled: (externalMetadataEnabled) => set({ externalMetadataEnabled }),
       setExternalMetadataShowBinding: (externalMetadataShowBinding) => set({ externalMetadataShowBinding }),
-      setAggregatorCatalog: (aggregatorCatalog) => set({ aggregatorCatalog }),
       setExternalMetadataProvider: (externalMetadataProvider) => set({ externalMetadataProvider }),
       setExternalMetadataFallback: (externalMetadataFallback) => set({ externalMetadataFallback }),
       setExternalMetadataOverride: (sourceId, enabled) =>
@@ -137,14 +130,9 @@ export const useUiStore = create<UiState>()(
     }),
     {
       name: "hibiki-ui",
-      version: 1,
-      // Versions before the aggregator-first rollout persisted its experimental default (`false`)
-      // for every existing profile. Flip that value once during the rollout; after migration, an
-      // explicit opt-out is stored at version 1 and remains respected on subsequent launches.
-      migrate: (persistedState, version) => {
-        const state = persistedState as UiState;
-        return version < 1 ? { ...state, aggregatorCatalog: true } : state;
-      },
+      version: 2,
+      // Version 2 removes the obsolete aggregator-first browsing preference. Persisted profiles
+      // may retain an unknown key safely; every regular browsing surface is source-owned now.
     },
   ),
 );

@@ -9,9 +9,8 @@ import { AnimeCard, PosterGrid, PosterGridSkeleton } from "@/components/AnimeCar
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { useUiStore } from "@/stores/uiStore";
 import { useDescribedTitles } from "@/lib/describedTitles";
-import { AggregatorCatalog } from "@/components/AggregatorCatalog";
 import { CatalogModeMenu } from "@/components/CatalogModeMenu";
-import { useAggregatorBrowsing, useMetadataProviderKey } from "@/lib/aggregatorBrowsing";
+import { useMetadataProviderKey } from "@/lib/aggregatorBrowsing";
 import type { AnimeTitle, SourceInfo } from "@shared/types";
 
 // Only three ways to browse make sense to expose: by relevance, alphabetically, or the source's
@@ -54,7 +53,6 @@ export function CatalogBrowsePage() {
   const sources = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });
   const activeSourceId = useUiStore((s) => s.activeSourceId);
   const source = sources.data?.find((s) => s.id === activeSourceId) ?? sources.data?.[0];
-  const aggregatorBrowsing = useAggregatorBrowsing(source);
   const providerKey = useMetadataProviderKey(source);
   const setRequestedMode = (next: SortMode) => navigate({ to: "/catalog", search: { sort: next }, replace: true });
 
@@ -63,7 +61,7 @@ export function CatalogBrowsePage() {
 
   const browse = useInfiniteQuery({
     queryKey: ["catalog", source?.id, mode === "alphabetical" ? "TITLE" : "RELEVANCE"],
-    enabled: !!source && !aggregatorBrowsing && mode !== "recent",
+    enabled: !!source && mode !== "recent",
     initialPageParam: 0,
     queryFn: ({ pageParam }) =>
       hibiki.sources.search(source!.id, { offset: pageParam, limit: PAGE_SIZE, sort: mode === "alphabetical" ? "TITLE" : "RELEVANCE" }),
@@ -75,17 +73,14 @@ export function CatalogBrowsePage() {
   // it has no offset param, so there's no "load more" for it.
   const recent = useQuery({
     queryKey: ["catalog-recent", source?.id],
-    enabled: !!source && !aggregatorBrowsing && mode === "recent",
+    enabled: !!source && mode === "recent",
     queryFn: () => hibiki.sources.latest(source!.id, RECENT_LIMIT),
   });
 
   const sourceItems = mode === "recent" ? (recent.data ?? []) : (browse.data?.pages.flat() ?? []);
-  // Described as a whole, including every page loaded so far: a newly appended page that named its
-  // titles differently from the ones above it would be the same mixed-list problem, one scroll
-  // further down.
-  const { titles: items, describing, refreshing: describingMore } = useDescribedTitles(
+  const { titles: items, loadingIds } = useDescribedTitles(
     source?.id,
-    aggregatorBrowsing ? undefined : sourceItems,
+    sourceItems,
     providerKey,
   );
   const isLoading = mode === "recent" ? recent.isLoading : browse.isLoading;
@@ -104,25 +99,12 @@ export function CatalogBrowsePage() {
     const el = loadMoreRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(
-      // Not while the page just added is still being described: `items` has not grown yet, so the
-      // sentinel is still on screen and would ask for page after page in a loop.
-      ([entry]) => { if (entry.isIntersecting && hasNextPage && !isFetchingNextPage && !describingMore) fetchNextPage(); },
+      ([entry]) => { if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) fetchNextPage(); },
       { rootMargin: "300px" },
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [catalogAutoLoad, mode, hasNextPage, isFetchingNextPage, describingMore, fetchNextPage, items.length]);
-
-  // The aggregator's catalog replaces this one wholesale rather than sitting beside it: the two
-  // list different things (entries against this source's titles), and a screen that mixed them
-  // would be back to the problem whole-screen description exists to avoid.
-  if (aggregatorBrowsing && source) {
-    return (
-      <div className="min-h-full bg-app-bg px-8 py-8 pb-16">
-        <AggregatorCatalog source={source} />
-      </div>
-    );
-  }
+  }, [catalogAutoLoad, mode, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return (
     <div className="min-h-full bg-app-bg px-8 py-8 pb-16">
@@ -137,13 +119,13 @@ export function CatalogBrowsePage() {
             </div>
           )}
 
-          {isLoading || describing ? (
+          {isLoading ? (
             <PosterGridSkeleton count={15} />
           ) : items.length === 0 ? (
             <EmptyState text={t("catalogPage.empty")} />
           ) : (
             <>
-              <VirtualGrid items={items} />
+              <VirtualGrid items={items} loadingIds={loadingIds} />
               {mode !== "recent" && hasNextPage && (
                 <div ref={loadMoreRef} className="mt-8 flex justify-center">
                   {catalogAutoLoad ? (
@@ -203,7 +185,7 @@ function useGridColumnCount(): number {
 // each) are all still there regardless of whether any given one is currently painted. Rendering
 // only the rows actually near the viewport (plus a small overscan) keeps the real DOM node count
 // bounded no matter how many pages have been paged through.
-function VirtualGrid({ items }: { items: AnimeTitle[] }) {
+function VirtualGrid({ items, loadingIds }: { items: AnimeTitle[]; loadingIds: Set<string> }) {
   const columns = useGridColumnCount();
   const rows = useMemo(() => {
     const out: AnimeTitle[][] = [];
@@ -240,7 +222,7 @@ function VirtualGrid({ items }: { items: AnimeTitle[] }) {
         // first render) - the real grid, unvirtualized, so there's an actual mounted node for that
         // callback to fire against; the resulting state update switches to the virtualized branch
         // immediately after, and this one never shows again.
-        <PosterGrid>{items.map((item) => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</PosterGrid>
+        <PosterGrid>{items.map((item) => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} metadataLoading={loadingIds.has(item.id)} />)}</PosterGrid>
       ) : (
         rowVirtualizer.getVirtualItems().map((virtualRow) => (
           <div
@@ -250,7 +232,7 @@ function VirtualGrid({ items }: { items: AnimeTitle[] }) {
             style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${virtualRow.start}px)` }}
           >
             <div className="grid gap-x-4" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
-              {rows[virtualRow.index].map((item) => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}
+              {rows[virtualRow.index].map((item) => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} metadataLoading={loadingIds.has(item.id)} />)}
             </div>
           </div>
         ))

@@ -1,4 +1,4 @@
-import { canBrowseProviders, metadataProviderOrder, type MetadataProviderId } from "@shared/externalMetadata";
+import { metadataProviderOrder, type MetadataProviderId } from "@shared/externalMetadata";
 import type { SourceInfo } from "@shared/types";
 import { useUiStore } from "@/stores/uiStore";
 
@@ -16,20 +16,6 @@ function useProviderOrder(source: SourceInfo | undefined): MetadataProviderId[] 
     source.id,
     source.useExternalMetadata === true,
   );
-}
-
-/**
- * One gate for every aggregator-driven browsing surface. The source must opt in, the user must
- * still allow external metadata for this particular source, the browsing preference itself must be
- * on - and at least one of the allowed providers must be one that can actually be browsed.
- *
- * That last part is the difference between this and describing: MAL can describe a title but has no
- * catalog worth the name, so preferring it with the fallback off used to switch Home, Catalog and
- * Search over to an aggregator and then report that none answered.
- */
-export function useAggregatorBrowsing(source: SourceInfo | undefined): boolean {
-  const browsingEnabled = useUiStore((state) => state.aggregatorCatalog);
-  return browsingEnabled && canBrowseProviders(useProviderOrder(source));
 }
 
 /**

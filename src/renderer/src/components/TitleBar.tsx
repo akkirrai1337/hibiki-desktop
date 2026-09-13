@@ -11,7 +11,6 @@ import { activeFilterCount } from "@/lib/searchFilters";
 import { SearchFiltersPanel } from "@/components/SearchFiltersPanel";
 import { UpdateButton } from "@/components/UpdateButton";
 import { cn } from "@/lib/cn";
-import { useAggregatorBrowsing } from "@/lib/aggregatorBrowsing";
 import appIcon from "@/assets/app-icon.png";
 
 const SEARCH_HIDDEN_ON = ["/settings", "/profile", "/sources"];
@@ -70,9 +69,7 @@ export function TitleBar() {
   const activeSourceId = useUiStore((s) => s.activeSourceId);
   const sources = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });
   const source = sources.data?.find((s) => s.id === activeSourceId) ?? sources.data?.[0];
-  const aggregatorBrowsing = useAggregatorBrowsing(source);
-  const aggregatorSearch = isSearchPage && aggregatorBrowsing && !sourceSearchOnly;
-  const showFilterButton = !searchHidden && !aggregatorSearch && !!source && source.supportedFilters.length > 0;
+  const showFilterButton = !searchHidden && !!source && source.supportedFilters.length > 0;
 
   const filters = useSearchFiltersStore((s) => s.filters);
   const setFilters = useSearchFiltersStore((s) => s.setFilters);

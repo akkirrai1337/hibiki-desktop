@@ -86,7 +86,7 @@ interface PosterCardProps {
 }
 
 /** Shared visual body for source titles and provider entries; navigation stays with each caller. */
-export function PosterCard({ title, posterUrl, type, year, episodeCount, rating, genres, description, progress, source }: PosterCardProps) {
+export function PosterCard({ title, posterUrl, type, year, episodeCount, rating, genres, description, progress, source, metadataLoading = false }: PosterCardProps & { metadataLoading?: boolean }) {
   const { t } = useTranslation();
   const meta = [
     year,
@@ -95,7 +95,7 @@ export function PosterCard({ title, posterUrl, type, year, episodeCount, rating,
   ].filter(Boolean).join(" · ");
   return <>
     <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-surface ring-1 ring-border">
-      {posterUrl ? <SmoothImage
+      {metadataLoading ? <div className="flex h-full items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-muted/40 border-t-accent" /></div> : posterUrl ? <SmoothImage
         src={posterUrl}
         alt={title}
         loading="lazy"
@@ -110,16 +110,16 @@ export function PosterCard({ title, posterUrl, type, year, episodeCount, rating,
       <SourceBadge source={source} />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-1.5 p-3 opacity-0 transition-[opacity,transform] duration-300 group-hover:translate-y-0 group-hover:opacity-100">
-        {genres && genres.length > 0 && (
+        {!metadataLoading && genres && genres.length > 0 && (
           <div className="mb-1.5 flex flex-wrap gap-1">
             {genres.slice(0, 3).map((genre) => (
               <span key={genre} className="rounded-md bg-white/20 px-1.5 py-0.5 text-[11px] font-medium text-white shadow-sm">{genre}</span>
             ))}
           </div>
         )}
-        {description ? (
+        {!metadataLoading && description ? (
           <p className="line-clamp-4 select-text text-xs leading-relaxed text-zinc-300">{description}</p>
-        ) : !genres?.length ? (
+        ) : !metadataLoading && !genres?.length ? (
           <p className="line-clamp-2 select-text text-base font-semibold leading-snug text-white">{title}</p>
         ) : null}
       </div>
@@ -127,13 +127,15 @@ export function PosterCard({ title, posterUrl, type, year, episodeCount, rating,
     </div>
     <p className="mt-3 line-clamp-2 select-text text-base font-semibold leading-snug tracking-[-.01em] text-text/90 transition-colors group-hover:text-text">{title}</p>
     <div className="mt-1 flex items-center gap-1.5">
+      {metadataLoading ? <span className="h-3 w-20 animate-pulse rounded bg-text/[.06]" /> : <>
       {type && <span className="shrink-0 rounded-md bg-text/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted">{type}</span>}
       <p className="line-clamp-1 text-sm text-muted">{meta || t("common.anime")}</p>
+      </>}
     </div>
   </>;
 }
 
-export const AnimeCard = memo(function AnimeCard({ anime, progress, source }: { anime: AnimeTitle; progress?: number; source?: AnimeCardSource }) {
+export const AnimeCard = memo(function AnimeCard({ anime, progress, source, metadataLoading = false }: { anime: AnimeTitle; progress?: number; source?: AnimeCardSource; metadataLoading?: boolean }) {
   const title = animeTitle(anime);
   return <Link
     to="/anime/$sourceId/$animeId"
@@ -151,6 +153,7 @@ export const AnimeCard = memo(function AnimeCard({ anime, progress, source }: { 
       description={anime.description}
       progress={progress}
       source={source}
+      metadataLoading={metadataLoading}
     />
   </Link>;
 });

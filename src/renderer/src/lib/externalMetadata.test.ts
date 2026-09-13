@@ -321,10 +321,13 @@ describe("mergeExternalMetadata", () => {
     expect(merged.posterUrl).toBe("https://source/poster.jpg");
   });
 
-  it("keeps a Russian name AniList cannot provide", () => {
-    const merged = mergeExternalMetadata(title({ russianName: "Провожающая в последний путь Фрирен" }), external({ englishName: "Frieren" }));
+  it("keeps every source title name when provider names differ", () => {
+    const source = title({ englishName: "Source title", originalName: "Source original", russianName: "Провожающая в последний путь Фрирен", synonyms: ["Source synonym"] });
+    const merged = mergeExternalMetadata(source, external({ englishName: "Provider title", romajiName: "Provider romaji", synonyms: ["Provider synonym"] }));
     expect(merged.russianName).toBe("Провожающая в последний путь Фрирен");
-    expect(merged.englishName).toBe("Frieren");
+    expect(merged.englishName).toBe("Source title");
+    expect(merged.originalName).toBe("Source original");
+    expect(merged.synonyms).toEqual(["Source synonym"]);
   });
 
   it("files the score under its provider without duplicating itself on a refetch", () => {

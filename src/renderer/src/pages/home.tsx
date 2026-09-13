@@ -10,10 +10,9 @@ import { ContinueWatchingFrameRow } from "@/components/ContinueWatchingRow";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { useDescribedTitles } from "@/lib/describedTitles";
 import { HERO_ACTION_CLASS, HeroCarousel, type HeroSlide } from "@/components/Hero";
-import { AggregatorHome } from "@/components/AggregatorHome";
 import { useContinueWatching } from "@/lib/continueWatching";
 import { useUiStore } from "@/stores/uiStore";
-import { useAggregatorBrowsing, useMetadataProviderKey } from "@/lib/aggregatorBrowsing";
+import { useMetadataProviderKey } from "@/lib/aggregatorBrowsing";
 import type { AnimeTitle } from "@shared/types";
 
 const RECOMMENDED_COUNT = 20;
@@ -47,13 +46,12 @@ export function CatalogPage() {
   const sources = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });
   const activeSourceId = useUiStore((s) => s.activeSourceId);
   const source = sources.data?.find((s) => s.id === activeSourceId) ?? sources.data?.[0];
-  const aggregatorBrowsing = useAggregatorBrowsing(source);
   const providerKey = useMetadataProviderKey(source);
   const sortMode = source?.supportedSorts.includes("RATING") ? "RATING" : undefined;
   const hero = useCachedTitleList({
     queryKey: ["hero", source?.id],
     cacheKey: source ? `hero:${source.id}` : null,
-    enabled: !!source && !aggregatorBrowsing,
+    enabled: !!source,
     queryFn: () => hibiki.sources.search(source!.id, { limit: HERO_SLIDE_COUNT, sort: sortMode }),
   });
   // Compute the source's window in the same render that enables the query. Keeping this in state
@@ -65,7 +63,7 @@ export function CatalogPage() {
     // Deliberately without the offset: this visit's slice is meant to be a different one, so the
     // useful thing to paint while it loads is the slice from last time.
     cacheKey: source ? `popular-pool:${source.id}` : null,
-    enabled: !!source && !aggregatorBrowsing,
+    enabled: !!source,
     queryFn: async () => {
       const window = await hibiki.sources.search(source!.id, { offset: poolOffset, limit: POOL_WINDOW, sort: sortMode });
       // A short catalog can have fewer titles than our random offset - fall back to the start
@@ -78,10 +76,8 @@ export function CatalogPage() {
   // caches per-title lookups under query keys both pages agree on so whichever loads first does
   // the actual work.
   const { hasHistory } = useContinueWatching();
-  // Both rows are described by the metadata provider once the whole row is - see
-  // useDescribedTitles for why it is all at once rather than card by card.
-  const { titles: heroSlides, describing: describingHero } = useDescribedTitles(source?.id, aggregatorBrowsing ? undefined : hero.data, providerKey);
-  const { titles: poolTitles, describing: describingPool } = useDescribedTitles(source?.id, aggregatorBrowsing ? undefined : pool.data, providerKey);
+  const { titles: heroSlides } = useDescribedTitles(source?.id, hero.data, providerKey);
+  const { titles: poolTitles, loadingIds: poolLoadingIds } = useDescribedTitles(source?.id, pool.data, providerKey);
   const isNew = !hasHistory;
   const sourceById = useMemo(() => new Map((sources.data ?? []).map((s) => [s.id, s])), [sources.data]);
   // Re-shuffled each time a fresh pool comes in (new source, new random offset, ...) so this
@@ -101,22 +97,9 @@ export function CatalogPage() {
   return <div className="min-h-full bg-app-bg pb-12">
     {sources.isLoading && <HeroSkeleton />}{sources.data?.length === 0 && <EmptySources />}{sources.isError && <ErrorBanner message={(sources.error as Error).message} className="m-8" />}
     {source && <>
-      {/* The aggregator's home replaces everything except continue-watching, which is about
-          episodes already started - the source's own titles, with the source's own progress. */}
-      {aggregatorBrowsing ? (
-        <AggregatorHome source={source}>
-          {!isNew && (
-            <div className="space-y-12 px-8 pt-10">
-              <Section title={t("catalog.continueWatching")} action={t("catalog.viewHistory")} to="/history">
-                <ContinueWatchingFrameRow sourceById={sourceById} />
-              </Section>
-            </div>
-          )}
-        </AggregatorHome>
-      ) : <>
-      {heroSlides.length > 0 && !describingHero
+      {heroSlides.length > 0
         ? <HeroCarousel slides={heroSlides.map((slide) => toHeroSlide(slide, t("catalog.openTitle")))} label={t("catalog.trendingOn", { source: source.name })} />
-        : (hero.isLoading || describingHero) && <HeroSkeleton />}
+        : hero.isLoading && <HeroSkeleton />}
       <div className="space-y-12 px-8 pt-10">
         {pool.isError && <ErrorBanner message={(pool.error as Error).message} />}
         {/* Always the frame row: swapping to poster cards below a threshold meant the section
@@ -126,13 +109,12 @@ export function CatalogPage() {
           <ContinueWatchingFrameRow sourceById={sourceById} />
         </Section>}
         <Section title={isNew ? t("catalog.popularNow") : t("catalog.becauseYouWatched")} action={t("catalog.openCatalog")} to="/catalog">
-          {pool.isLoading || describingPool ? <PosterGridSkeleton count={15} /> : <PosterGrid>{recommended.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</PosterGrid>}
+          {pool.isLoading ? <PosterGridSkeleton count={15} /> : <PosterGrid>{recommended.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} metadataLoading={poolLoadingIds.has(item.id)} />)}</PosterGrid>}
         </Section>
-        {genreSection && !describingPool && <Section title={t("catalog.genreSection", { genre: genreSection.genre })} action={t("catalog.openCatalog")} to="/catalog">
-          <PosterGrid>{genreSection.items.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</PosterGrid>
+        {genreSection && <Section title={t("catalog.genreSection", { genre: genreSection.genre })} action={t("catalog.openCatalog")} to="/catalog">
+          <PosterGrid>{genreSection.items.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} metadataLoading={poolLoadingIds.has(item.id)} />)}</PosterGrid>
         </Section>}
       </div>
-      </>}
     </>}
   </div>;
 }
