@@ -1,9 +1,11 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { AnimatePresence } from "motion/react";
 import { Download, Play, Trash2 } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
+import { Modal } from "@/components/Modal";
 import type { DownloadedEpisode } from "@shared/types";
 
 // Rendered persistently from __root.tsx instead - see index.tsx for why.
@@ -43,7 +45,11 @@ export function DownloadsPage() {
     return [...byAnime.values()].sort((a, b) => Math.max(...b.episodes.map((e) => e.downloadedAt)) - Math.max(...a.episodes.map((e) => e.downloadedAt)));
   }, [episodes]);
 
+  // The trash button sits inside the row you click to play, and what it deletes has to be
+  // downloaded all over again - so it asks first.
+  const [pendingRemoval, setPendingRemoval] = useState<DownloadedEpisode | null>(null);
   const removeEpisode = async (ep: DownloadedEpisode) => {
+    setPendingRemoval(null);
     await hibiki.downloads.remove(ep.sourceId, ep.animeId, ep.episodeId);
     queryClient.invalidateQueries({ queryKey: ["downloadedEpisodes"] });
   };
@@ -63,10 +69,24 @@ export function DownloadsPage() {
       ) : (
         <div className="space-y-8">
           {groups.map((group) => (
-            <AnimeGroup key={`${group.sourceId}:${group.animeId}`} group={group} locale={i18n.language} onRemove={removeEpisode} />
+            <AnimeGroup key={`${group.sourceId}:${group.animeId}`} group={group} locale={i18n.language} onRemove={setPendingRemoval} />
           ))}
         </div>
       )}
+      <AnimatePresence>
+        {pendingRemoval && (
+          <Modal onDismiss={() => setPendingRemoval(null)}>
+            <h2 className="text-base font-bold text-text">{t("downloads.removeConfirmTitle")}</h2>
+            <p className="mt-2 select-text text-sm leading-relaxed text-muted">
+              {t("downloads.removeConfirmMessage", { episode: pendingRemoval.episodeNumber, title: pendingRemoval.animeTitle })}
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => setPendingRemoval(null)} className="rounded-lg px-3.5 py-2 text-sm font-semibold text-muted transition-colors hover:bg-text/[.06]">{t("common.cancel")}</button>
+              <button onClick={() => removeEpisode(pendingRemoval)} className="rounded-lg bg-rose-500 px-3.5 py-2 text-sm font-bold text-text transition-opacity hover:opacity-90">{t("downloads.remove")}</button>
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

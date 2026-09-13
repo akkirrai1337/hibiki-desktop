@@ -247,7 +247,9 @@
     "title": "Downloaded episodes",
     "empty": "No downloaded episodes yet",
     "episodeCount": "{{count}} ep.",
-    "remove": "Remove"
+    "remove": "Remove",
+    "removeConfirmTitle": "Remove download?",
+    "removeConfirmMessage": "Episode {{episode}} of {{title}} will be deleted from this device and will have to be downloaded again to watch offline."
   },
   "catalogPage": {
     "empty": "Nothing here yet",
