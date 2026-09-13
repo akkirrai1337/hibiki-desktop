@@ -100,7 +100,37 @@ export interface ExternalCatalogRequest {
   /** For "season" - defaults to the season now when absent. */
   season?: AnimeSeason;
   seasonYear?: number;
+  /** AniList genre names - see ANILIST_GENRES. */
+  genres?: string[];
+  excludedGenres?: string[];
+  /** The app's own type aliases ("tv", "movie", ...), not a provider's formats. */
+  types?: string[];
+  excludedTypes?: string[];
+  /** The app's own status aliases ("ongoing", "released", "announced"). */
+  statuses?: string[];
+  excludedStatuses?: string[];
+  yearFrom?: number | null;
+  yearTo?: number | null;
 }
+
+export function hasCatalogFilters(request: ExternalCatalogRequest): boolean {
+  return [request.genres, request.excludedGenres, request.types, request.excludedTypes, request.statuses, request.excludedStatuses]
+    .some((list) => (list?.length ?? 0) > 0) || request.yearFrom != null || request.yearTo != null;
+}
+
+/** The providers whose catalog can be narrowed by genre, type, status and year. Kitsu's categories are
+ * a vocabulary of their own rather than AniList's genres, so a filtered catalog is AniList's alone
+ * instead of one whose genre filter quietly means something else on a fallback. */
+export const FILTERABLE_CATALOG_PROVIDERS: MetadataProviderId[] = ["anilist"];
+
+/** AniList's genre set, fixed on its side, minus Hentai - the catalog only ever asks for non-adult
+ * titles. Hardcoded rather than fetched: it has not changed in years, and a request per filter panel
+ * would be one more thing that can fail before the panel can open. */
+export const ANILIST_GENRES = [
+  "Action", "Adventure", "Comedy", "Drama", "Ecchi", "Fantasy", "Horror", "Mahou Shoujo", "Mecha",
+  "Music", "Mystery", "Psychological", "Romance", "Sci-Fi", "Slice of Life", "Sports", "Supernatural",
+  "Thriller",
+];
 
 export type AnimeSeason = "winter" | "spring" | "summer" | "fall";
 

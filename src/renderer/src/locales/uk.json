@@ -270,6 +270,27 @@
         "spring": "Весна",
         "summer": "Літо",
         "fall": "Осінь"
+      },
+      "noMatches": "Під ці фільтри нічого не підходить",
+      "genres": {
+        "Action": "Екшн",
+        "Adventure": "Пригоди",
+        "Comedy": "Комедія",
+        "Drama": "Драма",
+        "Ecchi": "Еччі",
+        "Fantasy": "Фентезі",
+        "Horror": "Жахи",
+        "Mahou Shoujo": "Махо-сьодзьо",
+        "Mecha": "Меха",
+        "Music": "Музика",
+        "Mystery": "Містика",
+        "Psychological": "Психологія",
+        "Romance": "Романтика",
+        "Sci-Fi": "Наукова фантастика",
+        "Slice of Life": "Повсякденність",
+        "Sports": "Спорт",
+        "Supernatural": "Надприродне",
+        "Thriller": "Трилер"
       }
     }
   },

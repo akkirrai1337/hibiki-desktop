@@ -4,7 +4,7 @@
 // Note for anyone wondering why a page is describing itself from MAL: AniList disabled this API
 // outright while this was written ("temporarily disabled due to severe stability issues", HTTP 403
 // on every query), which is exactly the case the service's provider fallback exists for.
-import { ANILIST_MEDIA_FIELDS, toExternalMetadata, toMatchCandidate, type AniListMedia } from "@shared/anilistMapping";
+import { ANILIST_MEDIA_FIELDS, toExternalMetadata, toMatchCandidate, type AniListMedia, aniListFormatsForType, aniListStatusFor } from "@shared/anilistMapping";
 import { seasonOf, type ExternalCatalogRequest, type ExternalMetadata, type MatchCandidate } from "@shared/externalMetadata";
 import { logger } from "../logger";
 import { rateLimitedJson } from "./requestQueue";
@@ -65,13 +65,39 @@ const SEASON_TO_ANILIST: Record<string, string> = {
  * rather than a lifetime popularity ranking, which is the one thing AniList does better than Kitsu
  * for a catalog and the reason it is preferred here when it is reachable at all.
  */
+/**
+ * Only the filter variables that are actually set. An unset one has to be left out entirely rather
+ * than sent as null: AniList answers a null `*_not_in` with a 500, and a request of nothing but null
+ * filters with "Illegal operator and value combination" - either of which would take down the
+ * unfiltered catalog too.
+ */
+function filterVariables(request: ExternalCatalogRequest): Record<string, string[] | number> {
+  const variables: Record<string, string[] | number> = {};
+  const addList = (name: string, values: string[] | undefined) => {
+    if (values && values.length > 0) variables[name] = [...new Set(values)];
+  };
+  const knownStatuses = (statuses: string[] | undefined) =>
+    statuses?.map(aniListStatusFor).filter((status): status is string => status !== null);
+  addList("genreIn", request.genres);
+  addList("genreNotIn", request.excludedGenres);
+  addList("formatIn", request.types?.flatMap(aniListFormatsForType));
+  addList("formatNotIn", request.excludedTypes?.flatMap(aniListFormatsForType));
+  addList("statusIn", knownStatuses(request.statuses));
+  addList("statusNotIn", knownStatuses(request.excludedStatuses));
+  // Start dates are YYYYMMDD integers, and one known only to the year is stored with a zero month and
+  // day - so the bounds sit just outside the range, not on its first day.
+  if (request.yearFrom != null) variables.startAfter = (request.yearFrom - 1) * 10_000 + 9_999;
+  if (request.yearTo != null) variables.startBefore = (request.yearTo + 1) * 10_000;
+  return variables;
+}
+
 export async function browse(request: ExternalCatalogRequest): Promise<ExternalMetadata[] | null> {
   const now = seasonOf(new Date());
   const seasonal = request.mode === "season";
   const data = await graphql<{ Page?: { media?: AniListMedia[] | null } | null }>(
-    `query ($page: Int, $perPage: Int, $season: MediaSeason, $seasonYear: Int) {
+    `query ($page: Int, $perPage: Int, $season: MediaSeason, $seasonYear: Int, $genreIn: [String], $genreNotIn: [String], $formatIn: [MediaFormat], $formatNotIn: [MediaFormat], $statusIn: [MediaStatus], $statusNotIn: [MediaStatus], $startAfter: FuzzyDateInt, $startBefore: FuzzyDateInt) {
       Page(page: $page, perPage: $perPage) {
-        media(type: ANIME, sort: ${request.mode === "popular" ? "POPULARITY_DESC" : "TRENDING_DESC"}, season: $season, seasonYear: $seasonYear, isAdult: false) { ${ANILIST_MEDIA_FIELDS} }
+        media(type: ANIME, sort: ${request.mode === "popular" ? "POPULARITY_DESC" : "TRENDING_DESC"}, season: $season, seasonYear: $seasonYear, genre_in: $genreIn, genre_not_in: $genreNotIn, format_in: $formatIn, format_not_in: $formatNotIn, status_in: $statusIn, status_not_in: $statusNotIn, startDate_greater: $startAfter, startDate_lesser: $startBefore, isAdult: false) { ${ANILIST_MEDIA_FIELDS} }
       }
     }`,
     {
@@ -81,6 +107,7 @@ export async function browse(request: ExternalCatalogRequest): Promise<ExternalM
       perPage: request.limit,
       season: seasonal ? SEASON_TO_ANILIST[request.season ?? now.season] : null,
       seasonYear: seasonal ? (request.seasonYear ?? now.year) : null,
+      ...filterVariables(request),
     },
   );
   if (!data) return null;

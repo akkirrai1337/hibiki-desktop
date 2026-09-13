@@ -270,7 +270,8 @@
         "spring": "Spring",
         "summer": "Summer",
         "fall": "Fall"
-      }
+      },
+      "noMatches": "Nothing matches these filters"
     }
   },
   "history": {

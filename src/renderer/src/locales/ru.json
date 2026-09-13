@@ -235,6 +235,27 @@
         "spring": "Весна",
         "summer": "Лето",
         "fall": "Осень"
+      },
+      "noMatches": "Под эти фильтры ничего не подходит",
+      "genres": {
+        "Action": "Экшен",
+        "Adventure": "Приключения",
+        "Comedy": "Комедия",
+        "Drama": "Драма",
+        "Ecchi": "Этти",
+        "Fantasy": "Фэнтези",
+        "Horror": "Ужасы",
+        "Mahou Shoujo": "Махо-сёдзё",
+        "Mecha": "Меха",
+        "Music": "Музыка",
+        "Mystery": "Мистика",
+        "Psychological": "Психология",
+        "Romance": "Романтика",
+        "Sci-Fi": "Научная фантастика",
+        "Slice of Life": "Повседневность",
+        "Sports": "Спорт",
+        "Supernatural": "Сверхъестественное",
+        "Thriller": "Триллер"
       }
     }
   },

@@ -71,6 +71,16 @@ export function mapAniListStatus(status: string | null | undefined): AnimeStatus
   return status ? (MEDIA_STATUS_TO_STATUS[status] ?? null) : null;
 }
 
+/** The reverse of mapAniListFormat, for filtering: every AniList format the app files under `type`. */
+export function aniListFormatsForType(type: string): string[] {
+  return Object.entries(FORMAT_TO_TYPE).filter(([, mapped]) => mapped === type).map(([format]) => format);
+}
+
+/** The reverse of mapAniListStatus, for filtering. */
+export function aniListStatusFor(status: string): string | null {
+  return Object.entries(MEDIA_STATUS_TO_STATUS).find(([, mapped]) => mapped === status)?.[0] ?? null;
+}
+
 export function toExternalMetadata(media: AniListMedia): ExternalMetadata {
   return {
     provider: "anilist",

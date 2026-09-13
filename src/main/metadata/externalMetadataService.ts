@@ -7,6 +7,8 @@
 import { and, desc, eq, lt, sql } from "drizzle-orm";
 import {
   CATALOG_PROVIDERS,
+  FILTERABLE_CATALOG_PROVIDERS,
+  hasCatalogFilters,
   MATCH_CONFIDENCE_THRESHOLD,
   METADATA_PROVIDER_IDS,
   pickBestMatch,
@@ -546,7 +548,10 @@ export async function browseProviders(
   request: ExternalCatalogRequest,
   order: MetadataProviderId[],
 ): Promise<{ results: ExternalMetadata[]; provider: MetadataProviderId | null }> {
-  const browsable = order.filter((provider) => CATALOG_PROVIDERS.includes(provider));
+  const filtered = hasCatalogFilters(request);
+  const browsable = order.filter(
+    (provider) => CATALOG_PROVIDERS.includes(provider) && (!filtered || FILTERABLE_CATALOG_PROVIDERS.includes(provider)),
+  );
   for (const provider of browsable) {
     const browse = provider === "anilist" ? anilist.browse : kitsu.browse;
     const results = await browse(request).catch(() => null);
