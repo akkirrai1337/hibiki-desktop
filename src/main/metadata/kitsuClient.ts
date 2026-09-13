@@ -13,6 +13,7 @@ import { seasonOf, type ExternalCatalogRequest, type ExternalMetadata, type Matc
 import { rateLimitedJson } from "./requestQueue";
 
 const BASE_URL = "https://kitsu.io/api/edge";
+const MAX_LISTING_PAGE = 20;
 
 // Kitsu publishes no hard rate limit, so this is a courtesy pace rather than a documented one -
 // still comfortably faster than the other two, since a title page waits on it.
@@ -66,28 +67,37 @@ export async function fetchByMalId(malId: number): Promise<ExternalMetadata | nu
  * page of it has nothing to return - the catalog screen stops there rather than pretending.
  */
 export async function browse(request: ExternalCatalogRequest): Promise<ExternalMetadata[] | null> {
-  const path = catalogPath(request);
-  if (path === null) return [];
-  const body = await get<KitsuAnime[]>(path);
-  if (!body) return null;
-  const included = body.included ?? [];
-  return (body.data ?? []).map((anime) => toExternalMetadata(anime, included));
+  if (request.mode === "trending") {
+    // A fixed list rather than something to page through: a later page has nothing to return.
+    if (request.offset > 0) return [];
+    const body = await get<KitsuAnime[]>(`/trending/anime?limit=${request.limit}&include=${KITSU_INCLUDE}`);
+    return body ? (body.data ?? []).map((anime) => toExternalMetadata(anime, body.included ?? [])) : null;
+  }
+  const listing = listingPath(request);
+  // Kitsu refuses a listing page larger than 20 with a 400 - and the catalog's own page is larger - so a
+  // bigger window is read in pages of 20 from the same offset and stitched back together.
+  const collected: ExternalMetadata[] = [];
+  let offset = request.offset;
+  while (collected.length < request.limit) {
+    const pageLimit = Math.min(MAX_LISTING_PAGE, request.limit - collected.length);
+    const body = await get<KitsuAnime[]>(`${listing}&page[limit]=${pageLimit}&page[offset]=${offset}&include=${KITSU_INCLUDE}`);
+    if (!body) return collected.length === 0 ? null : collected;
+    const page = (body.data ?? []).map((anime) => toExternalMetadata(anime, body.included ?? []));
+    collected.push(...page);
+    if (page.length < pageLimit) break;
+    offset += page.length;
+  }
+  return collected;
 }
 
-function catalogPath(request: ExternalCatalogRequest): string | null {
-  const paging = `page[limit]=${request.limit}&page[offset]=${request.offset}`;
-  if (request.mode === "trending") {
-    return request.offset > 0 ? null : `/trending/anime?limit=${request.limit}&include=${KITSU_INCLUDE}`;
-  }
+function listingPath(request: ExternalCatalogRequest): string {
   if (request.mode === "season") {
     const now = seasonOf(new Date());
-    const season = request.season ?? now.season;
-    const year = request.seasonYear ?? now.year;
-    return `/anime?filter[season]=${season}&filter[seasonYear]=${year}&sort=-userCount&${paging}&include=${KITSU_INCLUDE}`;
+    return `/anime?filter[season]=${request.season ?? now.season}&filter[seasonYear]=${request.seasonYear ?? now.year}&sort=-userCount`;
   }
-  // Kitsu's own popularity ranking, which is a lifetime count rather than a recent one - the
-  // difference between this and "trending" above.
-  return `/anime?sort=-userCount&${paging}&include=${KITSU_INCLUDE}`;
+  // Kitsu's own popularity ranking, which is a lifetime count rather than a recent one - the difference
+  // between this and "trending" above.
+  return `/anime?sort=-userCount`;
 }
 
 /** Null when the request itself failed - distinct from an empty list, which is Kitsu genuinely not
