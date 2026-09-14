@@ -153,6 +153,8 @@ const api = {
     // registers them with the main process, which injects them at the session level instead.
     registerHeaders: (url: string, headers: Record<string, string> | null | undefined): Promise<string> =>
       ipcRenderer.invoke(IPC.playerRegisterHeaders, url, headers ?? null),
+    registerHeaderOrigin: (sessionId: string, url: string): Promise<boolean> =>
+      ipcRenderer.invoke(IPC.playerRegisterHeaderOrigin, sessionId, url),
     unregisterHeaders: (sessionId: string): Promise<void> =>
       ipcRenderer.invoke(IPC.playerUnregisterHeaders, sessionId),
     // Where a stream URL actually lands after its CDN's redirects - see main/playerStream.ts.

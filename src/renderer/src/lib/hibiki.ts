@@ -116,6 +116,7 @@ export interface HibikiApi {
   };
   player: {
     registerHeaders(url: string, headers: Record<string, string> | null | undefined): Promise<string>;
+    registerHeaderOrigin(sessionId: string, url: string): Promise<boolean>;
     unregisterHeaders(sessionId: string): Promise<void>;
     resolveStreamUrl(url: string, headers: Record<string, string> | null | undefined): Promise<string>;
     captureFrame(rect: { x: number; y: number; width: number; height: number }): Promise<string | null>;

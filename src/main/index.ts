@@ -13,7 +13,7 @@ import { registerLibraryHandlers } from "./ipc/library";
 import { registerXpEventHandlers } from "./ipc/xpEvents";
 import { registerMarketplaceHandlers, repairMissingResolverDependencies } from "./ipc/marketplace";
 import { DOWNLOADS_DIR, registerDownloadHandlers } from "./ipc/downloads";
-import { installPlayerHeaderInjector, registerPlayerHeaders, unregisterPlayerHeaders } from "./playerHeaders";
+import { installPlayerHeaderInjector, registerPlayerHeaderOrigin, registerPlayerHeaders, unregisterPlayerHeaders } from "./playerHeaders";
 import { resolveFinalStreamUrl } from "./playerStream";
 import { clearDiscordPresence, setDiscordRpcEnabled, setIdleDiscordPresence, shutdownDiscordRpc, updateDiscordPresence } from "./discordRpc";
 import { createBackup, restoreBackup } from "./backup";
@@ -195,6 +195,9 @@ app.whenReady().then(() => {
   installPlayerHeaderInjector();
   ipcMain.handle(IPC.playerRegisterHeaders, (_e, url: string, headers: Record<string, string> | null) =>
     registerPlayerHeaders(url, headers),
+  );
+  ipcMain.handle(IPC.playerRegisterHeaderOrigin, (_e, sessionId: string, url: string) =>
+    registerPlayerHeaderOrigin(sessionId, url),
   );
   ipcMain.handle(IPC.playerUnregisterHeaders, (_e, sessionId: string) => unregisterPlayerHeaders(sessionId));
   ipcMain.handle(IPC.playerResolveStreamUrl, (_e, url: string, headers: Record<string, string> | null) =>

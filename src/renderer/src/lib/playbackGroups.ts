@@ -9,17 +9,19 @@ import { hibiki } from "@/lib/hibiki";
  * The cache is a placeholder, never a substitute for the request: a newly released episode has to
  * show up on the screen the user is looking at, not fifteen minutes later.
  */
-export function usePlaybackGroups(sourceId: string, animeId: string, staleTime?: number) {
+export function usePlaybackGroups(sourceId: string, animeId: string, staleTime?: number, enabled = true) {
   const cached = useQuery({
     queryKey: ["cached-playbackGroups", sourceId, animeId],
     queryFn: () => hibiki.sources.cachedPlaybackGroups(sourceId, animeId),
     staleTime: Infinity,
+    enabled,
   });
 
   return useQuery({
     queryKey: ["playbackGroups", sourceId, animeId],
     placeholderData: cached.data?.groups,
     staleTime,
+    enabled,
     queryFn: () => hibiki.sources.playbackGroups(sourceId, animeId),
   });
 }

@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes hibiki-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.animate-shimmer {
+  background: linear-gradient(110deg, rgba(255,255,255,.05) 30%, rgba(255,255,255,.13) 45%, rgba(255,255,255,.05) 60%);
+  background-size: 200% 100%;
+  animation: hibiki-shimmer 1.35s ease-in-out infinite;
+}
+
 :root {
   --color-bg: 250 250 251;
   --color-surface: 255 255 255;

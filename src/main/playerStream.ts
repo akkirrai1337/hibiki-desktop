@@ -17,6 +17,18 @@ import { logger } from "./logger";
 
 const MAX_REDIRECT_HOPS = 5;
 const RESOLVE_TIMEOUT_MS = 8000;
+const RESOLVE_CACHE_TTL_MS = 30_000;
+
+type CachedResolution = { url: string; expiresAt: number };
+const resolvedUrls = new Map<string, CachedResolution>();
+const resolvingUrls = new Map<string, Promise<string>>();
+
+function resolutionKey(url: string, headers?: Record<string, string> | null): string {
+  const normalized = Object.entries(headers ?? {})
+    .map(([name, value]) => [name.toLowerCase(), value] as const)
+    .sort(([a], [b]) => a.localeCompare(b));
+  return `${url}\n${JSON.stringify(normalized)}`;
+}
 
 /**
  * The URL this one ends up at, or the input unchanged when it doesn't redirect or can't be
@@ -24,6 +36,24 @@ const RESOLVE_TIMEOUT_MS = 8000;
  * reports its own errors - this is an optimization of the request, not a gate on it.
  */
 export async function resolveFinalStreamUrl(url: string, headers?: Record<string, string> | null): Promise<string> {
+  const key = resolutionKey(url, headers);
+  const cached = resolvedUrls.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.url;
+  const existing = resolvingUrls.get(key);
+  if (existing) return existing;
+
+  let pending!: Promise<string>;
+  pending = resolveFinalStreamUrlUncached(url, headers).then((resolved) => {
+    resolvedUrls.set(key, { url: resolved, expiresAt: Date.now() + RESOLVE_CACHE_TTL_MS });
+    return resolved;
+  }).finally(() => {
+    if (resolvingUrls.get(key) === pending) resolvingUrls.delete(key);
+  });
+  resolvingUrls.set(key, pending);
+  return pending;
+}
+
+async function resolveFinalStreamUrlUncached(url: string, headers?: Record<string, string> | null): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), RESOLVE_TIMEOUT_MS);
   let current = url;

@@ -16,6 +16,14 @@ describe("PlayerHeaderRegistry", () => {
     });
   });
 
+  it("shares a playback session with a subtitle origin", () => {
+    const registry = new PlayerHeaderRegistry();
+    registry.register("playback-1", "https://video.test/master.m3u8", { Referer: "https://player.test" }, 0);
+
+    expect(registry.registerOrigin("playback-1", "https://subs.test/episode-1.vtt", 1)).toBe(true);
+    expect(registry.headersFor("https://subs.test/episode-1.vtt", 2)).toEqual({ Referer: "https://player.test" });
+  });
+
   it("removes every redirect origin when playback ends", () => {
     const registry = new PlayerHeaderRegistry();
     registry.register("playback-1", "https://p12.cdn.test/master.m3u8", { Authorization: "token" }, 0);

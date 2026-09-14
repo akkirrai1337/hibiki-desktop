@@ -38,6 +38,21 @@ export class PlayerHeaderRegistry {
     return true;
   }
 
+  /** Adds another resource origin (for example a remote WebVTT file) to an existing playback
+   * session without replacing the session's headers or its already-known origins. */
+  registerOrigin(sessionId: string, url: string, now = Date.now()): boolean {
+    const origin = urlOrigin(url);
+    const session = this.sessions.get(sessionId);
+    if (!origin || !session) return false;
+    session.touchedAt = now;
+    if (!session.origins.has(origin)) {
+      session.origins.add(origin);
+      this.addOrigin(sessionId, origin);
+    }
+    this.sweep(now);
+    return true;
+  }
+
   unregister(sessionId: string): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;

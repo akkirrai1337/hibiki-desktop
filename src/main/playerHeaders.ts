@@ -18,6 +18,10 @@ export function registerPlayerHeaders(url: string, headers: Record<string, strin
   return sessionId;
 }
 
+export function registerPlayerHeaderOrigin(sessionId: string, url: string): boolean {
+  return headerRegistry.registerOrigin(sessionId, url);
+}
+
 export function unregisterPlayerHeaders(sessionId: string): void {
   headerRegistry.unregister(sessionId);
 }

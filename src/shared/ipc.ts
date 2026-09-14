@@ -80,6 +80,7 @@ export const IPC = {
   downloadsProgress: "downloads:progress",
 
   playerRegisterHeaders: "player:registerHeaders",
+  playerRegisterHeaderOrigin: "player:registerHeaderOrigin",
   playerUnregisterHeaders: "player:unregisterHeaders",
   playerResolveStreamUrl: "player:resolveStreamUrl",
   playerCaptureFrame: "player:captureFrame",

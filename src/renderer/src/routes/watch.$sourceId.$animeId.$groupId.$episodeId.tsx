@@ -112,6 +112,10 @@ function WatchPage() {
   // same minute twice is one minute there, and only the offsets themselves can say that.
   const unreportedSecondsRef = useRef(new Set<number>());
   const queryClient = useQueryClient();
+  // Starting playback only needs the route ids. Fetch the full groups payload when the user
+  // opens the dub or episode picker, not on every player entry.
+  const [groupsRequested, setGroupsRequested] = useState(false);
+  const requestGroups = useCallback(() => setGroupsRequested(true), []);
 
   // Same query key as the profile page's own activity query - watching here and then checking the
   // profile page reads from (and refetches into) the same cache entry instead of two independent
@@ -329,7 +333,7 @@ function WatchPage() {
   // props that VideoPlayer's own effects key off, so a background refetch here is just as capable
   // of resetting the player mid-episode as one on linksQuery/progressQuery was.
   const animeQuery = useQuery({ queryKey: ["anime", sourceId, animeId], queryFn: () => hibiki.sources.getById(sourceId, animeId), staleTime: Infinity, refetchOnWindowFocus: false });
-  const groupsQuery = usePlaybackGroups(sourceId, animeId, Infinity);
+  const groupsQuery = usePlaybackGroups(sourceId, animeId, Infinity, groupsRequested);
   const group = groupsQuery.data?.find((g) => g.id === groupId);
   const episodeIndex = group?.episodes.findIndex((e) => e.id === episodeId) ?? -1;
   const episode = episodeIndex >= 0 ? group!.episodes[episodeIndex] : undefined;
@@ -633,6 +637,8 @@ function WatchPage() {
           onBack={goBack}
           onPrevEpisode={onPrevEpisode}
           onNextEpisode={onNextEpisode}
+          onOpenEpisodes={requestGroups}
+          episodesLoading={groupsRequested && groupsQuery.isFetching && !groupsQuery.data}
           episodes={group?.episodes}
           currentEpisodeId={episodeId}
           onSelectEpisode={goToEpisode}

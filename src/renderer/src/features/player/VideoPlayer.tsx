@@ -71,6 +71,8 @@ interface VideoPlayerProps {
   onBack: () => void;
   onPrevEpisode?: () => void;
   onNextEpisode?: () => void;
+  onOpenEpisodes?: () => void;
+  episodesLoading?: boolean;
   // The current group's full episode list, so the in-player episode picker can jump straight to
   // any of them - not just the immediate neighbors onPrevEpisode/onNextEpisode cover.
   episodes?: Episode[];
@@ -243,6 +245,15 @@ function EpisodeListPanel({ episodes, currentEpisodeId, onSelect, title, t }: {
   </div>;
 }
 
+function EpisodeListSkeleton({ title }: { title: string }) {
+  return <div className="w-72 p-1.5">
+    <div className="px-2.5 py-1.5 text-sm font-semibold text-white">{title}</div>
+    <div className="space-y-1.5 p-1">
+      {Array.from({ length: 7 }, (_, index) => <div key={index} className="h-8 animate-shimmer rounded-lg" />)}
+    </div>
+  </div>;
+}
+
 // A YouTube-style drill-down menu (main list -> tap "Speed" -> its own page with a back arrow)
 // rather than dumping every control flat in one panel - the flat version read as a wall of options
 // with no hierarchy even at just three settings, and this scales worse the more get added (as
@@ -252,7 +263,7 @@ function PlayerSettingsMenu({
   playbackSpeed, onSelectSpeed,
   autoSkipSegments, onToggleAutoSkip,
   autoPlayNextEpisode, onToggleAutoPlay,
-  dubOptions, selectedDubId, onSelectDub,
+  dubOptions, selectedDubId, onSelectDub, onOpenDub, dubLoading,
   translationOptions, selectedTranslation, onSelectTranslation,
   playerOptions, selectedPlayerName, onSelectPlayerName,
   qualityOptions, selectedQuality, onSelectQuality, qualityLocked,
@@ -267,6 +278,8 @@ function PlayerSettingsMenu({
   dubOptions: { id: string; title: string }[];
   selectedDubId: string | undefined;
   onSelectDub: (groupId: string) => void;
+  onOpenDub: () => void;
+  dubLoading: boolean;
   translationOptions: string[];
   selectedTranslation: string | undefined;
   onSelectTranslation: (name: string) => void;
@@ -297,6 +310,7 @@ function PlayerSettingsMenu({
   if (page === "dub") {
     // Keyed by title, like every other ListPage - two groups sharing a title would be
     // indistinguishable in the list anyway, so picking the first match loses nothing.
+    if (dubLoading) return <div className="w-56 p-1.5"><div className="mb-1 flex items-center gap-1 px-1.5 py-2 text-sm font-semibold text-white">{t("watch.settings.dub")}</div><div className="space-y-1.5 p-1">{Array.from({ length: 5 }, (_, index) => <div key={index} className="h-8 animate-shimmer rounded-lg" />)}</div></div>;
     return <ListPage
       title={t("watch.settings.dub")}
       options={dubOptions.map((d) => d.title)}
@@ -316,7 +330,7 @@ function PlayerSettingsMenu({
   }
 
   return <div className="w-56 p-1.5">
-    {dubOptions.length > 0 && <MenuRow label={t("watch.settings.dub")} value={selectedDub?.title ?? "—"} onClick={dubOptions.length > 1 ? () => setPage("dub") : undefined} />}
+    <MenuRow label={t("watch.settings.dub")} value={selectedDub?.title ?? "—"} onClick={() => { onOpenDub(); setPage("dub"); }} />
     {translationOptions.length > 1 && <MenuRow label={t("watch.settings.translation")} value={selectedTranslation ?? "—"} onClick={() => setPage("translation")} />}
     {playerOptions.length > 0 && <MenuRow label={t("watch.settings.player")} value={selectedPlayerName ?? "—"} onClick={playerOptions.length > 1 ? () => setPage("player") : undefined} />}
     {qualityLocked
@@ -329,7 +343,7 @@ function PlayerSettingsMenu({
   </div>;
 }
 
-export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions, selectedDubId, onSelectDub, sourceSwitching, onSelectLink, onPlaybackFailure, startPositionMs, onProgress, onPlayStateChange, onCaptureThumbnail, title, episodeLabel, onBack, onPrevEpisode, onNextEpisode, episodes, currentEpisodeId, onSelectEpisode, streakToast }: VideoPlayerProps) {
+export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions, selectedDubId, onSelectDub, sourceSwitching, onSelectLink, onPlaybackFailure, startPositionMs, onProgress, onPlayStateChange, onCaptureThumbnail, title, episodeLabel, onBack, onPrevEpisode, onNextEpisode, onOpenEpisodes, episodesLoading, episodes, currentEpisodeId, onSelectEpisode, streakToast }: VideoPlayerProps) {
   const { t } = useTranslation();
   // Held in a ref, deliberately not read as a prop from inside the effects below. Both the source
   // setup and the media-element wiring would otherwise have to list it as a dependency, and the
@@ -368,6 +382,8 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   const episodeListRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const playbackStartedAtRef = useRef(0);
+  const firstFrameLoggedRef = useRef(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const seekBarRef = useRef<HTMLDivElement>(null);
 
@@ -547,11 +563,14 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     let dash: MediaPlayerClass | null = null;
     let cancelled = false;
     let headerSessionId: string | null = null;
+    const subtitleSessionIds: string[] = [];
     let networkRetryTimer: number | null = null;
     // Providers occasionally return `//cdn…` URLs. They are remote HTTPS streams, not local
     // files; make that explicit before a packaged renderer resolves them relative to `file:`.
     // Downloaded episodes already use the explicit `hibiki-download:` scheme and remain local.
     const streamUrl = playbackUrl(link.url);
+    playbackStartedAtRef.current = Date.now();
+    firstFrameLoggedRef.current = false;
     const isHls = link.type === "DIRECT_HLS";
     // Aksor (and other resolvers - see extractors/*.js in hibiki-sources) sometimes only has a
     // DASH rendition available, not HLS/MP4 - Android's ExoPlayer handles this via its DASH
@@ -577,6 +596,19 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         return;
       }
       headerSessionId = sessionId;
+      // `<track src>` is fetched by Chromium outside hls.js, so it does not inherit the stream
+      // request's headers automatically. Register every subtitle origin in the playback session;
+      // tracks that carry their own headers get a small dedicated session instead.
+      await Promise.all((link.subtitles ?? []).map(async (track) => {
+        const subtitleUrl = playbackUrl(track.url);
+        if (track.headers && Object.keys(track.headers).length > 0) {
+          const subtitleSessionId = await hibiki.player.registerHeaders(subtitleUrl, track.headers);
+          subtitleSessionIds.push(subtitleSessionId);
+          return;
+        }
+        await hibiki.player.registerHeaderOrigin(sessionId, subtitleUrl);
+      }));
+      if (cancelled) return;
       if (isHls) {
         // HLS/DASH are large libraries and the catalog never needs them. Import only the engine
         // selected by this stream, keeping both out of the application's startup bundle.
@@ -746,6 +778,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       hls?.destroy();
       dash?.destroy();
       if (headerSessionId) void hibiki.player.unregisterHeaders(headerSessionId);
+      for (const sessionId of subtitleSessionIds) void hibiki.player.unregisterHeaders(sessionId);
     };
   }, [link, isEmbed]);
 
@@ -795,6 +828,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
 
     const onLoadedMetadata = () => {
       setDuration(video.duration);
+      log.info("player", `metadata ready in ${Date.now() - playbackStartedAtRef.current}ms: ${link?.quality ?? "?"} ${playbackUrl(link?.url ?? "")}`);
       const pendingSwitch = pendingSourceSwitchRef.current;
       const isReplacementStream = !!pendingSwitch && pendingSwitch.fromUrl !== link?.url;
       if (isReplacementStream && video.duration) {
@@ -832,6 +866,10 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     };
     const onPlay = () => {
       setPlaying(true);
+      if (!firstFrameLoggedRef.current) {
+        firstFrameLoggedRef.current = true;
+        log.info("player", `first frame/playing in ${Date.now() - playbackStartedAtRef.current}ms: ${link?.quality ?? "?"} ${playbackUrl(link?.url ?? "")}`);
+      }
       onPlayStateChange?.(true);
       if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
     };
@@ -1342,7 +1380,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     >
       <video ref={videoRef} crossOrigin="anonymous" autoPlay className="h-full w-full object-contain">
         {link?.subtitles?.map((track) => (
-          <track key={track.url} kind="subtitles" src={track.url} srcLang={track.language ?? undefined} label={track.label ?? track.language ?? "sub"} />
+          <track key={track.url} kind="subtitles" src={playbackUrl(track.url)} srcLang={track.language ?? undefined} label={track.label ?? track.language ?? "sub"} />
         ))}
       </video>
 
@@ -1603,27 +1641,29 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
                 <VolumeIcon className="h-[18px] w-[18px]" strokeWidth={2} />
               </button>
             </div>
-            {episodes && episodes.length > 1 && (
+            {(episodesLoading || !episodes || episodes.length > 1) && (
               <div ref={episodeListRef} className="relative">
                 <button
-                  onClick={(e) => { stop(e); setEpisodeListOpen((v) => !v); }}
+                  onClick={(e) => { stop(e); onOpenEpisodes?.(); setEpisodeListOpen((v) => !v); }}
                   className={cn("flex h-8 w-8 shrink-0 items-center justify-center transition-colors", episodeListOpen ? "text-white" : "text-white/80 hover:text-white")}
                 >
                   <ListVideo className="h-[18px] w-[18px]" strokeWidth={2} />
                 </button>
                 {episodeListOpen && (
                   <div onClick={stop} className="absolute bottom-full right-0 z-20 mb-3 overflow-hidden rounded-xl border border-white/10 bg-[#1d1c22] shadow-2xl">
-                    <EpisodeListPanel
-                      episodes={episodes}
-                      currentEpisodeId={currentEpisodeId}
-                      onSelect={(episodeId) => {
-                        setEpisodeListOpen(false);
-                        if (episodeId === currentEpisodeId) return;
-                        onSelectEpisode?.(episodeId);
-                      }}
-                      title={t("detail.episodes")}
-                      t={t}
-                    />
+                    {episodesLoading || !episodes
+                      ? <EpisodeListSkeleton title={t("detail.episodes")} />
+                      : <EpisodeListPanel
+                          episodes={episodes}
+                          currentEpisodeId={currentEpisodeId}
+                          onSelect={(episodeId) => {
+                            setEpisodeListOpen(false);
+                            if (episodeId === currentEpisodeId) return;
+                            onSelectEpisode?.(episodeId);
+                          }}
+                          title={t("detail.episodes")}
+                          t={t}
+                        />}
                   </div>
                 )}
               </div>
@@ -1652,6 +1692,8 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
                     onToggleAutoPlay={() => setAutoPlayNextEpisode(!autoPlayNextEpisode)}
                     dubOptions={dubOptions ?? []}
                     selectedDubId={selectedDubId}
+                    onOpenDub={() => onOpenEpisodes?.()}
+                    dubLoading={episodesLoading ?? false}
                     onSelectDub={(id) => {
                       setSettingsOpen(false);
                       if (id === selectedDubId) return;
