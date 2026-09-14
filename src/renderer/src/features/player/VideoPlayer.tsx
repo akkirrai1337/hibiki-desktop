@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
 import type Hls from "hls.js";
@@ -9,10 +9,12 @@ import {
   ChevronLeft,
   ChevronRight,
   FastForward,
+  ListVideo,
   Loader2,
   Maximize,
   Minimize,
   Pause,
+  PictureInPicture2,
   Play,
   Settings,
   SkipBack,
@@ -22,7 +24,7 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
-import type { PlayerLink, VideoSegment } from "@shared/types";
+import type { Episode, PlayerLink, VideoSegment } from "@shared/types";
 import { pickLinkForDimension, pickLinkForQuality, playerOptions, qualityOptions, translationOptions } from "@/lib/playerLinks";
 import { playbackUrl } from "@/lib/playbackUrl";
 import { hibiki } from "@/lib/hibiki";
@@ -69,6 +71,11 @@ interface VideoPlayerProps {
   onBack: () => void;
   onPrevEpisode?: () => void;
   onNextEpisode?: () => void;
+  // The current group's full episode list, so the in-player episode picker can jump straight to
+  // any of them - not just the immediate neighbors onPrevEpisode/onNextEpisode cover.
+  episodes?: Episode[];
+  currentEpisodeId?: string;
+  onSelectEpisode?: (episodeId: string) => void;
   // Set for a few seconds right when the streak count just went up mid-episode - see StreakToast.
   streakToast?: { current: number; best: number } | null;
 }
@@ -193,6 +200,49 @@ function ListPage({ title, options, selected, onSelect, onBack }: { title: strin
   </div>;
 }
 
+// The episode picker's own panel - a plain scrollable list rather than the settings menu's
+// drill-down, since there's only ever this one page of it. Numbered rows (not just titles) so a
+// title-less episode ("Episode 7" everywhere) is still distinguishable at a glance.
+function EpisodeListPanel({ episodes, currentEpisodeId, onSelect, title, t }: {
+  episodes: Episode[];
+  currentEpisodeId: string | undefined;
+  onSelect: (episodeId: string) => void;
+  title: string;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  const listRef = useRef<HTMLDivElement>(null);
+  // Opens already scrolled to wherever you actually are, not the top of a list that can run into
+  // the hundreds - this mounts fresh every time the panel opens (see episodeListOpen below), so
+  // there's no stale scroll position to worry about carrying over from a previous open.
+  // useLayoutEffect, not useEffect, so this happens before the panel's first paint instead of as a
+  // visible jump right after it.
+  useLayoutEffect(() => {
+    listRef.current?.querySelector('[data-selected="true"]')?.scrollIntoView({ block: "center" });
+  }, []);
+  return <div className="w-72 p-1.5">
+    <div className="px-2.5 py-1.5 text-sm font-semibold text-white">{title}</div>
+    <div ref={listRef} className="max-h-72 overflow-y-auto">
+      {episodes.map((episode) => {
+        const selected = episode.id === currentEpisodeId;
+        return (
+          <button
+            key={episode.id}
+            data-selected={selected}
+            onClick={() => onSelect(episode.id)}
+            className={cn(
+              "flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
+              selected ? "text-white" : "text-zinc-200 hover:bg-white/[.06]",
+            )}
+          >
+            <span className="truncate">{episode.title || t("detail.episodeFallback", { number: episode.number })}</span>
+            {selected && <Check className="h-4 w-4 shrink-0 text-accent-text" strokeWidth={2.5} />}
+          </button>
+        );
+      })}
+    </div>
+  </div>;
+}
+
 // A YouTube-style drill-down menu (main list -> tap "Speed" -> its own page with a back arrow)
 // rather than dumping every control flat in one panel - the flat version read as a wall of options
 // with no hierarchy even at just three settings, and this scales worse the more get added (as
@@ -279,7 +329,7 @@ function PlayerSettingsMenu({
   </div>;
 }
 
-export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions, selectedDubId, onSelectDub, sourceSwitching, onSelectLink, onPlaybackFailure, startPositionMs, onProgress, onPlayStateChange, onCaptureThumbnail, title, episodeLabel, onBack, onPrevEpisode, onNextEpisode, streakToast }: VideoPlayerProps) {
+export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions, selectedDubId, onSelectDub, sourceSwitching, onSelectLink, onPlaybackFailure, startPositionMs, onProgress, onPlayStateChange, onCaptureThumbnail, title, episodeLabel, onBack, onPrevEpisode, onNextEpisode, episodes, currentEpisodeId, onSelectEpisode, streakToast }: VideoPlayerProps) {
   const { t } = useTranslation();
   // Held in a ref, deliberately not read as a prop from inside the effects below. Both the source
   // setup and the media-element wiring would otherwise have to list it as a dependency, and the
@@ -314,6 +364,8 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   const skipCountdownSeconds = autoSkipSegments ? autoSkipDelaySeconds : skipButtonTimeoutSeconds;
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
+  const [episodeListOpen, setEpisodeListOpen] = useState(false);
+  const episodeListRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -337,6 +389,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   const [controlsVisible, setControlsVisible] = useState(true);
   const [volumeHover, setVolumeHover] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isPip, setIsPip] = useState(false);
   const [seeking, setSeeking] = useState(false);
   const [hoverRatio, setHoverRatio] = useState<number | null>(null);
   // Mirrors the Android app's hold-to-fast-forward chip (top-center, "2×" + a fast-forward icon
@@ -777,8 +830,16 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     const onProgressEvent = () => {
       if (video.buffered.length > 0) setBuffered(video.buffered.end(video.buffered.length - 1));
     };
-    const onPlay = () => { setPlaying(true); onPlayStateChange?.(true); };
-    const onPause = () => { setPlaying(false); onPlayStateChange?.(false); };
+    const onPlay = () => {
+      setPlaying(true);
+      onPlayStateChange?.(true);
+      if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
+    };
+    const onPause = () => {
+      setPlaying(false);
+      onPlayStateChange?.(false);
+      if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused";
+    };
     const onWaiting = () => setBuffering(true);
     const onCanPlay = () => {
       setBuffering(false);
@@ -916,11 +977,75 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     return () => window.removeEventListener("pointerdown", onPointerDown, { capture: true });
   }, [settingsOpen]);
 
+  // Same reasoning as the settings menu's outside-click effect above, for the episode list panel.
+  useEffect(() => {
+    if (!episodeListOpen) return;
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.target instanceof Node && episodeListRef.current?.contains(e.target)) return;
+      setEpisodeListOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown, { capture: true });
+    return () => window.removeEventListener("pointerdown", onPointerDown, { capture: true });
+  }, [episodeListOpen]);
+
   // --- fullscreen tracking ---
   useEffect(() => {
     const onChange = () => setIsFullscreen(document.fullscreenElement === containerRef.current);
     document.addEventListener("fullscreenchange", onChange);
     return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  // --- picture-in-picture tracking (native fallback path only - see togglePip) ---
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const onEnter = () => setIsPip(true);
+    const onLeave = () => setIsPip(false);
+    video.addEventListener("enterpictureinpicture", onEnter);
+    video.addEventListener("leavepictureinpicture", onLeave);
+    return () => {
+      video.removeEventListener("enterpictureinpicture", onEnter);
+      video.removeEventListener("leavepictureinpicture", onLeave);
+    };
+  }, []);
+
+  // The browser's native picture-in-picture window (and the OS media-key overlay) only grows the
+  // ±seek buttons and a scrubbing timeline once a Media Session with those actions actually
+  // exists - without this, PiP falls back to a bare video frame with nothing but a generic
+  // "back to tab" link, which is exactly what a plain requestPictureInPicture() call gets you on
+  // its own.
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    navigator.mediaSession.metadata = new MediaMetadata({ title: episodeLabel || title, artist: title });
+    return () => { navigator.mediaSession.metadata = null; };
+  }, [title, episodeLabel]);
+
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    const video = videoRef.current;
+    if (!video) return;
+    // The PiP window's own skip icons are a fixed 15s, independent of this player's in-app
+    // keyboard/double-tap seek step - two different surfaces, no reason to tie them together.
+    const PIP_SEEK_STEP_SECONDS = 15;
+    const seekBy = (deltaSeconds: number) => {
+      video.currentTime = Math.min(Math.max(0, video.currentTime + deltaSeconds), video.duration || Infinity);
+    };
+    navigator.mediaSession.setActionHandler("play", () => void video.play());
+    navigator.mediaSession.setActionHandler("pause", () => video.pause());
+    // Electron's Chromium build renders "previoustrack"/"nexttrack" as clickable icons flanking
+    // play/pause in the native PiP window, but not "seekbackward"/"seekforward" (confirmed by
+    // hand: registering only the seek actions left the PiP window with no flanking buttons at
+    // all) - so the ±15s skip has to ride on the icon slots that actually render, rather than the
+    // ones semantically meant for it.
+    navigator.mediaSession.setActionHandler("previoustrack", () => seekBy(-PIP_SEEK_STEP_SECONDS));
+    navigator.mediaSession.setActionHandler("nexttrack", () => seekBy(PIP_SEEK_STEP_SECONDS));
+    return () => {
+      navigator.mediaSession.setActionHandler("play", null);
+      navigator.mediaSession.setActionHandler("pause", null);
+      navigator.mediaSession.setActionHandler("previoustrack", null);
+      navigator.mediaSession.setActionHandler("nexttrack", null);
+    };
   }, []);
 
   // --- auto-hide controls while playing ---
@@ -996,6 +1121,17 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   const toggleFullscreenNow = useCallback(() => {
     if (document.fullscreenElement) document.exitFullscreen();
     else containerRef.current?.requestFullscreen();
+  }, []);
+
+  const togglePip = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    const video = videoRef.current;
+    if (!video) return;
+    if (document.pictureInPictureElement) {
+      document.exitPictureInPicture().catch((err) => log.error("player", "failed to exit picture-in-picture:", err));
+    } else {
+      video.requestPictureInPicture().catch((err) => log.error("player", "failed to enter picture-in-picture:", err));
+    }
   }, []);
 
   // --- keyboard shortcuts: space play/pause (hold to fast-forward at 2x, TikTok/YouTube-style),
@@ -1467,6 +1603,37 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
                 <VolumeIcon className="h-[18px] w-[18px]" strokeWidth={2} />
               </button>
             </div>
+            {episodes && episodes.length > 1 && (
+              <div ref={episodeListRef} className="relative">
+                <button
+                  onClick={(e) => { stop(e); setEpisodeListOpen((v) => !v); }}
+                  className={cn("flex h-8 w-8 shrink-0 items-center justify-center transition-colors", episodeListOpen ? "text-white" : "text-white/80 hover:text-white")}
+                >
+                  <ListVideo className="h-[18px] w-[18px]" strokeWidth={2} />
+                </button>
+                {episodeListOpen && (
+                  <div onClick={stop} className="absolute bottom-full right-0 z-20 mb-3 overflow-hidden rounded-xl border border-white/10 bg-[#1d1c22] shadow-2xl">
+                    <EpisodeListPanel
+                      episodes={episodes}
+                      currentEpisodeId={currentEpisodeId}
+                      onSelect={(episodeId) => {
+                        setEpisodeListOpen(false);
+                        if (episodeId === currentEpisodeId) return;
+                        onSelectEpisode?.(episodeId);
+                      }}
+                      title={t("detail.episodes")}
+                      t={t}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+            <button
+              onClick={togglePip}
+              className={cn("flex h-8 w-8 shrink-0 items-center justify-center transition-colors", isPip ? "text-white" : "text-white/80 hover:text-white")}
+            >
+              <PictureInPicture2 className="h-[18px] w-[18px]" strokeWidth={2} />
+            </button>
             <div ref={settingsRef} className="relative">
               <button
                 onClick={(e) => { stop(e); setSettingsOpen((v) => !v); }}

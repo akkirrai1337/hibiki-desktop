@@ -633,6 +633,9 @@ function WatchPage() {
           onBack={goBack}
           onPrevEpisode={onPrevEpisode}
           onNextEpisode={onNextEpisode}
+          episodes={group?.episodes}
+          currentEpisodeId={episodeId}
+          onSelectEpisode={goToEpisode}
           streakToast={streakToast}
         />
       )}
