@@ -371,6 +371,13 @@ function CommentText({ text }: { text: string }) {
       {splitMentions(text).map((part, index) =>
         part.type === "mention" ? (
           <span key={index} className="font-semibold text-accent-text">@{part.name}</span>
+        ) : part.type === "spoiler" ? (
+          <details key={index} className="inline">
+            <summary className="inline cursor-pointer rounded bg-text/[.12] px-1.5 py-0.5 text-xs font-semibold text-text/80 marker:content-none hover:bg-text/[.18]">
+              {part.label}
+            </summary>
+            <span className="rounded bg-text/[.08] px-1 py-0.5">{part.value}</span>
+          </details>
         ) : (
           part.value
         ),

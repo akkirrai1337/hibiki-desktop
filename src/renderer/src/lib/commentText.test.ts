@@ -22,6 +22,20 @@ describe("splitMentions", () => {
     expect(parts.filter((part) => part.type === "mention")).toHaveLength(2);
   });
 
+  it("keeps YummyAnime spoilers concealed until the comment UI explicitly reveals them", () => {
+    expect(splitMentions('до [спойлер="Спойлер!"]герой погибает[/спойлер] после')).toEqual([
+      { type: "text", value: "до " },
+      { type: "spoiler", label: "Спойлер!", value: "герой погибает" },
+      { type: "text", value: " после" },
+    ]);
+  });
+
+  it("supports an unlabelled spoiler block", () => {
+    expect(splitMentions("[спойлер]скрытый текст[/спойлер]")).toEqual([
+      { type: "spoiler", label: "Спойлер", value: "скрытый текст" },
+    ]);
+  });
+
   it("leaves a comment without mentions exactly as written", () => {
     expect(splitMentions("серьёзно на самом интересном")).toEqual([
       { type: "text", value: "серьёзно на самом интересном" },
