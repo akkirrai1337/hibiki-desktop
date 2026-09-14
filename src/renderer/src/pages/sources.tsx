@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
@@ -77,6 +77,7 @@ const CAPABILITY_PRIORITY: SourceCapability[] = [
 ];
 
 const MAX_VISIBLE_CAPABILITIES = 3;
+const UPDATE_ALL_CONCURRENCY = 3;
 
 const CAPABILITY_LABEL_KEYS: Record<SourceCapability, string> = {
   LATEST_RELEASES: "sources.capability.latest",
@@ -112,7 +113,10 @@ export function SourcesPage() {
   const [addRepositoryOpen, setAddRepositoryOpen] = useState(false);
   const [repositoryPendingRemoval, setRepositoryPendingRemoval] = useState<string | null>(null);
   const [installingIds, setInstallingIds] = useState<Set<string>>(new Set());
+  const installingIdsRef = useRef(new Set<string>());
   const [installErrors, setInstallErrors] = useState<Record<string, string>>({});
+  const [updateAllInProgress, setUpdateAllInProgress] = useState(false);
+  const updateAllInProgressRef = useRef(false);
   const [refreshSignal, setRefreshSignal] = useState(0);
 
   const activeSourceId = useUiStore((s) => s.activeSourceId);
@@ -216,7 +220,12 @@ export function SourcesPage() {
         ? "error"
         : "loading";
 
-  async function installExtension(extension: MarketplaceExtension) {
+  const installExtension = useCallback(async (extension: MarketplaceExtension) => {
+    // State updates do not become visible until React renders again, so `installingIds` alone
+    // cannot stop two fast clicks (or two "Update all" presses) from starting the same download.
+    // The ref is updated synchronously and is the actual per-source mutex.
+    if (installingIdsRef.current.has(extension.id)) return;
+    installingIdsRef.current.add(extension.id);
     setInstallingIds((prev) => new Set(prev).add(extension.id));
     setInstallErrors((prev) => { const next = { ...prev }; delete next[extension.id]; return next; });
     const hadNoSources = (installedSources.data?.length ?? 0) === 0;
@@ -227,9 +236,33 @@ export function SourcesPage() {
     } catch (error) {
       setInstallErrors((prev) => ({ ...prev, [extension.id]: error instanceof Error ? error.message : String(error) }));
     } finally {
+      installingIdsRef.current.delete(extension.id);
       setInstallingIds((prev) => { const next = new Set(prev); next.delete(extension.id); return next; });
     }
-  }
+  }, [installedSources.data, originByExtensionId, queryClient, setActiveSourceId]);
+
+  const updateAll = useCallback(async () => {
+    if (updateAllInProgressRef.current) return;
+    updateAllInProgressRef.current = true;
+    setUpdateAllInProgress(true);
+    // Keep a fixed snapshot: each successful install refreshes the marketplace state, but that
+    // must not append new work into an update operation already in progress.
+    const pending = [...updateAvailableExtensions];
+    let nextIndex = 0;
+    const worker = async () => {
+      for (;;) {
+        const extension = pending[nextIndex++];
+        if (!extension) return;
+        await installExtension(extension);
+      }
+    };
+    try {
+      await Promise.all(Array.from({ length: Math.min(UPDATE_ALL_CONCURRENCY, pending.length) }, worker));
+    } finally {
+      updateAllInProgressRef.current = false;
+      setUpdateAllInProgress(false);
+    }
+  }, [installExtension, updateAvailableExtensions]);
 
   async function uninstallExtension(id: string) {
     const updated = await hibiki.sources.uninstall(id);
@@ -349,7 +382,8 @@ export function SourcesPage() {
                 onOpenSettings={setSettingsSourceId}
                 sourcesWithSettings={sourcesWithSettings}
                 onInstall={installExtension}
-                onUpdateAll={() => updateAvailableExtensions.forEach(installExtension)}
+                onUpdateAll={() => void updateAll()}
+                updateAllInProgress={updateAllInProgress}
                 onUninstall={uninstallExtension}
                 onSelect={setActiveSourceId}
               />
@@ -490,6 +524,7 @@ function ExtensionsTab({
   onOpenSettings,
   sourcesWithSettings,
   onUpdateAll,
+  updateAllInProgress,
   onUninstall,
   onSelect,
 }: {
@@ -506,6 +541,7 @@ function ExtensionsTab({
   activeSourceId: string | null;
   onInstall: (extension: MarketplaceExtension) => void;
   onUpdateAll: () => void;
+  updateAllInProgress: boolean;
   onUninstall: (id: string) => void;
   onOpenSettings: (id: string) => void;
   /** Ids whose installed manifest declares any settings - the marketplace entries these cards are
@@ -524,7 +560,7 @@ function ExtensionsTab({
         <>
           <SectionHeader
             title={t("sources.updatesSection")}
-            action={<button onClick={onUpdateAll} className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-text/80 transition-colors hover:bg-text/[.06]"><RefreshCw className="h-3.5 w-3.5" strokeWidth={2} />{t("sources.updateAll")}</button>}
+            action={<button onClick={onUpdateAll} disabled={updateAllInProgress} className={cn("flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-text/80 transition-colors", updateAllInProgress ? "cursor-wait opacity-60" : "hover:bg-text/[.06]")}><RefreshCw className={cn("h-3.5 w-3.5", updateAllInProgress && "animate-spin")} strokeWidth={2} />{t("sources.updateAll")}</button>}
           />
           <div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-3">
             <AnimatePresence initial={false}>
