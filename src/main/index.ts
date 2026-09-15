@@ -72,6 +72,10 @@ function createWindow(): void {
     title: "hibiki",
     icon: path.join(__dirname, "../../electron-builder-resources/hibiki.ico"),
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
+    // The native macOS traffic lights otherwise sit on top of the app icon in our custom
+    // titlebar. Keep this adjustment platform-specific so the Windows/Linux chrome remains
+    // unchanged.
+    trafficLightPosition: process.platform === "darwin" ? { x: 78, y: 12 } : undefined,
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.mjs"),
       contextIsolation: true,
