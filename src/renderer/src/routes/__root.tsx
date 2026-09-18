@@ -167,10 +167,24 @@ function RootLayoutContent() {
     if (sourcesQuery.data) rememberSources(sourcesQuery.data.map((s) => ({ id: s.id, name: s.name, iconUrl: s.iconUrl })));
   }, [sourcesQuery.data, rememberSources]);
 
+  // The renderer's browser storage can be recreated when a Windows installer replaces the app
+  // bundle, while extensions live in Electron's stable per-user data directory. An existing
+  // source is therefore conclusive evidence that this is not a first launch. Mirror that back
+  // into the UI store so later launches do not need this fallback either.
+  const onboardingInferredFromSources = sourcesQuery.isSuccess && sourcesQuery.data.length > 0;
+  useEffect(() => {
+    if (onboardingInferredFromSources && !onboardingCompleted) setOnboardingCompleted(true);
+  }, [onboardingInferredFromSources, onboardingCompleted, setOnboardingCompleted]);
+  // Do not briefly show the welcome screen on an update while the persisted source list is being
+  // read. A genuinely fresh install resolves to an empty list and then enters onboarding.
+  const onboardingResolved = onboardingCompleted || sourcesQuery.isSuccess;
+  const shouldShowOnboarding = !onboardingCompleted && !onboardingInferredFromSources;
+
   // Gated ahead of everything else below (including isWatching, though there's nothing to watch
   // yet at this point anyway) - nothing in the real app is usable without at least one source
   // installed, so this fully replaces the normal chrome instead of layering on top of it.
-  if (!onboardingCompleted) return <div className="flex h-screen w-screen flex-col overflow-hidden bg-app-bg text-text" style={{ backgroundImage: backgroundGradient }}>
+  if (!onboardingResolved) return <div className="h-screen w-screen bg-app-bg" style={{ backgroundImage: backgroundGradient }} />;
+  if (shouldShowOnboarding) return <div className="flex h-screen w-screen flex-col overflow-hidden bg-app-bg text-text" style={{ backgroundImage: backgroundGradient }}>
     <TitleBar />
     <div className="min-h-0 flex-1"><Onboarding onComplete={() => setOnboardingCompleted(true)} /></div>
   </div>;
