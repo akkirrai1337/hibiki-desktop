@@ -3,7 +3,7 @@ import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router"
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Loader2, TriangleAlert } from "lucide-react";
-import type { PlayerLink } from "@shared/types";
+import type { PlaybackGroup, PlayerLink } from "@shared/types";
 import { pickDefaultLink, pickPlaybackFallback, pickPreferredLink, pickResolvedLink } from "@/lib/playerLinks";
 import { usePlaybackGroups } from "@/lib/playbackGroups";
 import { hibiki, downloadFileUrl } from "@/lib/hibiki";
@@ -334,7 +334,11 @@ function WatchPage() {
   // of resetting the player mid-episode as one on linksQuery/progressQuery was.
   const animeQuery = useQuery({ queryKey: ["anime", sourceId, animeId], queryFn: () => hibiki.sources.getById(sourceId, animeId), staleTime: Infinity, refetchOnWindowFocus: false });
   const groupsQuery = usePlaybackGroups(sourceId, animeId, Infinity, groupsRequested);
-  const group = groupsQuery.data?.find((g) => g.id === groupId);
+  // The detail screen normally populated this cache immediately before navigation. Read it while
+  // the picker stays lazy, so title/episode text and prev/next paint without another source call.
+  const cachedGroups = queryClient.getQueryData<PlaybackGroup[]>(["playbackGroups", sourceId, animeId]);
+  const playerGroups = groupsQuery.data ?? cachedGroups;
+  const group = playerGroups?.find((g) => g.id === groupId);
   const episodeIndex = group?.episodes.findIndex((e) => e.id === episodeId) ?? -1;
   const episode = episodeIndex >= 0 ? group!.episodes[episodeIndex] : undefined;
   const prevEpisode = episodeIndex > 0 ? group!.episodes[episodeIndex - 1] : undefined;
@@ -380,7 +384,7 @@ function WatchPage() {
   // position shifted, so index 15 is not episode 16.
   const selectDub = useCallback(
     (targetGroupId: string) => {
-      const target = groupsQuery.data?.find((g) => g.id === targetGroupId);
+      const target = playerGroups?.find((g) => g.id === targetGroupId);
       if (!target || target.episodes.length === 0) return;
       const nearestBelow = target.episodes
         .filter((e) => e.number <= episodeNumber)
@@ -391,7 +395,7 @@ function WatchPage() {
       }
       navigate({ to: "/watch/$sourceId/$animeId/$groupId/$episodeId", params: { sourceId, animeId, groupId: targetGroupId, episodeId: targetEpisode.id }, replace: true });
     },
-    [navigate, groupsQuery.data, sourceId, animeId, episodeNumber],
+    [navigate, playerGroups, sourceId, animeId, episodeNumber],
   );
   // A real history.back() (not a push to the detail route) so the titlebar's back/forward arrows
   // stay consistent with "Escape" - otherwise this would push a *new* detail-page entry, leaving
@@ -622,7 +626,7 @@ function WatchPage() {
           link={link}
           availableLinks={linksQuery.data}
           offlinePlayback={!!downloadedQuery.data}
-          dubOptions={groupsQuery.data}
+          dubOptions={playerGroups}
           selectedDubId={groupId}
           onSelectDub={selectDub}
           sourceSwitching={sourceSwitching || (!link && preferencePending)}
