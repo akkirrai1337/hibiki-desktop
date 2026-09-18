@@ -184,7 +184,14 @@ export function TitleBar() {
                   catalog={filterCatalog.data}
                   loading={filterCatalog.isLoading}
                   filters={filters}
-                  onApply={(next) => { setFilters(next); setFiltersPanelOpen(false); }}
+                  onApply={(next) => {
+                    setFilters(next);
+                    setFiltersPanelOpen(false);
+                    // Filters are a search in their own right. Navigate even when the box is
+                    // empty, so a genre/year selection made from any screen immediately shows
+                    // matching titles instead of merely leaving a dot on the filter icon.
+                    navigate({ to: "/search", search: { q: value.trim(), source: sourceSearchOnly ? true : undefined } });
+                  }}
                   onClose={() => setFiltersPanelOpen(false)}
                 />
               )}

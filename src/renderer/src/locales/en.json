@@ -196,7 +196,14 @@
   },
   "search": {
     "prompt": "Start typing an anime title",
+    "minChars": "Enter at least {{count}} characters to search",
     "empty": "No results for \"{{query}}\"",
+    "filteredResults": "Filtered results",
+    "filteredEmpty": "No titles match the selected filters",
+    "source": "source",
+    "errorTooShort": "Enter at least {{count}} characters to search.",
+    "errorUnavailable": "{{source}} is not responding right now. Check your connection and try again.",
+    "errorGeneric": "Could not search {{source}}. Please try again.",
     "resultsFor": "Results for \"{{query}}\"",
     "aggregator": {
       "searchSource": "Search {{source}} instead",
