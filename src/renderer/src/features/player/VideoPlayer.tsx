@@ -386,7 +386,6 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   const firstFrameLoggedRef = useRef(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const seekBarRef = useRef<HTMLDivElement>(null);
-  const documentPipWindowRef = useRef<Window | null>(null);
 
   const [playing, setPlaying] = useState(true);
   const [buffering, setBuffering] = useState(true);
@@ -1049,12 +1048,11 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     };
   }, []);
 
-  // A route change unmounts the player while its Document PiP window may still be open. Closing it
-  // here keeps the auxiliary window from briefly showing a detached playback surface.
-  useEffect(() => () => documentPipWindowRef.current?.close(), []);
-
-  // Position state feeds Chromium's media controls and system integrations. Native video PiP owns
-  // its own fixed chrome; the interactive in-window timeline lives in Document PiP below.
+  // The browser's native picture-in-picture window (and the OS media-key overlay) only grows the
+  // ±seek buttons and a scrubbing timeline once a Media Session with those actions actually
+  // exists - without this, PiP falls back to a bare video frame with nothing but a generic
+  // "back to tab" link, which is exactly what a plain requestPictureInPicture() call gets you on
+  // its own.
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;
     navigator.mediaSession.metadata = new MediaMetadata({ title: episodeLabel || title, artist: title });
@@ -1071,21 +1069,6 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     const seekBy = (deltaSeconds: number) => {
       video.currentTime = Math.min(Math.max(0, video.currentTime + deltaSeconds), video.duration || Infinity);
     };
-    const updatePositionState = () => {
-      // Live streams and a few sources expose Infinity/NaN until their metadata settles. The
-      // Media Session API throws for those values, so simply omit the timeline until it is safe.
-      if (!Number.isFinite(video.duration) || video.duration <= 0 || !Number.isFinite(video.currentTime)) return;
-      try {
-        navigator.mediaSession.setPositionState({
-          duration: video.duration,
-          position: Math.min(Math.max(0, video.currentTime), video.duration),
-          playbackRate: video.playbackRate > 0 ? video.playbackRate : 1,
-        });
-      } catch {
-        // Some Chromium versions reject a state while a stream is being replaced; the next media
-        // event retries with the new source's stable values.
-      }
-    };
     navigator.mediaSession.setActionHandler("play", () => void video.play());
     navigator.mediaSession.setActionHandler("pause", () => video.pause());
     // Electron's Chromium build renders "previoustrack"/"nexttrack" as clickable icons flanking
@@ -1095,30 +1078,11 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     // ones semantically meant for it.
     navigator.mediaSession.setActionHandler("previoustrack", () => seekBy(-PIP_SEEK_STEP_SECONDS));
     navigator.mediaSession.setActionHandler("nexttrack", () => seekBy(PIP_SEEK_STEP_SECONDS));
-    navigator.mediaSession.setActionHandler("seekto", (details) => {
-      if (details.seekTime === undefined || !Number.isFinite(video.duration)) return;
-      const target = Math.min(Math.max(0, details.seekTime), video.duration);
-      if (details.fastSeek && "fastSeek" in video) video.fastSeek(target);
-      else video.currentTime = target;
-      updatePositionState();
-    });
-    video.addEventListener("loadedmetadata", updatePositionState);
-    video.addEventListener("durationchange", updatePositionState);
-    video.addEventListener("timeupdate", updatePositionState);
-    video.addEventListener("seeked", updatePositionState);
-    video.addEventListener("ratechange", updatePositionState);
-    updatePositionState();
     return () => {
       navigator.mediaSession.setActionHandler("play", null);
       navigator.mediaSession.setActionHandler("pause", null);
       navigator.mediaSession.setActionHandler("previoustrack", null);
       navigator.mediaSession.setActionHandler("nexttrack", null);
-      navigator.mediaSession.setActionHandler("seekto", null);
-      video.removeEventListener("loadedmetadata", updatePositionState);
-      video.removeEventListener("durationchange", updatePositionState);
-      video.removeEventListener("timeupdate", updatePositionState);
-      video.removeEventListener("seeked", updatePositionState);
-      video.removeEventListener("ratechange", updatePositionState);
     };
   }, []);
 
@@ -1199,174 +1163,14 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
 
   const togglePip = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    const video = videoRef.current!;
+    const video = videoRef.current;
     if (!video) return;
-    // An Electron popup lives in a different rendering surface. Moving an HLS-attached <video>
-    // into it aborts segment requests (ERR_FAILED), so use Chromium's native PiP which retains
-    // the original media pipeline and does not interrupt playback.
     if (document.pictureInPictureElement) {
       document.exitPictureInPicture().catch((err) => log.error("player", "failed to exit picture-in-picture:", err));
     } else {
       video.requestPictureInPicture().catch((err) => log.error("player", "failed to enter picture-in-picture:", err));
     }
-    if (false) {
-    const shouldResumeAfterMove = !video.paused;
-
-    // Electron exposes the Chromium Document PiP surface but does not currently implement its
-    // window creation. A same-origin popup configured as an always-on-top child by the main
-    // process gives us the same useful desktop mini-player with reliable Electron support.
-    const existingPipWindow = documentPipWindowRef.current!;
-    if (existingPipWindow && !existingPipWindow.closed) {
-      existingPipWindow.close();
-      return;
-    }
-    const popup = window.open("about:blank", "hibiki-player-pip", "popup=yes,width=560,height=350")!;
-    if (!popup) {
-      video.requestPictureInPicture().catch((err) => log.error("player", "failed to enter picture-in-picture:", err));
-      return;
-    }
-
-    void Promise.resolve(popup).then((pipWindow) => {
-        documentPipWindowRef.current = pipWindow;
-        const pipDocument = pipWindow.document;
-        pipDocument.title = `${title} — ${episodeLabel}`;
-        pipDocument.body.style.cssText = "margin:0;overflow:hidden;background:#09090b;color:#fafafa;font-family:Inter,system-ui,sans-serif;";
-
-        const shell = pipDocument.createElement("div");
-        shell.style.cssText = "position:relative;box-sizing:border-box;width:100vw;height:100vh;overflow:hidden;border:1px solid rgba(255,255,255,.18);border-radius:12px;background:#09090b;";
-        const media = pipDocument.createElement("div");
-        media.style.cssText = "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#000;";
-        const gradient = pipDocument.createElement("div");
-        gradient.style.cssText = "pointer-events:none;position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.58),transparent 34%,transparent 55%,rgba(0,0,0,.88));";
-        const spinnerStyle = pipDocument.createElement("style");
-        spinnerStyle.textContent = "@keyframes hibiki-pip-spin{to{transform:rotate(360deg)}}";
-        pipDocument.head.append(spinnerStyle);
-        const loading = pipDocument.createElement("div");
-        loading.style.cssText = "pointer-events:none;position:absolute;z-index:3;top:50%;left:50%;width:32px;height:32px;margin:-16px;border:3px solid rgba(255,255,255,.28);border-top-color:#f43f5e;border-radius:50%;opacity:0;transition:opacity .16s;animation:hibiki-pip-spin .75s linear infinite;";
-        const heading = pipDocument.createElement("div");
-        // This is the PiP title strip rather than a Windows title bar: it stays light over the
-        // video, can drag the frameless window, and keeps the only required action (close) local.
-        heading.style.cssText = "position:absolute;top:0;left:0;right:0;padding:10px 48px 35px 14px;background:linear-gradient(180deg,rgba(0,0,0,.72),transparent);-webkit-app-region:drag;";
-        const titleLine = pipDocument.createElement("div");
-        titleLine.textContent = title;
-        titleLine.style.cssText = "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:700;letter-spacing:.01em;";
-        const episodeLine = pipDocument.createElement("div");
-        episodeLine.textContent = episodeLabel;
-        episodeLine.style.cssText = "margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#d4d4d8;font-size:10px;";
-        heading.append(titleLine, episodeLine);
-        const close = pipDocument.createElement("button");
-        close.type = "button";
-        close.textContent = "×";
-        close.title = "Закрыть мини-плеер";
-        close.style.cssText = "position:absolute;z-index:2;top:7px;right:8px;width:24px;height:24px;border:0;border-radius:7px;background:rgba(0,0,0,.24);color:#fff;font:400 21px/20px system-ui,sans-serif;cursor:pointer;-webkit-app-region:no-drag;";
-        close.addEventListener("click", () => pipWindow.close());
-
-        const controls = pipDocument.createElement("div");
-        controls.style.cssText = "position:absolute;left:0;right:0;bottom:0;padding:34px 18px 14px;background:linear-gradient(0deg,rgba(0,0,0,.92),transparent);";
-        const timeline = pipDocument.createElement("input");
-        timeline.type = "range";
-        timeline.min = "0";
-        timeline.max = "1000";
-        timeline.value = "0";
-        timeline.style.cssText = "display:block;width:100%;height:5px;margin:0 0 10px;cursor:pointer;accent-color:#e11d48;";
-        const row = pipDocument.createElement("div");
-        // The side readings must not influence the centre controls. Grid's equal outer columns
-        // keep the action cluster centred even when the timestamp grows to an hour or more.
-        row.style.cssText = "display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;height:38px;";
-        const time = pipDocument.createElement("span");
-        time.style.cssText = "grid-column:1;min-width:90px;color:#e4e4e7;font-size:11px;font-variant-numeric:tabular-nums;";
-        const actions = pipDocument.createElement("div");
-        actions.style.cssText = "grid-column:2;display:flex;align-items:center;gap:10px;";
-        const icons = {
-          // A compact, open replay arc like the Chrome/YouTube PiP control — the former nearly
-          // closed circle read as a generic refresh icon rather than "back 15 seconds".
-          backward: "<svg viewBox='0 0 24 24' width='21' height='21' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M5 11.5a7.5 7.5 0 1 1 2.2 5.3'/><path d='M5 5v5h5'/></svg><span style='position:absolute;inset:0;display:grid;place-items:center;padding-top:1px;font:700 8px/1 Arial,sans-serif'>15</span>",
-          // Exact horizontal reflection of the left replay control; keep the label outside the
-          // transformed group so it stays readable and perfectly centred.
-          forward: "<svg viewBox='0 0 24 24' width='21' height='21' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><g transform='translate(24 0) scale(-1 1)'><path d='M5 11.5a7.5 7.5 0 1 1 2.2 5.3'/><path d='M5 5v5h5'/></g></svg><span style='position:absolute;inset:0;display:grid;place-items:center;padding-top:1px;font:700 8px/1 Arial,sans-serif'>15</span>",
-          play: "<svg viewBox='0 0 24 24' width='20' height='20' fill='currentColor'><path d='m8 5 11 7-11 7V5Z'/></svg>",
-          pause: "<svg viewBox='0 0 24 24' width='20' height='20' fill='currentColor'><path d='M7 5h4v14H7zm6 0h4v14h-4z'/></svg>",
-        };
-        const button = (icon: string, titleText: string) => {
-          const control = pipDocument.createElement("button");
-          control.type = "button";
-          control.innerHTML = icon;
-          control.title = titleText;
-          control.style.cssText = "position:relative;display:grid;place-items:center;width:38px;height:38px;border:0;border-radius:999px;background:rgba(255,255,255,.13);color:#fff;cursor:pointer;";
-          return control;
-        };
-        const back = button(icons.backward, "Назад на 15 секунд");
-        const play = button(video.paused ? icons.play : icons.pause, video.paused ? "Воспроизвести" : "Пауза");
-        play.style.background = "rgba(225,29,72,.92)";
-        const forward = button(icons.forward, "Вперёд на 15 секунд");
-        actions.append(back, play, forward);
-        row.append(time, actions);
-        controls.append(timeline, row);
-        shell.append(media, gradient, loading, heading, close, controls);
-        pipDocument.body.append(shell);
-        media.append(video);
-        video.style.cssText = "width:100%;height:100%;object-fit:contain;";
-        // Adopting a media element into Electron's child window can transiently pause it. The
-        // original click is still a user gesture, so restore only playback that was already live.
-        if (shouldResumeAfterMove) void video.play().catch((err) => log.warn("player", "failed to resume in mini-player:", err));
-
-        const sync = () => {
-          const validDuration = Number.isFinite(video.duration) && video.duration > 0;
-          timeline.disabled = !validDuration;
-          timeline.value = validDuration ? String(Math.round((video.currentTime / video.duration) * 1000)) : "0";
-          time.textContent = validDuration ? `${formatTime(video.currentTime)} / ${formatTime(video.duration)}` : "В эфире";
-          play.innerHTML = video.paused ? icons.play : icons.pause;
-          play.title = video.paused ? "Воспроизвести" : "Пауза";
-        };
-        const seekBy = (seconds: number) => { video.currentTime = Math.min(Math.max(0, video.currentTime + seconds), video.duration || Infinity); };
-        const onTimelineInput = () => {
-          if (Number.isFinite(video.duration) && video.duration > 0) video.currentTime = (Number(timeline.value) / 1000) * video.duration;
-        };
-        const onPlay = () => {
-          if (video.paused) {
-            void video.play().catch((err) => log.warn("player", "failed to resume from mini-player:", err));
-          } else {
-            // Do this synchronously rather than through a conditional expression: a pending
-            // play() from the just-opened window must be interrupted by the user's pause click.
-            video.pause();
-          }
-          sync();
-        };
-        const setLoading = (visible: boolean) => { loading.style.opacity = visible ? "1" : "0"; };
-        const showLoading = () => setLoading(true);
-        const hideLoading = () => setLoading(false);
-        const onTimeUpdate = () => { sync(); setLoading(false); };
-        const events = ["loadedmetadata", "durationchange", "play", "pause", "volumechange", "ratechange"] as const;
-        // Moving the surface into Electron's auxiliary window emits a synthetic `seeking` event,
-        // even when no network request is pending. Only real buffering signals may show the loader.
-        const bufferingEvents = ["waiting", "stalled", "loadstart"] as const;
-        const readyEvents = ["canplay", "playing", "seeked", "progress"] as const;
-        events.forEach((event) => video.addEventListener(event, sync));
-        video.addEventListener("timeupdate", onTimeUpdate);
-        bufferingEvents.forEach((event) => video.addEventListener(event, showLoading));
-        readyEvents.forEach((event) => video.addEventListener(event, hideLoading));
-        timeline.addEventListener("input", onTimelineInput);
-        back.addEventListener("click", () => seekBy(-15));
-        play.addEventListener("click", onPlay);
-        forward.addEventListener("click", () => seekBy(15));
-        sync();
-        setLoading(!video.paused && video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA);
-        setIsPip(true);
-
-        pipWindow.addEventListener("pagehide", () => {
-          events.forEach((event) => video.removeEventListener(event, sync));
-          video.removeEventListener("timeupdate", onTimeUpdate);
-          bufferingEvents.forEach((event) => video.removeEventListener(event, showLoading));
-          readyEvents.forEach((event) => video.removeEventListener(event, hideLoading));
-          // React continues to own this node; put it back before its next render can touch it.
-          containerRef.current?.prepend(video);
-          video.style.cssText = "";
-          documentPipWindowRef.current = null;
-          setIsPip(false);
-        }, { once: true });
-    }).catch((err) => log.error("player", "failed to open desktop mini-player:", err));
-    }
-  }, [episodeLabel, title]);
+  }, []);
 
   // --- keyboard shortcuts: space play/pause (hold to fast-forward at 2x, TikTok/YouTube-style),
   // f fullscreen, escape leaves, left/right seek ±5s, up/down volume, m mutes ---
