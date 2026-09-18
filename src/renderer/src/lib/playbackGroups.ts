@@ -14,7 +14,10 @@ export function usePlaybackGroups(sourceId: string, animeId: string, staleTime?:
     queryKey: ["cached-playbackGroups", sourceId, animeId],
     queryFn: () => hibiki.sources.cachedPlaybackGroups(sourceId, animeId),
     staleTime: Infinity,
-    enabled,
+    // A player can be opened straight from "Continue watching", without first mounting the
+    // detail page. Reading SQLite is local and gives it the current episode plus its neighbors
+    // immediately; `enabled` below still gates the expensive live source request.
+    enabled: true,
   });
 
   return useQuery({
