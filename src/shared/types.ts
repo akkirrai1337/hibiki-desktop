@@ -256,6 +256,8 @@ export interface SourceInfo {
   version: string;
   iconUrl?: string | null;
   lang?: string | null;
+  /** Whether this installed source is marked 18+ by its manifest. */
+  isNsfw: boolean;
   capabilities: SourceCapability[];
   supportedSorts: string[];
   supportedFilters: SearchFilterKind[];

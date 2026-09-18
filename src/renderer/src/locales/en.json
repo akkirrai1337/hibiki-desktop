@@ -496,7 +496,9 @@
     "discord": {
       "title": "Discord",
       "enabled": "Show activity in Discord",
-      "hint": "Title, dub, and timeline in your Discord status"
+      "hint": "Title, dub, and timeline in your Discord status",
+      "ignoreNsfw": "Hide NSFW sources",
+      "ignoreNsfwHint": "Do not share viewing from sources marked 18+"
     },
     "externalMetadata": {
       "enabled": "Describe titles from an aggregator",

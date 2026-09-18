@@ -11,6 +11,9 @@ interface UiState {
   // find the switch first - Settings is where you turn it *off*. Only affects new installs: an
   // existing one keeps whatever its persisted "hibiki-ui" value already says.
   discordRpcEnabled: boolean;
+  // Keep a title from an NSFW-marked source out of Rich Presence by default. This is source-level
+  // deliberately: a source may not expose reliable adult metadata for every individual title.
+  discordIgnoreNsfwSources: boolean;
   // False only until the first-launch onboarding flow (see Onboarding.tsx) is finished once -
   // persisted so it never shows again after that, same as the rest of this store.
   onboardingCompleted: boolean;
@@ -71,6 +74,7 @@ interface UiState {
   setActiveSourceId: (id: string | null) => void;
   setSidebarWidth: (width: number) => void;
   setDiscordRpcEnabled: (enabled: boolean) => void;
+  setDiscordIgnoreNsfwSources: (enabled: boolean) => void;
   setOnboardingCompleted: (completed: boolean) => void;
   setProfileCelebratedStreak: (streak: number) => void;
   setAccentColor: (color: string | null) => void;
@@ -93,6 +97,7 @@ export const useUiStore = create<UiState>()(
       activeSourceId: null,
       sidebarWidth: 236,
       discordRpcEnabled: true,
+      discordIgnoreNsfwSources: true,
       onboardingCompleted: false,
       profileCelebratedStreak: -1,
       accentColor: null,
@@ -109,6 +114,7 @@ export const useUiStore = create<UiState>()(
       setActiveSourceId: (activeSourceId) => set({ activeSourceId }),
       setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
       setDiscordRpcEnabled: (discordRpcEnabled) => set({ discordRpcEnabled }),
+      setDiscordIgnoreNsfwSources: (discordIgnoreNsfwSources) => set({ discordIgnoreNsfwSources }),
       setOnboardingCompleted: (onboardingCompleted) => set({ onboardingCompleted }),
       setProfileCelebratedStreak: (profileCelebratedStreak) => set({ profileCelebratedStreak }),
       setAccentColor: (accentColor) => set({ accentColor }),

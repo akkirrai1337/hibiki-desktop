@@ -10,6 +10,7 @@ import { hibiki, downloadFileUrl } from "@/lib/hibiki";
 import { log } from "@/lib/log";
 import { usePlayerPrefsStore } from "@/stores/playerPrefsStore";
 import { usePlayerSelectionStore } from "@/stores/playerSelectionStore";
+import { useUiStore } from "@/stores/uiStore";
 import { VideoPlayer } from "@/features/player/VideoPlayer";
 import { animeTitle } from "@/components/AnimeCard";
 import { ACTIVITY_DAYS, buildActivitySeries, computeStreaks } from "@/components/StreakBadge";
@@ -98,6 +99,18 @@ function WatchPage() {
   const navigate = useNavigate();
   const router = useRouter();
   const { sourceId, animeId, groupId, episodeId } = Route.useParams();
+  const discordIgnoreNsfwSources = useUiStore((s) => s.discordIgnoreNsfwSources);
+  // RootLayout already asks for this exact query on startup, so normally this is a cache hit. Keep
+  // sharing blocked until it answers when the privacy switch is on: an unknown source must not
+  // briefly leak its title into Discord while its 18+ flag is still loading.
+  const sourcesQuery = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });
+  const sourceIsNsfw = sourcesQuery.data?.some((source) => source.id === sourceId && source.isNsfw) ?? false;
+  const canShareDiscordPresence = !discordIgnoreNsfwSources || (sourcesQuery.isSuccess && !sourceIsNsfw);
+  const canShareDiscordPresenceRef = useRef(canShareDiscordPresence);
+  useEffect(() => {
+    canShareDiscordPresenceRef.current = canShareDiscordPresence;
+    if (!canShareDiscordPresence) hibiki.discord.clearPresence();
+  }, [canShareDiscordPresence]);
   const lastSaveRef = useRef(0);
   const watchedSentRef = useRef(false);
   const lastDiscordUpdateRef = useRef(0);
@@ -463,7 +476,7 @@ function WatchPage() {
     // The very first update after an episode change (see the episodeId effect below) can easily
     // fire before this data has loaded at all - once it does load, correct the card right away
     // instead of leaving it poster-less/dub-less until the next throttled tick (up to 16s later).
-    if (!title) return;
+    if (!title || !canShareDiscordPresence) return;
     lastDiscordUpdateRef.current = Date.now();
     hibiki.discord.updatePresence({
       animeTitle: title,
@@ -474,7 +487,7 @@ function WatchPage() {
       isPlaying: true,
       posterUrl: anime?.posterUrl ?? null,
     });
-  }, [title, dubName, anime?.posterUrl, episodeNumber]);
+  }, [title, dubName, anime?.posterUrl, episodeNumber, canShareDiscordPresence]);
 
   const watchedThreshold = usePlayerPrefsStore((s) => s.watchedThresholdPercent) / 100;
   // Plain primitives (not `link` itself) in onProgress's dependency list - same reasoning as
@@ -552,7 +565,7 @@ function WatchPage() {
         upserted.then(() => queryClient.invalidateQueries({ queryKey: ["dailyActivity", ACTIVITY_DAYS] }));
       }
       const meta = discordMetaRef.current;
-      if (meta.title && now - lastDiscordUpdateRef.current >= DISCORD_UPDATE_INTERVAL_MS) {
+      if (canShareDiscordPresenceRef.current && meta.title && now - lastDiscordUpdateRef.current >= DISCORD_UPDATE_INTERVAL_MS) {
         lastDiscordUpdateRef.current = now;
         hibiki.discord.updatePresence({
           animeTitle: meta.title,
@@ -575,7 +588,7 @@ function WatchPage() {
   const onPlayStateChange = useCallback(
     (playing: boolean) => {
       const meta = discordMetaRef.current;
-      if (!meta.title) return;
+      if (!canShareDiscordPresenceRef.current || !meta.title) return;
       lastDiscordUpdateRef.current = Date.now();
       hibiki.discord.updatePresence({
         animeTitle: meta.title,

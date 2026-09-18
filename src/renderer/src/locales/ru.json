@@ -516,7 +516,9 @@
     "discord": {
       "title": "Discord",
       "enabled": "Показывать активность в Discord",
-      "hint": "Тайтл, озвучка и таймлайн в статусе Discord"
+      "hint": "Тайтл, озвучка и таймлайн в статусе Discord",
+      "ignoreNsfw": "Не показывать NSFW-источники",
+      "ignoreNsfwHint": "Скрывать просмотр из источников с пометкой 18+"
     },
     "externalMetadata": {
       "enabled": "Метаданные из агрегатора",

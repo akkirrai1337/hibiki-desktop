@@ -540,6 +540,8 @@ export function SettingsPage() {
   const setAutoUpdate = useUiStore((s) => s.setAutoUpdate);
   const discordRpcEnabled = useUiStore((s) => s.discordRpcEnabled);
   const setDiscordRpcEnabled = useUiStore((s) => s.setDiscordRpcEnabled);
+  const discordIgnoreNsfwSources = useUiStore((s) => s.discordIgnoreNsfwSources);
+  const setDiscordIgnoreNsfwSources = useUiStore((s) => s.setDiscordIgnoreNsfwSources);
   const theme = useUiStore((s) => s.theme);
   const setTheme = useUiStore((s) => s.setTheme);
   const accentColor = useUiStore((s) => s.accentColor);
@@ -632,6 +634,15 @@ export function SettingsPage() {
             </div>
             <Switch checked={discordRpcEnabled} onChange={setDiscordRpcEnabled} />
           </div>
+          {discordRpcEnabled && (
+            <div className="mt-4 flex items-center justify-between gap-3 border-t border-border pt-4">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-text">{t("settings.discord.ignoreNsfw")}</p>
+                <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.discord.ignoreNsfwHint")}</p>
+              </div>
+              <Switch checked={discordIgnoreNsfwSources} onChange={setDiscordIgnoreNsfwSources} />
+            </div>
+          )}
         </SettingsRow>
 
         <SettingsRow icon={<Globe className="h-[18px] w-[18px]" strokeWidth={2} />}>

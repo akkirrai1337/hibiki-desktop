@@ -48,6 +48,7 @@ interface Manifest {
   version: string;
   iconUrl?: string;
   lang?: string;
+  isNsfw?: boolean;
   capabilities?: string[];
   useExternalMetadata?: boolean;
   supportedSorts?: string[];
@@ -181,6 +182,7 @@ export class ExtensionRuntime {
       version: manifest.version,
       iconUrl: manifest.iconUrl ?? null,
       lang: manifest.lang ?? null,
+      isNsfw: manifest.isNsfw === true,
       capabilities: (manifest.capabilities ?? []) as SourceInfo["capabilities"],
       useExternalMetadata: manifest.useExternalMetadata === true,
       supportedSorts: manifest.supportedSorts ?? [],

@@ -516,7 +516,9 @@
     "discord": {
       "title": "Discord",
       "enabled": "Показувати активність у Discord",
-      "hint": "Назва, озвучення й таймлайн у статусі Discord"
+      "hint": "Назва, озвучення й таймлайн у статусі Discord",
+      "ignoreNsfw": "Не показувати NSFW-джерела",
+      "ignoreNsfwHint": "Приховувати перегляд із джерел із позначкою 18+"
     },
     "externalMetadata": {
       "enabled": "Метадані з агрегатора",
