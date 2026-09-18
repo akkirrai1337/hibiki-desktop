@@ -204,7 +204,12 @@ function AnimeDetailPage() {
   // uses, letting the app-wide gradient bleed through consistently instead.
   const backgroundTheme = useUiStore((s) => s.backgroundTheme);
   const [downloadEpisode, setDownloadEpisode] = useState<Episode | null>(null);
+  const [posterPreviewOpen, setPosterPreviewOpen] = useState(false);
   const queryClient = useQueryClient();
+
+  // The preview belongs to this exact title. A parameter-only route change can keep the detail
+  // component mounted, so do not let a poster from the previous title linger above the new page.
+  useEffect(() => setPosterPreviewOpen(false), [sourceId, animeId]);
   // Arriving here almost always means a card was clicked, and that card's list already carried
   // this title - the same AnimeTitle shape getById returns, with fewer fields filled in and none
   // contradicting it (see lib/listedTitles). Drawing it while getById is in flight replaces a
@@ -399,7 +404,7 @@ function AnimeDetailPage() {
     {(animeQuery.isLoading || describing) && <DetailSkeleton />}
     {animeQuery.isError && <div className="p-8"><ErrorBanner message={(animeQuery.error as Error).message} /></div>}
     {anime && !describing && <>
-      <Overview anime={anime} libraryCategory={libraryEntry?.category ?? null} onSetLibraryCategory={setLibraryCategory} onRemoveFromLibrary={removeFromLibrary} continueTarget={continueTarget ? { groupId: activeGroup!.id, episodeId: continueTarget.episode.id, label: continueTarget.label } : undefined} sourceId={sourceId} animeId={animeId} source={source} related={describedRelated} titleLoadedAt={animeQuery.dataUpdatedAt} />
+      <Overview anime={anime} libraryCategory={libraryEntry?.category ?? null} onSetLibraryCategory={setLibraryCategory} onRemoveFromLibrary={removeFromLibrary} onPosterClick={() => setPosterPreviewOpen(true)} continueTarget={continueTarget ? { groupId: activeGroup!.id, episodeId: continueTarget.episode.id, label: continueTarget.label } : undefined} sourceId={sourceId} animeId={animeId} source={source} related={describedRelated} titleLoadedAt={animeQuery.dataUpdatedAt} />
       <div className="px-8 pt-6">
         <h2 className="mb-4 text-xl font-bold tracking-[-.02em] text-text">{t("detail.episodes")}</h2>
         {groupsQuery.isLoading && <div className="text-sm text-muted">{t("detail.loadingEpisodes")}</div>}
@@ -474,6 +479,9 @@ function AnimeDetailPage() {
             onClose={() => setDownloadEpisode(null)}
           />
         )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {posterPreviewOpen && anime.posterUrl && <PosterPreview key={`${sourceId}:${animeId}`} posterUrl={anime.posterUrl} title={animeTitle(anime)} onClose={() => setPosterPreviewOpen(false)} />}
       </AnimatePresence>
     </>}
   </div>;
@@ -676,7 +684,7 @@ function EpisodeChip({
   );
 }
 
-function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLibrary, continueTarget, sourceId, animeId, source, related, titleLoadedAt }: { anime: AnimeTitle; libraryCategory: LibraryCategory | null; onSetLibraryCategory: (category: LibraryCategory) => void; onRemoveFromLibrary: () => void; continueTarget?: { groupId: string; episodeId: string; label: string }; sourceId: string; animeId: string; source: SourceInfo | undefined; related: RelatedAnimeTitle[]; titleLoadedAt: number }) {
+function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLibrary, onPosterClick, continueTarget, sourceId, animeId, source, related, titleLoadedAt }: { anime: AnimeTitle; libraryCategory: LibraryCategory | null; onSetLibraryCategory: (category: LibraryCategory) => void; onRemoveFromLibrary: () => void; onPosterClick: () => void; continueTarget?: { groupId: string; episodeId: string; label: string }; sourceId: string; animeId: string; source: SourceInfo | undefined; related: RelatedAnimeTitle[]; titleLoadedAt: number }) {
   const { t, i18n } = useTranslation();
   const title = animeTitle(anime);
   const [descriptionOpen, setDescriptionOpen] = useState(false);
@@ -710,9 +718,14 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
   return <section className="border-b border-border px-8 pb-8 pt-8">
     <div className="flex gap-7">
       <div className="w-44 shrink-0 sm:w-52">
-        <div className="aspect-[2/3] overflow-hidden rounded-2xl bg-surface shadow-[0_20px_50px_rgba(0,0,0,.5)] ring-1 ring-border">
+        <button
+          type="button"
+          onClick={onPosterClick}
+          disabled={!anime.posterUrl}
+          className="group block aspect-[2/3] w-full overflow-hidden rounded-2xl bg-surface text-left shadow-[0_20px_50px_rgba(0,0,0,.5)] ring-1 ring-border transition-[transform,box-shadow] hover:scale-[1.015] hover:shadow-[0_24px_56px_rgba(0,0,0,.58)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default disabled:hover:scale-100"
+        >
           {anime.posterUrl ? <img src={anime.posterUrl} alt={title} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center px-3 text-center text-xs text-muted">{t("common.noPoster")}</div>}
-        </div>
+        </button>
       </div>
       <div className="min-w-0 flex-1 pt-1">
         <h1 className="max-w-2xl select-text text-3xl font-bold leading-[1.1] tracking-[-.03em] text-text md:text-4xl">{title}</h1>
@@ -774,6 +787,56 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
       />
     </div>
   </section>;
+}
+
+// Kept in a portal because this page can itself apply backdrop-filter for background themes.
+// That CSS property turns fixed descendants into page-relative elements, which makes an image
+// viewer drift away from the viewport after the details page has been scrolled.
+function PosterPreview({ posterUrl, title, onClose }: { posterUrl: string; title: string; onClose: () => void }) {
+  const { t } = useTranslation();
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return createPortal(
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/[.78] p-8 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.94 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.94 }}
+        transition={{ type: "spring", stiffness: 360, damping: 30 }}
+        className="relative flex h-full w-full items-center justify-center"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <SmoothImage src={posterUrl} alt={title} className="max-h-full max-w-full rounded-xl object-contain shadow-2xl" />
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={t("detail.back")}
+          title={t("detail.back")}
+          className="absolute right-0 top-0 flex h-10 w-10 items-center justify-center rounded-xl bg-black/45 text-white/80 shadow-lg backdrop-blur-sm transition-colors hover:bg-black/65 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <X className="h-5 w-5" strokeWidth={2.5} />
+        </button>
+      </motion.div>
+    </motion.div>,
+    document.body,
+  );
 }
 
 function LibraryButton({ category, onSelect, onRemove }: { category: LibraryCategory | null; onSelect: (category: LibraryCategory) => void; onRemove: () => void }) {
