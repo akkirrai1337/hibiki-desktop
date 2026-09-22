@@ -78,9 +78,9 @@ describe("pickPreferredLink", () => {
     expect(pickPreferredLink(episode, { translation: "Дублированная", playerName: "Kodik" })).toBe(kodik720);
   });
 
-  it("falls back to a partial match when the exact combination is gone", () => {
-    const preferred = pickPreferredLink(episode, { translation: "Дублированная", playerName: "Sibnet" });
-    expect(preferred?.translation).toBe("Дублированная");
+  it("discards a saved choice for a retired player so source priority can take over", () => {
+    expect(pickPreferredLink(episode, { translation: "Дублированная", playerName: "Sibnet" })).toBeUndefined();
+    expect(pickPreferredLink(episode, { translation: "Дублированная", playerName: "CVH" })).toBeUndefined();
   });
 
   it("returns undefined when nothing matches, so the caller can use the default", () => {

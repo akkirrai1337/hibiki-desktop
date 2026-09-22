@@ -11,6 +11,7 @@ import type { PlayerLink } from "@shared/types";
 // third-party embed page. This app doesn't run per-provider embed extractors in the renderer, so
 // the ordering approximates it by preferring whichever direct link a source already returned.
 const LINK_TYPE_PRIORITY: Record<string, number> = { DIRECT_HLS: 0, DIRECT_MP4: 0, DIRECT_DASH: 0, EMBED: 1 };
+const RETIRED_PLAYER_NAMES = new Set(["cvh", "sibnet"]);
 
 export interface PlaybackPreference {
   translation?: string | null;
@@ -31,6 +32,11 @@ export function pickDefaultLink<T extends { type: string }>(links: T[] | undefin
 export function pickPreferredLink(links: PlayerLink[], preference: PlaybackPreference): PlayerLink | undefined {
   const { translation, playerName } = preference;
   if (!translation && !playerName) return undefined;
+  // CVH/Sibnet were removed because they ultimately hand Chromium their unstable iframe page.
+  // A persisted choice for either must not degrade into a translation-only partial match: that
+  // would make an old saved player silently dictate the next provider instead of using the
+  // source's current priority (Kodik is first for YummyAnime, for example).
+  if (playerName && RETIRED_PLAYER_NAMES.has(playerName.trim().toLowerCase())) return undefined;
   return links
     .map((link) => ({
       link,

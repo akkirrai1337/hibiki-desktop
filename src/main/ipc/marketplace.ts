@@ -5,7 +5,7 @@ import type { InstalledVersions, MarketplaceExtension, RepositoryFetchResult, So
 import { getDb } from "../db";
 import { sourceRepositories } from "../db/schema";
 import { DEFAULT_REPOSITORY_URL, fetchExtensionFiles, fetchRepositoryIndex, fetchRepositoryResult, isHttpsRepositoryUrl } from "../marketplace";
-import type { ExtensionRuntime } from "../extensions/runtime";
+import { isRetiredResolver, type ExtensionRuntime } from "../extensions/runtime";
 import { logger } from "../logger";
 
 // A source's resolverDependencies (e.g. YummyAnime needs "kodik", "sibnet", ...) are hidden
@@ -24,6 +24,7 @@ async function installResolverDependencies(dependencyIds: string[], originUrl: s
   }
   const resolversById = new Map(index.filter((e) => e.type === "player-resolver").map((e) => [e.id, e]));
   for (const id of dependencyIds) {
+    if (isRetiredResolver(id)) continue;
     const resolverExtension = resolversById.get(id);
     if (!resolverExtension) continue;
     try {
@@ -49,6 +50,7 @@ export async function repairMissingResolverDependencies(runtime: ExtensionRuntim
   for (const requirement of runtime.installedResolverRequirements()) {
     const resolverIds = requirementsByOrigin.get(requirement.originUrl) ?? new Set<string>();
     for (const id of requirement.resolverIds) {
+      if (isRetiredResolver(id)) continue;
       if (installed[id] === undefined) resolverIds.add(id);
     }
     if (resolverIds.size > 0) requirementsByOrigin.set(requirement.originUrl, resolverIds);

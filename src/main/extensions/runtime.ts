@@ -93,6 +93,28 @@ interface ResolverHealth {
 // Failures older than this stop counting against it.
 const RESOLVER_FAILURE_DECAY_MS = 10 * 60_000;
 
+// These hosts only expose their own iframe UI in practice. CVH and Sibnet both intermittently
+// report "video unavailable" there, which leaves the application without its player controls and
+// gives the viewer no reliable way to switch away. Keep the retirement centralized so old local
+// resolver files and a source update declaring either dependency cannot re-enable them.
+const RETIRED_RESOLVER_IDS = new Set(["cvh", "sibnet"]);
+const RETIRED_PLAYER_NAMES = new Set(["cvh", "sibnet"]);
+const RETIRED_PLAYER_HOSTS = ["yummyani.me", "sibnet.ru"];
+
+export function isRetiredResolver(id: string): boolean {
+  return RETIRED_RESOLVER_IDS.has(id.toLowerCase());
+}
+
+function isRetiredPlayerLink(link: PlayerLink): boolean {
+  if (link.playerName && RETIRED_PLAYER_NAMES.has(link.playerName.trim().toLowerCase())) return true;
+  try {
+    const host = new URL(link.url).hostname.toLowerCase();
+    return RETIRED_PLAYER_HOSTS.some((retiredHost) => host === retiredHost || host.endsWith(`.${retiredHost}`));
+  } catch {
+    return false;
+  }
+}
+
 export class ExtensionRuntime {
   private readonly extensions = new Map<string, LoadedExtension>();
   private readonly resolvers = new Map<string, ResolverManifest>();
@@ -157,6 +179,7 @@ export class ExtensionRuntime {
       }
     }
 
+    this.removeRetiredResolverFiles();
     this.resolvers.clear();
     if (fs.existsSync(this.resolversDir)) {
       for (const file of fs.readdirSync(this.resolversDir)) {
@@ -165,6 +188,7 @@ export class ExtensionRuntime {
         const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8")) as ResolverManifest;
         const scriptPath = manifestPath.replace(/\.manifest\.json$/, ".js");
         if (!fs.existsSync(scriptPath)) continue;
+        if (isRetiredResolver(manifest.id)) continue;
         this.resolvers.set(manifest.id, {
           id: manifest.id,
           version: manifest.version ?? "0.0.0",
@@ -545,7 +569,11 @@ export class ExtensionRuntime {
 
   getPlayerLinks(sourceId: string, titleId: string, groupId: string, episodeId: string, preference?: PlayerLinkPreference): Promise<PlayerLink[]> {
     return this.shareRead("getPlayerLinks", sourceId, [titleId, groupId, episodeId, preference ?? null], async () => {
-      const links = await this.run<PlayerLink[]>("getPlayerLinks", sourceId, [titleId, groupId, episodeId]);
+      const sourceLinks = await this.run<PlayerLink[]>("getPlayerLinks", sourceId, [titleId, groupId, episodeId]);
+      const links = sourceLinks.filter((link) => !isRetiredPlayerLink(link));
+      if (links.length !== sourceLinks.length) {
+        logger.info("resolve", `removed ${sourceLinks.length - links.length} retired CVH/Sibnet link(s) before playback`);
+      }
       const preferredIndex = this.preferredLinkIndex(links, preference);
       // A source-provided direct link needs no resolver at all. Let the renderer adopt the saved
       // choice from the returned list instead of resolving an unrelated EMBED first.
@@ -555,6 +583,7 @@ export class ExtensionRuntime {
   }
 
   async resolvePlayerLink(link: PlayerLink): Promise<PlayerLink[]> {
+    if (isRetiredPlayerLink(link)) return [];
     return this.resolveEmbedLinks([link]);
   }
 
@@ -573,6 +602,9 @@ export class ExtensionRuntime {
 
   private preferredLinkIndex(links: PlayerLink[], preference?: PlayerLinkPreference): number {
     if (!preference?.translation && !preference?.playerName) return -1;
+    // A persisted pick can outlive the player it names. Treat a retired player as no preference
+    // at all rather than letting a translation-only partial match jump to a different mirror.
+    if (preference.playerName && RETIRED_PLAYER_NAMES.has(preference.playerName.trim().toLowerCase())) return -1;
     let bestIndex = -1;
     let bestScore = 0;
     for (let i = 0; i < links.length; i++) {
@@ -761,7 +793,7 @@ export class ExtensionRuntime {
   installedResolverRequirements(): InstalledResolverRequirement[] {
     const requirements: InstalledResolverRequirement[] = [];
     for (const [sourceId, { manifest }] of this.extensions) {
-      const resolverIds = [...new Set((manifest.resolverDependencies ?? []).filter(Boolean))];
+      const resolverIds = [...new Set((manifest.resolverDependencies ?? []).filter((id) => id && !isRetiredResolver(id)))];
       if (resolverIds.length === 0) continue;
       const originUrl = this.originOf(sourceId);
       if (originUrl) requirements.push({ sourceId, originUrl, resolverIds });
@@ -809,6 +841,10 @@ export class ExtensionRuntime {
    * install(), there's no origin-trust guard here: resolvers aren't user-facing or user-chosen,
    * and a source can freely redeclare/update its own resolverDependencies. */
   installResolver(id: string, manifestJson: string, jsPayload: string): void {
+    if (isRetiredResolver(id)) {
+      logger.info("resolvers", `skipping retired resolver ${id}`);
+      return;
+    }
     let manifest: { id?: string };
     try {
       manifest = JSON.parse(manifestJson);
@@ -821,6 +857,14 @@ export class ExtensionRuntime {
     fs.writeFileSync(path.join(this.resolversDir, `${id}.manifest.json`), manifestJson);
     fs.writeFileSync(path.join(this.resolversDir, `${id}.js`), jsPayload);
     this.reload();
+  }
+
+  private removeRetiredResolverFiles(): void {
+    for (const id of RETIRED_RESOLVER_IDS) {
+      for (const suffix of [".manifest.json", ".js"]) {
+        fs.rmSync(path.join(this.resolversDir, `${id}${suffix}`), { force: true });
+      }
+    }
   }
 
   uninstall(id: string): void {
