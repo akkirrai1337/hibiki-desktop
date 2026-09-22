@@ -185,18 +185,18 @@ function RootLayoutContent() {
   // installed, so this fully replaces the normal chrome instead of layering on top of it.
   if (!onboardingResolved) return <div className="h-screen w-screen bg-app-bg" style={{ backgroundImage: backgroundGradient }} />;
   if (shouldShowOnboarding) return <div className="flex h-screen w-screen flex-col overflow-hidden bg-app-bg text-text" style={{ backgroundImage: backgroundGradient }}>
-    <TitleBar />
+    {hibiki.platform !== "darwin" && <TitleBar />}
     <div className="min-h-0 flex-1"><Onboarding onComplete={() => setOnboardingCompleted(true)} /></div>
   </div>;
 
   if (isWatching) return <div className="flex h-screen w-screen flex-col overflow-hidden bg-black" style={{ backgroundImage: backgroundGradient }}>
-    <TitleBar />
+    {hibiki.platform !== "darwin" && <TitleBar />}
     <AchievementToast />
     <div className="min-h-0 flex-1"><Outlet /></div>
   </div>;
 
   return <div className="flex h-screen w-screen flex-col overflow-hidden bg-app-bg text-text" style={{ backgroundImage: backgroundGradient }}>
-    <TitleBar />
+    {hibiki.platform !== "darwin" && <TitleBar />}
     <AchievementToast />
     <div className="flex min-h-0 flex-1">
       <Sidebar />

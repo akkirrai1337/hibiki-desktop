@@ -61,7 +61,7 @@ let extensionRuntime: ExtensionRuntime | null = null;
 // follow. Fully custom buttons are just regular page content, so they follow app theming exactly
 // the same as everything else, at the cost of us owning their hit-testing/hover/click ourselves
 // (see the new window:* IPC handlers below) instead of getting that for free from the OS. macOS
-// keeps hiddenInset (its native traffic-light equivalent) - no such color-patch problem there.
+// uses the standard native frame and title bar.
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -71,7 +71,7 @@ function createWindow(): void {
     backgroundColor: "#0c0c0f",
     title: "hibiki",
     icon: path.join(__dirname, "../../electron-builder-resources/hibiki.ico"),
-    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
+    ...(process.platform === "darwin" ? {} : { titleBarStyle: "hidden" as const }),
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.mjs"),
       contextIsolation: true,
