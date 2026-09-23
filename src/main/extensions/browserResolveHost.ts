@@ -30,6 +30,18 @@ const VALIDATION_TIMEOUT_MS = 5_000;
 const SETTLE_MS = 600;
 const MAX_VALIDATION_CONCURRENCY = 3;
 
+function resolverUrlLabel(raw: string): string {
+  try {
+    const url = new URL(raw);
+    const tail = url.pathname.split("/").filter(Boolean).slice(-2).map((part) =>
+      part.length > 24 ? `${part.slice(0, 8)}…` : part,
+    ).join("/");
+    return `${url.host}/${tail || "…"}${url.search ? "?…" : ""}`;
+  } catch {
+    return "<invalid-url>";
+  }
+}
+
 // Same net a bare <video src> or hls.js request would resolve to - not sniffing content-type,
 // because captures come from a network-request hook (see below) that only sees the URL, same as
 // Android's shouldInterceptRequest-based capture.
@@ -409,12 +421,30 @@ function streamTypeForUrl(url: string): string {
  * the page's own network requests) surface, and returns them in the same shape a plain
  * Provider.resolve() call would - so callers (see runtime.ts) don't need to distinguish the two.
  */
-export async function performBrowserResolve(link: PlayerLink, script: string, timeoutMs = TIMEOUT_MS): Promise<ResolvedStream[]> {
+export async function performBrowserResolve(
+  link: PlayerLink,
+  script: string,
+  timeoutMs = TIMEOUT_MS,
+  parentUrl?: string | null,
+): Promise<ResolvedStream[]> {
   // Covers navigation, iframe setup, probing and validation. Previously the clock started only
   // after all navigation had completed, allowing a dead embed page to hang well beyond 25s.
   const deadline = Date.now() + Math.min(TIMEOUT_MS, timeoutMs);
-  const refererUrl = link.headers?.Referer ?? link.headers?.referer ?? null;
+  const resolveStartedAt = Date.now();
+  const sourceRefererUrl = link.headers?.Referer ?? link.headers?.referer ?? null;
+  let refererUrl = sourceRefererUrl;
+  try {
+    if (parentUrl) {
+      const parsedParentUrl = new URL(parentUrl);
+      if (parsedParentUrl.protocol === "http:" || parsedParentUrl.protocol === "https:") {
+        refererUrl = parsedParentUrl.href;
+      }
+    }
+  } catch {
+    // Keep the source-provided referrer for malformed/non-HTTP resolver context URLs.
+  }
   const { window: win, hasReferer } = acquireResolverWindow(refererUrl);
+  logger.info("resolve", `browser pipeline started for ${link.playerName ?? "?"}: target=${resolverUrlLabel(link.url)}, window=${hasReferer ? "pooled with referer" : "navigation required"}`);
   const ses = win.webContents.session;
   const networkCaptures: Capture[] = [];
   const capturedRequestHeaders = new Map<string, Record<string, string>>();
@@ -450,14 +480,18 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
   // they have all finished, which on a heavy source SPA is most of the time a resolve takes. So
   // everything below the top-level document is cancelled for the duration of that one navigation.
   const loadRefererDocument = async (url: string): Promise<boolean> => {
+    const startedAt = Date.now();
     documentOnly = true;
     try {
       await loadURLBefore(win, url, deadline);
+      logger.debug("resolve", `browser referer document ready in ${Date.now() - startedAt}ms: ${resolverUrlLabel(url)}`);
       return true;
-    } catch {
+    } catch (error) {
       // Some referring pages never fully settle even stripped down to their HTML. As long as the
       // window ended up at that origin, embedding the real link below still works.
-      return !win.isDestroyed() && originOf(win.webContents.getURL()) === originOf(url);
+      const usable = !win.isDestroyed() && originOf(win.webContents.getURL()) === originOf(url);
+      logger.warn("resolve", `browser referer navigation failed in ${Date.now() - startedAt}ms; usable=${usable}: ${resolverUrlLabel(url)}; ${String(error)}`);
+      return usable;
     } finally {
       documentOnly = false;
     }
@@ -502,7 +536,7 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
       // reaching the referring page, the embed frame committing, and the probing after it.
       logger.debug(
         "resolve",
-        `embed ready: referer ${refererMs}ms${hasReferer ? " (pooled)" : ""}, frame ${Date.now() - embedStartedAt}ms`,
+        `embed ready: referer ${refererMs}ms${hasReferer ? " (pooled)" : ""}, frame ${Date.now() - embedStartedAt}ms; target=${resolverUrlLabel(link.url)}`,
       );
       // Falling back to the top frame (rather than throwing) matches the plain-loadURL behavior
       // this replaces when there's no usable Referer to embed against - some resolver still gets
@@ -526,12 +560,10 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
     // One reachability check per URL for the whole resolve, shared between the master-playlist
     // check below and the final validation in buildResult.
     const probes = new Map<string, Promise<StreamProbe>>();
-    // `master()` is an explicit part of the resolver contract. Re-fetching that URL merely to
-    // rediscover #EXT-X-STREAM-INF adds a full CDN round trip (or a CORS failure timeout) after the
-    // resolver already did the provider-specific work. Network-only observations remain subject
-    // to validation in buildResult(); only an extension's deliberate master report is trusted.
-    const findDeclaredMaster = (captures: Capture[]): Capture | null =>
-      captures.find((capture) => capture.kind === "master" && !PLACEHOLDER_URL_PATTERN.test(capture.url)) ?? null;
+    // `master()` is an explicit part of the resolver contract. Re-fetching declared URLs merely
+    // to rediscover #EXT-X-STREAM-INF adds a CDN round trip (or a CORS timeout) after the resolver
+    // already did its provider-specific work. Network-only observations remain subject to
+    // validation in buildResult(); only deliberate master reports are trusted.
     for (let probe = 0; probe < MAX_PROBES && !done && Date.now() < deadline; probe++) {
       if (!started) {
         // The script is expected to drive its own state machine forward (see alloha.js's
@@ -544,28 +576,35 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
         // wrapped in another function, or its "no-player" return gets swallowed into that
         // wrapper's own (undefined) return instead of surfacing to us.
         let result: unknown;
+        const scriptStartedAt = Date.now();
         try {
           result = await withTimeout(
             target.executeJavaScript(`${BRIDGE_SCRIPT}\n${script}`),
             deadline - Date.now(),
             "Browser resolver script timed out",
           );
-        } catch {
+        } catch (error) {
+          logger.warn("resolve", `browser extractor script execution failed after ${Date.now() - scriptStartedAt}ms: ${resolverUrlLabel(link.url)}; ${String(error)}`);
           result = "no-player";
         }
         started = result !== "no-player";
+        logger.debug("resolve", `browser extractor script executed in ${Date.now() - scriptStartedAt}ms; ready=${started}; target=${resolverUrlLabel(link.url)}`);
       }
 
       const probeDelay = Math.min(PROBE_DELAY_MS, FIRST_PROBE_DELAY_MS * 2 ** probe);
       await sleep(Math.min(probeDelay, Math.max(0, deadline - Date.now())));
+      const probeStartedAt = Date.now();
       const state = await readPageState(target, deadline);
       currentQuality = state.lastQuality; // tags network captures made before the *next* tick
       done = state.done;
+      if (probe < 8 || done || state.captures.length > 0 || networkCaptures.length > 0) {
+        logger.debug("resolve", `browser probe ${probe + 1}: state read ${Date.now() - probeStartedAt}ms; done=${done}; captured=${state.captures.length + networkCaptures.length}; quality=${state.lastQuality ?? "?"}; elapsed=${Date.now() - resolveStartedAt}ms`);
+      }
 
-      const master = findDeclaredMaster(state.captures);
-      if (master) {
-        logger.debug("resolve", `master playlist captured on probe ${probe + 1}, stopping early`);
-        return await buildResult([master], [], link, win, target, deadline, probes, capturedRequestHeaders);
+      const masters = state.captures.filter((capture) => capture.kind === "master" && !PLACEHOLDER_URL_PATTERN.test(capture.url));
+      if (masters.length > 0) {
+        logger.debug("resolve", `master playlist(s) captured on probe ${probe + 1}: ${masters.length}; stopping early`);
+        return await buildResult(masters, [], link, win, target, deadline, probes, capturedRequestHeaders);
       }
 
       const totalCount = state.captures.length + networkCaptures.length;
@@ -582,6 +621,7 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
     }
 
     const finalState = await readPageState(target, deadline);
+    logger.info("resolve", `browser probing finished after ${Date.now() - resolveStartedAt}ms: page=${finalState.captures.length}, network=${networkCaptures.length}; validating candidates`);
     return await buildResult(finalState.captures, networkCaptures, link, win, target, deadline, probes, capturedRequestHeaders);
   } finally {
     removeNetworkCapture(webContentsId);
@@ -625,6 +665,7 @@ async function probeStream(
   const wantsHead = PLAYLIST_URL_PATTERN.test(url);
   const range = wantsHead ? `bytes=0-${PLAYLIST_HEAD_BYTES - 1}` : "bytes=0-0";
   const probe = (async (): Promise<StreamProbe> => {
+    const startedAt = Date.now();
     try {
       const timeoutMs = Math.min(VALIDATION_TIMEOUT_MS, deadline - Date.now());
       const result = (await withTimeout(target.executeJavaScript(`
@@ -642,8 +683,11 @@ async function probeStream(
             .finally(function () { clearTimeout(timer); });
         })();
       `), timeoutMs, `Stream validation timed out for ${url}`)) as { ok: boolean; status: number; head: string };
-      return { reachable: result.ok || result.status === 206, head: result.head ?? "" };
-    } catch {
+      const reachable = result.ok || result.status === 206;
+      logger.debug("resolve", `browser candidate validation ${reachable ? "ok" : "failed"} in ${Date.now() - startedAt}ms: ${resolverUrlLabel(url)} status=${result.status}`);
+      return { reachable, head: result.head ?? "" };
+    } catch (error) {
+      logger.warn("resolve", `browser candidate validation errored after ${Date.now() - startedAt}ms: ${resolverUrlLabel(url)}; ${String(error)}`);
       return { reachable: false, head: "" };
     }
   })();
@@ -661,12 +705,14 @@ async function buildResult(
   probes: Map<string, Promise<StreamProbe>>,
   capturedRequestHeaders: ReadonlyMap<string, Record<string, string>>,
 ): Promise<ResolvedStream[]> {
+  const buildStartedAt = Date.now();
   const seen = new Set<string>();
   const combined = [...pageCaptures, ...networkCaptures]
     .filter((c) => !PLACEHOLDER_URL_PATTERN.test(c.url))
     .filter((c) => (seen.has(c.url) ? false : (seen.add(c.url), true)))
     .sort((a, b) => CAPTURE_KIND_RANK[a.kind] - CAPTURE_KIND_RANK[b.kind]);
   if (combined.length === 0) throw new Error("Browser resolver found no playable stream");
+  logger.debug("resolve", `browser candidates collected: ${combined.length} (${combined.map((capture) => `${capture.kind}/${capture.quality ?? "?"}@${resolverUrlLabel(capture.url)}`).join(", ")})`);
 
   // Refreshed after capture, not before - a Cloudflare-style clearance cookie set while the page
   // ran (exactly what challenge() exists for elsewhere in this app) needs to be in the header set
@@ -718,6 +764,7 @@ async function buildResult(
   await Promise.all(Array.from({ length: Math.min(MAX_VALIDATION_CONCURRENCY, combined.length) }, validateWorker));
   const reachableCaptures = combined.filter((_capture, index) => reachable[index]);
   const selected = reachableCaptures.length > 0 ? reachableCaptures : combined;
+  logger.info("resolve", `browser candidate checks finished in ${Date.now() - buildStartedAt}ms: reachable=${reachableCaptures.length}/${combined.length}; returning=${selected.length}`);
   if (reachableCaptures.length === 0) {
     logger.warn("resolve", `same-page validation was blocked for ${combined.length} captured stream(s); returning browser captures`);
   }

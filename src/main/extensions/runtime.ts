@@ -105,6 +105,28 @@ export function isRetiredResolver(id: string): boolean {
   return RETIRED_RESOLVER_IDS.has(id.toLowerCase());
 }
 
+interface BrowserResolverPayload {
+  script: string;
+  /** Optional page to host the embed frame under, supplied by the resolver when required. */
+  parentUrl?: string;
+}
+
+const BROWSER_RESOLVER_PAYLOAD_PREFIX = "hibiki-browser-resolver:v1:";
+
+function parseBrowserResolverPayload(value: string): BrowserResolverPayload {
+  if (!value.startsWith(BROWSER_RESOLVER_PAYLOAD_PREFIX)) return { script: value };
+  try {
+    const parsed = JSON.parse(value.slice(BROWSER_RESOLVER_PAYLOAD_PREFIX.length)) as Partial<BrowserResolverPayload>;
+    if (typeof parsed.script !== "string" || !parsed.script) throw new Error("missing script");
+    return {
+      script: parsed.script,
+      ...(typeof parsed.parentUrl === "string" ? { parentUrl: parsed.parentUrl } : {}),
+    };
+  } catch (error) {
+    throw new Error(`Invalid browser resolver payload: ${String(error)}`);
+  }
+}
+
 function isRetiredPlayerLink(link: PlayerLink): boolean {
   if (link.playerName && RETIRED_PLAYER_NAMES.has(link.playerName.trim().toLowerCase())) return true;
   try {
@@ -644,11 +666,17 @@ export class ExtensionRuntime {
   // inside a real page in a real browser context, which is Electron-main-only territory (see
   // browserResolveHost.ts, same reasoning as challenge()/browserFetch() elsewhere in this app).
   private async runBrowserResolver(resolverId: string, link: PlayerLink, deadline: number): Promise<Array<PlayerLink & { type: string }>> {
-    const script = await this.run<string>("browserScript", resolverId, [JSON.stringify(link)], {
+    const resolveStartedAt = Date.now();
+    logger.info("resolve", `${resolverId} browser resolver: loading extractor script`);
+    const result = await this.run<string>("browserScript", resolverId, [JSON.stringify(link)], {
       extensionsDir: this.resolversDir,
       timeoutMs: Math.max(1, Math.min(WORKER_TIMEOUT_MS, deadline - Date.now())),
     });
-    const streams = await performBrowserResolve(link, script, Math.max(1, deadline - Date.now()));
+    const { script, parentUrl } = parseBrowserResolverPayload(result);
+    logger.info("resolve", `${resolverId} extractor script ready in ${Date.now() - resolveStartedAt}ms (${script.length} chars); starting hidden-browser resolve`);
+    const browserStartedAt = Date.now();
+    const streams = await performBrowserResolve(link, script, Math.max(1, deadline - Date.now()), parentUrl);
+    logger.info("resolve", `${resolverId} hidden-browser resolve finished in ${Date.now() - browserStartedAt}ms: ${streams.length} stream(s)`);
     return streams as unknown as Array<PlayerLink & { type: string }>;
   }
 
@@ -708,7 +736,7 @@ export class ExtensionRuntime {
       attemptsByResolver.set(resolver.id, used + 1);
       attempts += 1;
       const attemptStartedAt = Date.now();
-      logger.info("resolve", `attempt ${attempts}/${MAX_ATTEMPTS} via ${resolver.id} (${resolver.runtime ?? "NODE"}) for ${link.playerName ?? "?"}/${link.translation ?? "?"} ${link.url}`);
+      logger.info("resolve", `attempt ${attempts}/${MAX_ATTEMPTS} via ${resolver.id} (${resolver.runtime ?? "NODE"}) for ${link.playerName ?? "?"}/${link.translation ?? "?"} ${playerUrlLabel(link.url)}`);
       try {
         const raw =
           resolver.runtime === "BROWSER"
