@@ -83,6 +83,27 @@ interface VideoPlayerProps {
 }
 
 const CONTROLS_HIDE_DELAY_MS = 3000;
+const PLAYBACK_LOAD_TIMEOUT_MS = 15_000;
+let playbackTraceSequence = 0;
+
+function playbackUrlLabel(raw: string): string {
+  try {
+    const url = new URL(raw);
+    const tail = url.pathname.split("/").filter(Boolean).slice(-2).map((part) =>
+      part.length > 24 ? `${part.slice(0, 8)}…` : part,
+    ).join("/");
+    return `${url.host}/${tail || "…"}${url.search ? "?…" : ""}`;
+  } catch {
+    return raw.slice(0, 48);
+  }
+}
+
+function logPlayRequestFailure(origin: string, error: unknown): void {
+  const name = error instanceof DOMException ? error.name : "unknown";
+  const message = error instanceof Error ? error.message : String(error);
+  const write = name === "AbortError" ? log.debug : log.warn;
+  write("player", `video.play() rejected from ${origin}: ${name}: ${message}`);
+}
 
 // A quick overshoot on the way in (it's an accomplishment, it should feel a little bouncy) and a
 // plain ease-in on the way out (it's just tidying up, no reason to draw it out) - same shape as
@@ -384,6 +405,8 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   const videoRef = useRef<HTMLVideoElement>(null);
   const playbackStartedAtRef = useRef(0);
   const firstFrameLoggedRef = useRef(false);
+  const playbackTraceRef = useRef<{ id: string; write: (message: string, ...details: unknown[]) => void; snapshot?: () => unknown } | null>(null);
+  const playbackTimeoutRef = useRef<number | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const seekBarRef = useRef<HTMLDivElement>(null);
 
@@ -395,6 +418,27 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   const [switchingSource, setSwitchingSource] = useState(false);
   const pendingSourceSwitchRef = useRef<{ fromUrl: string | null; position: number; resume: boolean } | null>(null);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [playbackRetryKey, setPlaybackRetryKey] = useState(0);
+  const retryPositionMsRef = useRef<number | null>(null);
+  const armPlaybackTimeout = useCallback((stage: "startup" | "buffering") => {
+    if (playbackTimeoutRef.current !== null) clearTimeout(playbackTimeoutRef.current);
+    playbackTimeoutRef.current = window.setTimeout(() => {
+      playbackTimeoutRef.current = null;
+      const video = videoRef.current;
+      // Network startup can outlive the timeout even after the browser has enough data to play.
+      // Don't leave a stale fatal overlay on top of media that's already healthy.
+      if (stage === "startup" && video && (!video.paused || video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA)) {
+        setPlaybackError(null);
+        setBuffering(false);
+        return;
+      }
+      const trace = playbackTraceRef.current;
+      if (trace) trace.write(`playback ${stage} timeout after ${PLAYBACK_LOAD_TIMEOUT_MS}ms`, trace.snapshot?.() ?? {});
+      else log.error("player", `playback ${stage} timeout after ${PLAYBACK_LOAD_TIMEOUT_MS}ms`);
+      setPlaybackError(t("common.playbackTimeout"));
+      setBuffering(false);
+    }, PLAYBACK_LOAD_TIMEOUT_MS);
+  }, [t]);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [buffered, setBuffered] = useState(0);
@@ -505,9 +549,10 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     video?.pause();
     setSettingsOpen(false);
     setBuffering(true);
+    armPlaybackTimeout("startup");
     setSwitchingSource(true);
     return true;
-  }, [currentTime, link, playing]);
+  }, [currentTime, link, playing, armPlaybackTimeout]);
   /** Whether the pick actually moved playback somewhere. */
   const selectDimension = (changed: Partial<Pick<PlayerLink, "translation" | "playerName" | "quality">>): boolean => {
     // With no link resolved yet there is nothing to keep the other two dimensions *close* to, so
@@ -565,6 +610,15 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     let headerSessionId: string | null = null;
     const subtitleSessionIds: string[] = [];
     let networkRetryTimer: number | null = null;
+    let manifestTimer: number | null = null;
+    let fragmentTimer: number | null = null;
+    let bufferedTimer: number | null = null;
+    const traceId = `p${(++playbackTraceSequence).toString(36)}`;
+    const traceStartedAt = performance.now();
+    const trace = (message: string, ...details: unknown[]) => {
+      log.info("player", `[${traceId} +${Math.round(performance.now() - traceStartedAt)}ms] ${message}`, ...details);
+    };
+    playbackTraceRef.current = { id: traceId, write: trace };
     // Providers occasionally return `//cdn…` URLs. They are remote HTTPS streams, not local
     // files; make that explicit before a packaged renderer resolves them relative to `file:`.
     // Downloaded episodes already use the explicit `hibiki-download:` scheme and remain local.
@@ -577,6 +631,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     // module (DashMediaSource, see PlayerScreen.kt), so this mirrors that with dash.js rather
     // than falling back to the EMBED iframe just because the direct stream happens to be DASH.
     const isDash = link.type === "DIRECT_DASH";
+    trace(`selected ${link.type} ${link.translation ?? "?"}/${link.playerName ?? "?"} ${link.quality ?? "?"} at ${playbackUrlLabel(streamUrl)}; subtitles=${link.subtitles?.length ?? 0}; headers=${Object.keys(link.headers ?? {}).length}`);
     setPlaybackError(null);
     // Nothing owns the element until one of the paths below claims it - an error arriving in
     // between belongs to the stream being torn down, not to this one.
@@ -585,12 +640,15 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     // old stream may still have left `buffering` false, so reset it explicitly before loading the
     // replacement to provide immediate feedback and suppress controls tied to the previous media.
     setBuffering(true);
+    armPlaybackTimeout("startup");
 
     // Referer/User-Agent can't be set from renderer JS (forbidden headers on XHR/fetch, and a
     // plain <video src> has no header hook at all) — register them with the main process, which
     // injects them at the session level for every request to this URL's origin (playlist +
     // segments alike), then start playback once that's in place.
+    const setupStartedAt = performance.now();
     hibiki.player.registerHeaders(streamUrl, link.headers).then(async (sessionId) => {
+      trace(`header session ready in ${Math.round(performance.now() - setupStartedAt)}ms`);
       if (cancelled) {
         void hibiki.player.unregisterHeaders(sessionId);
         return;
@@ -608,11 +666,13 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         }
         await hibiki.player.registerHeaderOrigin(sessionId, subtitleUrl);
       }));
+      trace(`subtitle/header origins ready in ${Math.round(performance.now() - setupStartedAt)}ms`);
       if (cancelled) return;
       if (isHls) {
         // HLS/DASH are large libraries and the catalog never needs them. Import only the engine
         // selected by this stream, keeping both out of the application's startup bundle.
         const { default: HlsEngine } = await import("hls.js");
+        trace(`hls.js import ready in ${Math.round(performance.now() - setupStartedAt)}ms`);
         if (cancelled) return;
         elementOwnsSourceRef.current = !HlsEngine.isSupported();
         if (!HlsEngine.isSupported()) {
@@ -621,8 +681,66 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         }
         // Which stream this player instance is about to own. A switch that silently kept the old
         // stream, or a torn-down instance still loading, is otherwise invisible in an exported log.
-        log.info("player", `attaching hls: ${link.translation ?? "?"}/${link.playerName ?? "?"} ${link.quality ?? "?"} ${streamUrl}`);
+        trace(`creating hls.js; nativeHls=${!HlsEngine.isSupported()}; attach target=${playbackUrlLabel(streamUrl)}`);
         hls = new HlsEngine();
+        let manifestLoaded = false;
+        let firstFragmentLoaded = false;
+        let firstFragmentBuffered = false;
+        manifestTimer = window.setTimeout(() => {
+          if (!manifestLoaded && !cancelled) log.warn("player", `[${traceId} +${Math.round(performance.now() - traceStartedAt)}ms] still waiting for HLS manifest response`);
+        }, 5000);
+        fragmentTimer = window.setTimeout(() => {
+          if (!firstFragmentLoaded && !cancelled) log.warn("player", `[${traceId} +${Math.round(performance.now() - traceStartedAt)}ms] manifest not followed by first HLS fragment response`);
+        }, 12000);
+        bufferedTimer = window.setTimeout(() => {
+          if (!firstFragmentBuffered && !cancelled) log.warn("player", `[${traceId} +${Math.round(performance.now() - traceStartedAt)}ms] first HLS fragment has not reached buffer`);
+        }, 18000);
+        hls.on(HlsEngine.Events.MANIFEST_LOADING, (_event, data) => {
+          trace(`manifest request started: ${playbackUrlLabel(data.url)}`);
+        });
+        hls.on(HlsEngine.Events.MEDIA_ATTACHED, () => trace("hls.js media source attached to video element"));
+        hls.on(HlsEngine.Events.BUFFER_CREATED, (_event, data) => {
+          trace("media source buffers created", Object.entries(data.tracks).map(([name, track]) => `${name}:${track?.container ?? "?"}/${track?.codec ?? "?"}`).join(", "));
+        });
+        hls.on(HlsEngine.Events.MANIFEST_LOADED, (_event, data) => {
+          manifestLoaded = true;
+          if (manifestTimer !== null) window.clearTimeout(manifestTimer);
+          trace(`manifest response received in ${Math.round(data.stats.loading.end - data.stats.loading.start)}ms; levels=${data.levels.length}; url=${playbackUrlLabel(data.url)}`);
+        });
+        hls.on(HlsEngine.Events.LEVEL_LOADED, (_event, data) => {
+          trace(`level playlist loaded: level=${data.level}, fragments=${data.details.fragments.length}, live=${data.details.live}, url=${playbackUrlLabel(data.details.url)}`);
+        });
+        hls.on(HlsEngine.Events.FRAG_LOADING, (_event, data) => {
+          if (data.frag.sn === "initSegment" || (typeof data.frag.sn === "number" && data.frag.sn < 3)) {
+            trace(`fragment request started: sn=${data.frag.sn}, type=${data.frag.type}, level=${data.frag.level}, url=${playbackUrlLabel(data.frag.url)}`);
+          }
+        });
+        hls.on(HlsEngine.Events.FRAG_LOADED, (_event, data) => {
+          if (firstFragmentLoaded) return;
+          firstFragmentLoaded = true;
+          if (fragmentTimer !== null) window.clearTimeout(fragmentTimer);
+          const stats = data.frag.stats;
+          trace(`first fragment response in ${stats ? Math.round(stats.loading.end - stats.loading.start) : "?"}ms; bytes=${stats?.loaded ?? data.payload.byteLength}; sn=${data.frag.sn}; url=${playbackUrlLabel(data.frag.url)}`);
+        });
+        hls.on(HlsEngine.Events.FRAG_BUFFERED, (_event, data) => {
+          if (!firstFragmentBuffered) {
+            firstFragmentBuffered = true;
+            if (bufferedTimer !== null) window.clearTimeout(bufferedTimer);
+            trace(`first fragment buffered; sn=${data.frag.sn}; buffer=${video.buffered.length ? `${video.buffered.start(0).toFixed(2)}-${video.buffered.end(video.buffered.length - 1).toFixed(2)}s` : "empty"}`);
+          }
+          networkRetries = 0;
+          mediaRetries = 0;
+        });
+        let appendedSegmentsLogged = 0;
+        hls.on(HlsEngine.Events.BUFFER_APPENDED, (_event, data) => {
+          if (appendedSegmentsLogged++ >= 5) return;
+          const ranges = Object.entries(data.timeRanges).flatMap(([name, range]) => {
+            if (!range || range.length === 0) return [];
+            return [`${name}:${Array.from({ length: range.length }, (_, index) => `${range.start(index).toFixed(2)}-${range.end(index).toFixed(2)}s`).join(",")}`];
+          });
+          const pending = (data as typeof data & { pending?: number }).pending ?? "?";
+          trace(`buffer append completed: parent=${data.parent}, sn=${data.frag.sn}, pending=${pending}`, ranges.join("; "));
+        });
         // Without this, a failed manifest/segment load (CORS, a dead CDN host, ...) just leaves
         // the "buffering" spinner turning forever with nothing in the console to explain why -
         // network/media errors are usually transient (hls.js's own recommended recovery), but a
@@ -656,22 +774,25 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         // NETWORK_ERROR already was, giving up into the visible error overlay after a few tries.
         let mediaRetries = 0;
         const MAX_MEDIA_RETRIES = 3;
-        hls.on(HlsEngine.Events.MANIFEST_PARSED, () => {
+        hls.on(HlsEngine.Events.MANIFEST_PARSED, (_event, data) => {
           networkRetries = 0;
+          trace(`manifest parsed; levels=${data.levels.length}; selectedLevel=${hls?.currentLevel ?? "auto"}`);
         });
         // A successful buffer append is the real signal that recovery actually worked - resetting
         // only on MANIFEST_PARSED (which fires once, near the very start) would let one recovered
         // error early in playback silently use up the whole retry budget for a later, unrelated one.
-        hls.on(HlsEngine.Events.FRAG_BUFFERED, () => {
-          networkRetries = 0;
-          mediaRetries = 0;
-        });
         hls.on(HlsEngine.Events.ERROR, (_event, data) => {
           // Non-fatal is hls.js saying it has handled this itself. Recording it is worth doing,
           // reporting it as an error is not - a single dub switch produces a burst of them as the
           // segments in flight are cancelled, which buried the one line that mattered.
           const write = data.fatal ? log.error : log.debug;
-          write("player", `hls.js ${data.fatal ? "fatal" : "non-fatal"} error:`, data.type, data.details, data.reason ?? "", data.response ? `http ${data.response.code}` : "");
+          const stats = data.stats;
+          const request = data.networkDetails as XMLHttpRequest | undefined;
+          const requestDuration = stats?.loading?.start != null && stats.loading.end > stats.loading.start
+            ? `${Math.round(stats.loading.end - stats.loading.start)}ms`
+            : "incomplete";
+          const failedUrl = data.response?.url ?? request?.responseURL ?? data.url ?? data.frag?.url ?? streamUrl;
+          write("player", `[${traceId} +${Math.round(performance.now() - traceStartedAt)}ms] hls.js ${data.fatal ? "fatal" : "non-fatal"} error:`, data.type, data.details, data.reason ?? "", data.response ? `http ${data.response.code}` : "", `url=${playbackUrlLabel(failedUrl)}`, `fragment=${data.frag?.sn ?? "?"}`, `level=${data.level ?? data.frag?.level ?? "?"}`, `context=${data.context?.type ?? "?"}`, `buffer=${data.buffer ?? data.bufferInfo?.len ?? "?"}`, `appendNoProgress=${data.appendsWithoutProgress ?? "?"}`, `requestStatus=${request?.status ?? "?"}`, `loaded=${stats?.loaded ?? "?"}`, `requestDuration=${requestDuration}`);
           if (!data.fatal) return;
           switch (data.type) {
             case HlsEngine.ErrorTypes.NETWORK_ERROR: {
@@ -715,7 +836,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
                 // stream on the host that answered.
                 void hibiki.player.resolveStreamUrl(streamUrl, link.headers).then((finalUrl) => {
                   if (cancelled || !hls) return;
-                  if (finalUrl !== streamUrl) log.info("player", `retrying manifest at its redirect target ${finalUrl}`);
+                if (finalUrl !== streamUrl) trace(`retrying manifest at redirect target ${playbackUrlLabel(finalUrl)}`);
                   hls.loadSource(finalUrl);
                 });
               }, 500 * (2 ** (networkRetries - 1)));
@@ -737,6 +858,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         });
         hls.loadSource(streamUrl);
         hls.attachMedia(video);
+        trace("loadSource() and attachMedia() called");
       } else if (isDash) {
         const { MediaPlayer: DashMediaPlayer } = await import("dashjs");
         if (cancelled) return;
@@ -767,20 +889,29 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       }
     }).catch((error) => {
       if (cancelled) return;
-      log.error("player", "failed to establish playback header session:", error);
+      log.error("player", `[${traceId} +${Math.round(performance.now() - traceStartedAt)}ms] playback setup failed at header/subtitle/player initialization:`, error);
       setPlaybackError(error instanceof Error ? error.message : "playback setup failed");
     });
 
     return () => {
       cancelled = true;
+      trace(`teardown; stage=${firstFrameLoggedRef.current ? "playing" : "not-playing"}`);
+      // A superseded player instance may still own outstanding network requests. Distinguish that
+      // from a stream that independently failed so logs don't misdiagnose user-driven switches.
+      if (manifestTimer !== null) window.clearTimeout(manifestTimer);
+      if (fragmentTimer !== null) window.clearTimeout(fragmentTimer);
+      if (bufferedTimer !== null) window.clearTimeout(bufferedTimer);
       if (networkRetryTimer !== null) window.clearTimeout(networkRetryTimer);
-      if (hls) log.info("player", `detaching hls: ${streamUrl}`);
+      if (playbackTimeoutRef.current !== null) clearTimeout(playbackTimeoutRef.current);
+      playbackTimeoutRef.current = null;
+      if (playbackTraceRef.current?.id === traceId) playbackTraceRef.current = null;
+      if (hls) trace(`detaching hls: ${playbackUrlLabel(streamUrl)}`);
       hls?.destroy();
       dash?.destroy();
       if (headerSessionId) void hibiki.player.unregisterHeaders(headerSessionId);
       for (const sessionId of subtitleSessionIds) void hibiki.player.unregisterHeaders(sessionId);
     };
-  }, [link, isEmbed]);
+  }, [link, isEmbed, armPlaybackTimeout, playbackRetryKey]);
 
   // --- media element event wiring ---
   const embedRef = useRef<HTMLIFrameElement>(null);
@@ -825,15 +956,52 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   useEffect(() => {
     const video = videoRef.current;
     if (!video || isEmbed) return;
+    let waitingSince: number | null = null;
+    let lastTimeUpdateLogAt = 0;
+    let lastLoggedBufferedEnd = -1;
+    const mediaState = () => {
+      const ranges: string[] = [];
+      try {
+        for (let index = 0; index < video.buffered.length; index += 1) {
+          ranges.push(`${video.buffered.start(index).toFixed(2)}-${video.buffered.end(index).toFixed(2)}`);
+        }
+      } catch { /* MediaSource can invalidate ranges during a source switch. */ }
+      return {
+        currentSrc: video.currentSrc ? playbackUrlLabel(video.currentSrc) : "",
+        readyState: `${video.readyState}(${["HAVE_NOTHING", "HAVE_METADATA", "HAVE_CURRENT_DATA", "HAVE_FUTURE_DATA", "HAVE_ENOUGH_DATA"][video.readyState] ?? "?"})`,
+        networkState: `${video.networkState}(${["NETWORK_EMPTY", "NETWORK_IDLE", "NETWORK_LOADING", "NETWORK_NO_SOURCE"][video.networkState] ?? "?"})`,
+        currentTime: Number.isFinite(video.currentTime) ? Number(video.currentTime.toFixed(2)) : null,
+        duration: Number.isFinite(video.duration) ? Number(video.duration.toFixed(2)) : null,
+        paused: video.paused,
+        seeking: video.seeking,
+        playbackRate: video.playbackRate,
+        buffered: ranges,
+        error: video.error ? { code: video.error.code, message: video.error.message } : null,
+      };
+    };
+    const activeTrace = playbackTraceRef.current;
+    if (activeTrace) activeTrace.snapshot = mediaState;
+    const observe = (event: string, extra?: Record<string, unknown>) => {
+      playbackTraceRef.current?.write(`video.${event}`, { ...mediaState(), ...extra });
+    };
+    const mediaEvents = ["loadstart", "loadeddata", "canplaythrough", "stalled", "suspend", "emptied", "seeking", "seeked", "abort"] as const;
+    const mediaEventHandlers = mediaEvents.map((event) => {
+      const handler = () => observe(event);
+      video.addEventListener(event, handler);
+      return [event, handler] as const;
+    });
 
     const onLoadedMetadata = () => {
       setDuration(video.duration);
-      log.info("player", `metadata ready in ${Date.now() - playbackStartedAtRef.current}ms: ${link?.quality ?? "?"} ${playbackUrl(link?.url ?? "")}`);
+      observe("loadedmetadata", { elapsedMs: playbackStartedAtRef.current > 0 ? Date.now() - playbackStartedAtRef.current : null });
       const pendingSwitch = pendingSourceSwitchRef.current;
       const isReplacementStream = !!pendingSwitch && pendingSwitch.fromUrl !== link?.url;
       if (isReplacementStream && video.duration) {
         video.currentTime = Math.min(pendingSwitch.position, Math.max(0, video.duration - 1));
         if (!pendingSwitch.resume) video.pause();
+      } else if (retryPositionMsRef.current !== null && video.duration) {
+        video.currentTime = Math.min(retryPositionMsRef.current / 1000, video.duration - 1);
+        retryPositionMsRef.current = null;
       } else if (startPositionMs && video.duration) {
         video.currentTime = Math.min(startPositionMs / 1000, video.duration - 1);
       }
@@ -859,35 +1027,68 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       }
     };
     const onEnded = () => {
+      observe("ended");
       if (autoPlayNextEpisode) onNextEpisode?.();
     };
     const onProgressEvent = () => {
-      if (video.buffered.length > 0) setBuffered(video.buffered.end(video.buffered.length - 1));
+      if (video.buffered.length > 0) {
+        const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+        setBuffered(bufferedEnd);
+        if (bufferedEnd - lastLoggedBufferedEnd >= 2) {
+          lastLoggedBufferedEnd = bufferedEnd;
+          observe("progress", { bufferedEnd: Number(bufferedEnd.toFixed(2)) });
+        }
+      }
     };
     const onPlay = () => {
       setPlaying(true);
-      if (!firstFrameLoggedRef.current) {
-        firstFrameLoggedRef.current = true;
-        log.info("player", `first frame/playing in ${Date.now() - playbackStartedAtRef.current}ms: ${link?.quality ?? "?"} ${playbackUrl(link?.url ?? "")}`);
-      }
+      observe("play (playback requested)", { elapsedMs: playbackStartedAtRef.current > 0 ? Date.now() - playbackStartedAtRef.current : null });
       onPlayStateChange?.(true);
       if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
     };
     const onPause = () => {
       setPlaying(false);
+      observe("pause");
       onPlayStateChange?.(false);
       if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused";
     };
-    const onWaiting = () => setBuffering(true);
-    const onCanPlay = () => {
+    const onWaiting = () => {
+      if (waitingSince === null) waitingSince = performance.now();
+      observe("waiting", { waitingForMs: 0 });
+      setBuffering(true);
+      armPlaybackTimeout("buffering");
+    };
+    const onCanPlay = (event: "canplay" | null = "canplay") => {
+      if (event) observe(event);
+      if (playbackTimeoutRef.current !== null) clearTimeout(playbackTimeoutRef.current);
+      playbackTimeoutRef.current = null;
+      setPlaybackError(null);
       setBuffering(false);
       const pendingSwitch = pendingSourceSwitchRef.current;
       if (!pendingSwitch || pendingSwitch.fromUrl === link?.url) return;
 
-      if (pendingSwitch.resume) void video.play().catch(() => undefined);
+      if (pendingSwitch.resume) void video.play().catch((error: unknown) => logPlayRequestFailure("source switch", error));
       else video.pause();
       pendingSourceSwitchRef.current = null;
       setSwitchingSource(false);
+    };
+    const onCanPlayEvent = () => onCanPlay();
+    const onPlaying = () => {
+      const waitedMs = waitingSince === null ? null : Math.round(performance.now() - waitingSince);
+      waitingSince = null;
+      if (!firstFrameLoggedRef.current && playbackStartedAtRef.current > 0) {
+        firstFrameLoggedRef.current = true;
+        observe("first playing", { elapsedMs: Date.now() - playbackStartedAtRef.current, waitedMs });
+      } else {
+        observe("playing", { waitedMs });
+      }
+      onCanPlay(null);
+    };
+    const onTimeUpdateDiagnostic = () => {
+      const now = performance.now();
+      if (now - lastTimeUpdateLogAt < 5000) return;
+      lastTimeUpdateLogAt = now;
+      observe("timeupdate");
     };
     const onVolumeChange = () => { setVolume(video.volume); setMuted(video.muted); setStoredVolume(video.volume, video.muted); };
     // Only meaningful for the direct-<video src> path (hls.js has its own error events, wired up
@@ -901,6 +1102,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     // falls through to `video.src` too whenever Hls.isSupported() is false, and that path would
     // then have had no error reporting at all: no overlay, no fallback, just a spinner forever.
     const onError = () => {
+      observe("error");
       if (!link || isEmbed || !elementOwnsSourceRef.current) return;
       log.error("player", "<video> element error:", `code ${video.error?.code}`, video.error?.message ?? "");
       const reason = video.error?.message || "playback failed";
@@ -909,30 +1111,34 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
 
     video.addEventListener("loadedmetadata", onLoadedMetadata);
     video.addEventListener("timeupdate", onTimeUpdate);
+    video.addEventListener("timeupdate", onTimeUpdateDiagnostic);
     video.addEventListener("progress", onProgressEvent);
     video.addEventListener("play", onPlay);
     video.addEventListener("pause", onPause);
     video.addEventListener("waiting", onWaiting);
-    video.addEventListener("canplay", onCanPlay);
-    video.addEventListener("playing", onCanPlay);
+    video.addEventListener("canplay", onCanPlayEvent);
+    video.addEventListener("playing", onPlaying);
     video.addEventListener("volumechange", onVolumeChange);
     video.addEventListener("error", onError);
     video.addEventListener("ended", onEnded);
 
     return () => {
+      if (playbackTraceRef.current === activeTrace && activeTrace) activeTrace.snapshot = undefined;
       video.removeEventListener("loadedmetadata", onLoadedMetadata);
       video.removeEventListener("timeupdate", onTimeUpdate);
+      video.removeEventListener("timeupdate", onTimeUpdateDiagnostic);
       video.removeEventListener("progress", onProgressEvent);
       video.removeEventListener("play", onPlay);
       video.removeEventListener("pause", onPause);
       video.removeEventListener("waiting", onWaiting);
-      video.removeEventListener("canplay", onCanPlay);
-      video.removeEventListener("playing", onCanPlay);
+      video.removeEventListener("canplay", onCanPlayEvent);
+      video.removeEventListener("playing", onPlaying);
       video.removeEventListener("volumechange", onVolumeChange);
       video.removeEventListener("ended", onEnded);
       video.removeEventListener("error", onError);
+      for (const [event, handler] of mediaEventHandlers) video.removeEventListener(event, handler);
     };
-  }, [link, isEmbed, startPositionMs, onProgress, onPlayStateChange, reportPlaybackFailure, autoPlayNextEpisode, playbackSpeed, onNextEpisode, setStoredVolume]);
+  }, [link, isEmbed, startPositionMs, onProgress, onPlayStateChange, reportPlaybackFailure, autoPlayNextEpisode, playbackSpeed, onNextEpisode, setStoredVolume, armPlaybackTimeout]);
 
   // Push the remembered volume onto the element itself. A fresh <video> (new episode, new stream
   // after a player switch) always comes up at 1.0 unmuted, so this has to re-run per `link`, not
@@ -1069,7 +1275,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     const seekBy = (deltaSeconds: number) => {
       video.currentTime = Math.min(Math.max(0, video.currentTime + deltaSeconds), video.duration || Infinity);
     };
-    navigator.mediaSession.setActionHandler("play", () => void video.play());
+    navigator.mediaSession.setActionHandler("play", () => void video.play().catch((error: unknown) => logPlayRequestFailure("media session", error)));
     navigator.mediaSession.setActionHandler("pause", () => video.pause());
     // Electron's Chromium build renders "previoustrack"/"nexttrack" as clickable icons flanking
     // play/pause in the native PiP window, but not "seekbackward"/"seekforward" (confirmed by
@@ -1142,7 +1348,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     const video = videoRef.current;
     if (!video) return;
     if (video.paused) {
-      video.play();
+      void video.play().catch((error: unknown) => logPlayRequestFailure("player controls", error));
       flashCenterIcon("play");
     } else {
       video.pause();
@@ -1502,6 +1708,21 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60 px-8 text-center">
           <TriangleAlert className="h-10 w-10 text-rose-400" strokeWidth={1.75} />
           <p className="select-text text-sm text-zinc-300">{t("common.loadFailed", { message: playbackError })}</p>
+          {link && !isEmbed && (
+            <button
+              type="button"
+              onClick={() => {
+                const video = videoRef.current;
+                retryPositionMsRef.current = video && Number.isFinite(video.currentTime) ? video.currentTime * 1000 : null;
+                setPlaybackError(null);
+                setBuffering(true);
+                setPlaybackRetryKey((attempt) => attempt + 1);
+              }}
+              className="rounded-full bg-rose-500 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-rose-400"
+            >
+              {t("common.retry")}
+            </button>
+          )}
         </div>
       ) : (sourceSwitching || switchingSource || buffering || !link) && (
         // `!link` is the "still deciding what to play" case - the spinner sits over the chrome
@@ -1620,12 +1841,20 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
               className="relative -m-2 flex h-12 w-12 shrink-0 items-center justify-center"
               onMouseEnter={() => setVolumeHover(true)}
               onMouseLeave={() => setVolumeHover(false)}
+              onWheel={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                const video = videoRef.current;
+                if (!video || event.deltaY === 0) return;
+                video.volume = Math.min(1, Math.max(0, video.volume + (event.deltaY < 0 ? VOLUME_STEP : -VOLUME_STEP)));
+                video.muted = video.volume === 0;
+              }}
             >
               {/* h-8, not the input's own height: a range input is a ~16px band, and aiming at
                   16px of a track that only appears on hover means the slightest vertical drift
                   collapses it mid-drag. The taller box is transparent, so nothing looks different
                   - there is just somewhere to be. */}
-              <div className={cn("absolute right-full top-1/2 mr-1 flex h-8 -translate-y-1/2 items-center overflow-hidden transition-[width] duration-200 ease-out", volumeHover ? "w-20" : "w-0")}>
+              <div className={cn("absolute right-full top-1/2 -mr-2 flex h-8 -translate-y-1/2 items-center overflow-hidden transition-[width] duration-200 ease-out", volumeHover ? "w-20" : "w-0")}>
                 <input
                   type="range"
                   min={0}

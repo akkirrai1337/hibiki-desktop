@@ -170,13 +170,24 @@ function WatchPage() {
   // the whole hls.js (re)attach, snapping playback back near the last saved progress checkpoint.
   const linksQuery = useQuery({
     queryKey: ["playerLinks", sourceId, animeId, groupId, episodeId],
-    queryFn: () => hibiki.sources.playerLinks(
-      sourceId,
-      animeId,
-      groupId,
-      episodeId,
-      usePlayerSelectionStore.getState().get(sourceId, animeId, groupId),
-    ),
+    queryFn: async () => {
+      const startedAt = performance.now();
+      log.info("player", `link discovery started: source=${sourceId}, anime=${animeId}, group=${groupId}, episode=${episodeId}`);
+      try {
+        const links = await hibiki.sources.playerLinks(
+          sourceId,
+          animeId,
+          groupId,
+          episodeId,
+          usePlayerSelectionStore.getState().get(sourceId, animeId, groupId),
+        );
+        log.info("player", `link discovery finished in ${Math.round(performance.now() - startedAt)}ms: ${links.length} link(s); ${links.map((item) => `${item.type}:${item.playerName ?? "?"}/${item.translation ?? "?"}/${item.quality ?? "?"}`).join(", ") || "none"}`);
+        return links;
+      } catch (error) {
+        log.error("player", `link discovery failed after ${Math.round(performance.now() - startedAt)}ms:`, error);
+        throw error;
+      }
+    },
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
@@ -219,11 +230,11 @@ function WatchPage() {
     }
 
     setSourceSwitching(true);
-    const startedAt = Date.now();
-    log.info("player", `resolving embed ${selected.playerName ?? "?"}/${selected.translation ?? "?"} ${selected.url}`);
+    const startedAt = performance.now();
+    log.info("player", `embed resolve started: player=${selected.playerName ?? "?"}, translation=${selected.translation ?? "?"}`);
     try {
       const resolved = await hibiki.sources.resolvePlayerLink(selected);
-      log.info("player", `resolved ${selected.playerName ?? "?"} in ${Date.now() - startedAt}ms -> ${resolved.length} link(s)`);
+      log.info("player", `embed resolve finished in ${Math.round(performance.now() - startedAt)}ms: player=${selected.playerName ?? "?"}, links=${resolved.length}; ${resolved.map((item) => `${item.type}/${item.quality ?? "?"}`).join(", ") || "none"}`);
       // Superseded while it was resolving. Whatever superseded it owns the outcome now, and that
       // is worth saying out loud: from the outside this is indistinguishable from a resolve that
       // simply never came back, and the screen sits on a spinner either way.
@@ -261,7 +272,7 @@ function WatchPage() {
         log.info("player", `discarding stale failed resolve ${requestId} (current ${selectionRequestRef.current})`);
         return;
       }
-      log.warn("player", `failed to resolve ${selected.playerName ?? selected.url}:`, error);
+      log.warn("player", `embed resolve failed for ${selected.playerName ?? "?"} after ${Math.round(performance.now() - startedAt)}ms:`, error);
       setManualLink(selected);
     } finally {
       if (requestId === selectionRequestRef.current) setSourceSwitching(false);

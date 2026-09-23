@@ -36,6 +36,18 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WORKER_TIMEOUT_MS = 30_000;
 const RESOLVE_TOTAL_TIMEOUT_MS = 45_000;
 
+function playerUrlLabel(raw: string): string {
+  try {
+    const url = new URL(raw);
+    const tail = url.pathname.split("/").filter(Boolean).slice(-2).map((part) =>
+      part.length > 24 ? `${part.slice(0, 8)}…` : part,
+    ).join("/");
+    return `${url.host}/${tail || "…"}${url.search ? "?…" : ""}`;
+  } catch {
+    return "<invalid-url>";
+  }
+}
+
 const RESOLVER_STREAM_TYPE_TO_PLAYER_LINK_TYPE: Record<string, PlayerLinkType | undefined> = {
   HLS: "DIRECT_HLS",
   MP4: "DIRECT_MP4",
