@@ -1,10 +1,11 @@
 import { useEffect, useRef } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { Home, LayoutGrid, Bookmark, Download, Radio, User, Settings } from "lucide-react";
 import { useUiStore } from "@/stores/uiStore";
 import { useSourceUpdateCount } from "@/lib/sourceUpdates";
 import { cn } from "@/lib/cn";
+import { clearSectionTitle, getSectionTitle, isRememberedTitlePath, type BrowseSection } from "@/lib/sectionTitleMemory";
 
 // 236px is the ceiling (the original full design). Below MIN_FULL_WIDTH there isn't room to keep
 // labels legible, so instead of shrinking/truncating text we snap straight to an icon-only strip
@@ -95,7 +96,23 @@ function NavLink({
   compact: boolean;
   badgeCount?: number;
 }) {
-  return <Link to={to} title={compact ? label : undefined} className={cn("app-no-drag group relative flex items-center rounded-lg py-2 text-[13px] font-medium text-muted transition-colors hover:bg-text/[.05] hover:text-text", compact ? "justify-center px-0" : "gap-3 px-3")} activeProps={{ className: "!text-text" }}>
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (state) => (state.resolvedLocation ?? state.location).pathname });
+  const section: BrowseSection | null = to === "/" ? "home" : to === "/catalog" ? "catalog" : null;
+  return <Link to={to} title={compact ? label : undefined} data-browse-section={section ?? undefined} onClick={(event) => {
+    if (!section || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    // Clicking the section while already there, or while viewing its remembered title, returns
+    // to the section itself. From any other page it opens that section's remembered title.
+    if (pathname === to) return;
+    const remembered = getSectionTitle(section);
+    if (!remembered) return;
+    if (isRememberedTitlePath(pathname, remembered)) {
+      clearSectionTitle(section);
+      return;
+    }
+    event.preventDefault();
+    void navigate({ to: "/anime/$sourceId/$animeId", params: remembered });
+  }} className={cn("app-no-drag group relative flex items-center rounded-lg py-2 text-[13px] font-medium text-muted transition-colors hover:bg-text/[.05] hover:text-text", compact ? "justify-center px-0" : "gap-3 px-3")} activeProps={{ className: "!text-text" }}>
     {({ isActive }: { isActive: boolean }) => <>
       <span className={cn("absolute -left-3 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-accent transition-opacity", isActive ? "opacity-100" : "opacity-0")} />
       {isActive && <span className="absolute inset-0 rounded-lg bg-text/[.08]" />}

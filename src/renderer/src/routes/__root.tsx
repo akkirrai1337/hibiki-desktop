@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createRootRoute, Outlet, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useUiStore } from "@/stores/uiStore";
@@ -14,6 +14,7 @@ import { useAppZoom } from "@/lib/useAppZoom";
 import { cn } from "@/lib/cn";
 import { Onboarding } from "@/features/onboarding/Onboarding";
 import { SignInPromptProvider } from "@/components/SignInPrompt";
+import { rememberSectionTitle, type BrowseSection } from "@/lib/sectionTitleMemory";
 
 // Every static (paramless) route's own route component is a no-op (see index.tsx) - its real
 // content is one of these, kept alive here instead once first visited (see `visited` below). Lazy
@@ -135,6 +136,41 @@ function RootLayoutContent() {
   // one, so reading the pending location hid the page being left the instant a navigation started,
   // leaving an empty frame under the chrome until the next route's chunk arrived.
   const pathname = useRouterState({ select: (s) => (s.resolvedLocation ?? s.location).pathname });
+  const browseSection = useRef<BrowseSection | null>(null);
+  const clickedBrowseSection = useRef<BrowseSection | null>(null);
+  useLayoutEffect(() => {
+    const onClickCapture = (event: MouseEvent) => {
+      if (!(event.target instanceof Element)) return;
+      const section = event.target.closest<HTMLElement>("[data-browse-section]")?.dataset.browseSection;
+      if (section === "home" || section === "catalog") clickedBrowseSection.current = section;
+    };
+    document.addEventListener("click", onClickCapture, true);
+    return () => document.removeEventListener("click", onClickCapture, true);
+  }, []);
+  useLayoutEffect(() => {
+    if (pathname === "/" || pathname === "/catalog") {
+      const section: BrowseSection = pathname === "/" ? "home" : "catalog";
+      browseSection.current = section;
+      clickedBrowseSection.current = null;
+      return;
+    }
+
+    const titleMatch = pathname.match(/^\/anime\/([^/]+)\/([^/]+)$/);
+    if (titleMatch) {
+      // Use the section the user clicked in as the title's origin. Keep it across title-to-title
+      // and player navigation, while unrelated routes below clear it.
+      const clickedSection = clickedBrowseSection.current;
+      clickedBrowseSection.current = null;
+      if (clickedSection) browseSection.current = clickedSection;
+      if (browseSection.current) {
+        rememberSectionTitle(browseSection.current, decodeURIComponent(titleMatch[1]), decodeURIComponent(titleMatch[2]));
+      }
+      return;
+    }
+
+    clickedBrowseSection.current = null;
+    if (!pathname.startsWith("/watch/")) browseSection.current = null;
+  }, [pathname]);
   // Each of PERSISTED_PAGES only ever joins this set, never leaves it - the first visit mounts it
   // (paying its own load/query cost, same as before) and every visit after that just toggles
   // `hidden` on an already-live component instead of tearing it down and rebuilding its state from
@@ -239,6 +275,7 @@ function RootLayoutContent() {
           // and artwork, which then made the active catalog less smooth to scroll.
           return <div
             key={path}
+            data-browse-section={path === "/" ? "home" : path === "/catalog" ? "catalog" : undefined}
             aria-hidden={!isActive}
             className={cn(
               "no-scrollbar min-h-0 overflow-y-auto",
