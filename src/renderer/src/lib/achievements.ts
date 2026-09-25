@@ -184,6 +184,32 @@ function leveled(familyId: string, tiers: AchievementTier[], current: number): A
   };
 }
 
+export interface AchievementMarks {
+  titles: number;
+  completed: number;
+  genres: number;
+}
+
+// Tops the library up to the best figures ever recorded, so a library that has since shrunk does not
+// un-earn library-based achievements. Neutral stand-in entries are used, so computeAchievements and its
+// shared vectors stay exactly as they are.
+export function withRecordedBest(entries: LibraryEntry[], marks: AchievementMarks): LibraryEntry[] {
+  const completedPad = Math.max(0, marks.completed - entries.filter((e) => e.category === "completed").length);
+  const genrePad = Math.max(0, marks.genres - new Set(entries.flatMap((e) => e.anime.genres ?? [])).size);
+  const padding: LibraryEntry[] = [];
+  for (let i = 0; i < completedPad; i++) {
+    padding.push({ category: "completed", anime: { genres: [] } } as unknown as LibraryEntry);
+  }
+  if (genrePad > 0) {
+    const genres = Array.from({ length: genrePad }, (_, i) => `\u0000best-${i}`);
+    padding.push({ category: "other", anime: { genres } } as unknown as LibraryEntry);
+  }
+  for (let i = entries.length + padding.length; i < marks.titles; i++) {
+    padding.push({ category: "other", anime: { genres: [] } } as unknown as LibraryEntry);
+  }
+  return padding.length ? [...entries, ...padding] : entries;
+}
+
 // Computed entirely from data already loaded elsewhere on this page (library entries, a lifetime
 // activity query, the same streak math the stat cards use) - no separate achievements table, just
 // thresholds read off state that already exists for other reasons.

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { hibiki } from "@/lib/hibiki";
-import { computeAchievements, tiersClearedInRange, type Achievement } from "@/lib/achievements";
+import { computeAchievements, tiersClearedInRange, withRecordedBest, type Achievement } from "@/lib/achievements";
+import { useAchievementMarksStore } from "@/stores/achievementMarksStore";
 import { buildActivitySeries, computeStreaks } from "@/components/StreakBadge";
 import { useAchievementsStore } from "@/stores/achievementsStore";
 import { useAchievementToastStore } from "@/stores/achievementToastStore";
@@ -37,10 +38,29 @@ export function useAchievementUnlocks(): void {
     () => computeStreaks(buildActivitySeries(lifetimeRows, LIFETIME_ACTIVITY_DAYS)).best,
     [lifetimeRows],
   );
-  const achievements = useMemo(
-    () => computeAchievements({ entries, lifetimeWatchedMs, bestStreak: lifetimeBestStreak }),
-    [entries, lifetimeWatchedMs, lifetimeBestStreak],
+  const markedTitles = useAchievementMarksStore((s) => s.titles);
+  const markedCompleted = useAchievementMarksStore((s) => s.completed);
+  const markedGenres = useAchievementMarksStore((s) => s.genres);
+  const recordMarks = useAchievementMarksStore((s) => s.record);
+  // The library topped up to its best ever figures, so removing titles never un-earns an achievement.
+  const ruleEntries = useMemo(
+    () => withRecordedBest(entries, { titles: markedTitles, completed: markedCompleted, genres: markedGenres }),
+    [entries, markedTitles, markedCompleted, markedGenres],
   );
+  const achievements = useMemo(
+    () => computeAchievements({ entries: ruleEntries, lifetimeWatchedMs, bestStreak: lifetimeBestStreak }),
+    [ruleEntries, lifetimeWatchedMs, lifetimeBestStreak],
+  );
+
+  // Recorded only once the library has really loaded, so an empty first render never counts as a figure.
+  useEffect(() => {
+    if (!libraryQuery.isSuccess) return;
+    recordMarks({
+      titles: ruleEntries.length,
+      completed: ruleEntries.filter((e) => e.category === "completed").length,
+      genres: new Set(ruleEntries.flatMap((e) => e.anime.genres ?? [])).size,
+    });
+  }, [libraryQuery.isSuccess, ruleEntries, recordMarks]);
 
   useEffect(() => { setAchievements(achievements); }, [achievements, setAchievements]);
 
