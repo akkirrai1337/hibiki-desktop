@@ -162,7 +162,8 @@
     },
     "relatedHere": "You are here",
     "relatedShowMore": "Show {{count}} more",
-    "relatedShowLess": "Show less"
+    "relatedShowLess": "Show less",
+    "screenshots": "Screenshots"
   },
   "watch": {
     "loadingLink": "Loading link…",

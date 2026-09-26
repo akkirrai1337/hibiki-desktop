@@ -41,6 +41,8 @@ export interface AnimeTitle {
   episodeCount?: number | null;
   availableEpisodeCount?: number | null;
   posterUrl?: string | null;
+  /** Stills from the title as a whole - not from any one episode. Only some sources have them. */
+  screenshots?: string[];
   /** This title's own page on the source's website, when the source supplies one. Only it can: an
    * id here is whatever that source identifies titles by, which is often not what its URLs use. */
   pageUrl?: string | null;

@@ -162,7 +162,8 @@
     },
     "relatedHere": "Ви тут",
     "relatedShowMore": "Показати ще {{count}}",
-    "relatedShowLess": "Згорнути"
+    "relatedShowLess": "Згорнути",
+    "screenshots": "Кадри"
   },
   "watch": {
     "loadingLink": "Завантаження посилання…",

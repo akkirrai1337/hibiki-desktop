@@ -164,11 +164,15 @@ function AnimeDetailPage() {
   const backgroundTheme = useUiStore((s) => s.backgroundTheme);
   const [downloadEpisode, setDownloadEpisode] = useState<Episode | null>(null);
   const [posterPreviewOpen, setPosterPreviewOpen] = useState(false);
+  const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   // The preview belongs to this exact title. A parameter-only route change can keep the detail
   // component mounted, so do not let a poster from the previous title linger above the new page.
-  useEffect(() => setPosterPreviewOpen(false), [sourceId, animeId]);
+  useEffect(() => {
+    setPosterPreviewOpen(false);
+    setScreenshotPreview(null);
+  }, [sourceId, animeId]);
   // Arriving here almost always means a card was clicked, and that card's list already carried
   // this title - the same AnimeTitle shape getById returns, with fewer fields filled in and none
   // contradicting it (see lib/listedTitles). Drawing it while getById is in flight replaces a
@@ -268,6 +272,7 @@ function AnimeDetailPage() {
       })()
     : [];
   const relatedIds = new Set(related.map((r) => r.id));
+  const screenshots = useMemo(() => [...new Set((anime?.screenshots ?? []).filter((url) => typeof url === "string" && url))], [anime?.screenshots]);
   const similar = anime ? dedupeById(anime.similarAnime ?? []).filter((r) => r.id !== animeId && !relatedIds.has(r.id)) : [];
 
   const libraryEntry = libraryQuery.data?.find((e) => e.sourceId === sourceId && e.animeId === animeId);
@@ -425,6 +430,24 @@ function AnimeDetailPage() {
           ))}
         </div>}
       </div>
+      {screenshots.length > 0 && (
+        <div className="px-8 pt-10">
+          <h2 className="mb-4 text-xl font-bold tracking-[-.02em] text-text">{t("detail.screenshots")}</h2>
+          <HorizontalScrollRow
+            items={screenshots}
+            getKey={(url) => url}
+            cardWidthClassName="w-[calc((100%-3*0.625rem)/3.3)]"
+            arrowAspectClassName="aspect-video"
+            renderItem={(url) => (
+              <button onClick={() => setScreenshotPreview(url)} className="group block w-full overflow-hidden rounded-xl bg-surface ring-1 ring-border">
+                <div className="aspect-video w-full">
+                  <SmoothImage src={url} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.035]" />
+                </div>
+              </button>
+            )}
+          />
+        </div>
+      )}
       <div className="px-8 pt-10">
         <TitleStrip
           items={similar}
@@ -450,6 +473,7 @@ function AnimeDetailPage() {
         )}
       </AnimatePresence>
       <AnimatePresence>
+        {screenshotPreview && <PosterPreview key={screenshotPreview} posterUrl={screenshotPreview} title={animeTitle(anime)} onClose={() => setScreenshotPreview(null)} />}
         {posterPreviewOpen && anime.posterUrl && <PosterPreview key={`${sourceId}:${animeId}`} posterUrl={anime.posterUrl} title={animeTitle(anime)} onClose={() => setPosterPreviewOpen(false)} />}
       </AnimatePresence>
     </>}

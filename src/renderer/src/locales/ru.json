@@ -162,7 +162,8 @@
     },
     "relatedHere": "Вы здесь",
     "relatedShowMore": "Показать ещё {{count}}",
-    "relatedShowLess": "Свернуть"
+    "relatedShowLess": "Свернуть",
+    "screenshots": "Кадры"
   },
   "watch": {
     "loadingLink": "Загрузка ссылки…",
