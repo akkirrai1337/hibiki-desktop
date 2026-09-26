@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MotionConfig } from "motion/react";
 import { RouterProvider, createHashHistory, createRouter } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
 import "./lib/i18n";
@@ -50,7 +51,12 @@ declare module "@tanstack/react-router" {
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      {/* Every spring in the app ends within half a pixel by default and then snaps to its target, which is
+          the shift text shows a moment after a panel has "fully" arrived. Running the springs down to a
+          hundredth of a pixel makes that last snap invisible, everywhere at once. */}
+      <MotionConfig transition={{ restDelta: 0.01, restSpeed: 0.05 }}>
+        <RouterProvider router={router} />
+      </MotionConfig>
     </QueryClientProvider>
   </React.StrictMode>,
 );
