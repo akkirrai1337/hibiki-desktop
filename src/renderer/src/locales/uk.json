@@ -218,6 +218,8 @@
       "genres": "Жанри",
       "genresExpand": "Показати всі жанри",
       "genresCollapse": "Згорнути жанри",
+      "ratingAny": "Будь-який рейтинг",
+      "ratingUpTo": "До {{rating}}",
       "year": "Рік",
       "reset": "Скинути",
       "apply": "Застосувати",

@@ -13,6 +13,7 @@ import { HERO_ACTION_CLASS, HeroCarousel, type HeroSlide } from "@/components/He
 import { useContinueWatching } from "@/lib/continueWatching";
 import { useUiStore } from "@/stores/uiStore";
 import { useMetadataProviderKey } from "@/lib/aggregatorBrowsing";
+import { pickPopularSort } from "@/lib/catalogSort";
 import type { AnimeTitle } from "@shared/types";
 
 const RECOMMENDED_COUNT = 20;
@@ -47,11 +48,18 @@ export function CatalogPage() {
   const activeSourceId = useUiStore((s) => s.activeSourceId);
   const source = sources.data?.find((s) => s.id === activeSourceId) ?? sources.data?.[0];
   const providerKey = useMetadataProviderKey(source);
-  const sortMode = source?.supportedSorts.includes("RATING") ? "RATING" : undefined;
-  const hero = useCachedTitleList({
-    queryKey: ["hero", source?.id],
-    cacheKey: source ? `hero:${source.id}` : null,
+  // The source's own best-known order, once we know what it offers (undefined = its default listing).
+  const settings = useQuery({
+    queryKey: ["filterCatalog", source?.id],
     enabled: !!source,
+    queryFn: () => hibiki.sources.filterCatalog(source!.id),
+  });
+  const sortMode = pickPopularSort(settings.data?.sortOptions ?? []);
+  const settingsReady = settings.isFetched;
+  const hero = useCachedTitleList({
+    queryKey: ["hero", source?.id, sortMode ?? ""],
+    cacheKey: source ? `hero:${source.id}` : null,
+    enabled: !!source && settingsReady,
     queryFn: () => hibiki.sources.search(source!.id, { limit: HERO_SLIDE_COUNT, sort: sortMode }),
   });
   // Compute the source's window in the same render that enables the query. Keeping this in state
@@ -59,11 +67,11 @@ export function CatalogPage() {
   // the old offset and then immediately start a second with the new one.
   const poolOffset = useMemo(randomPoolOffset, [source?.id]);
   const pool = useCachedTitleList({
-    queryKey: ["popular-pool", source?.id, poolOffset],
+    queryKey: ["popular-pool", source?.id, poolOffset, sortMode ?? ""],
     // Deliberately without the offset: this visit's slice is meant to be a different one, so the
     // useful thing to paint while it loads is the slice from last time.
     cacheKey: source ? `popular-pool:${source.id}` : null,
-    enabled: !!source,
+    enabled: !!source && settingsReady,
     queryFn: async () => {
       const window = await hibiki.sources.search(source!.id, { offset: poolOffset, limit: POOL_WINDOW, sort: sortMode });
       // A short catalog can have fewer titles than our random offset - fall back to the start

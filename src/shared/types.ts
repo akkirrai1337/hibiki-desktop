@@ -255,10 +255,6 @@ export interface SourceInfo {
   /** Whether this installed source is marked 18+ by its manifest. */
   isNsfw: boolean;
   capabilities: SourceCapability[];
-  supportedSorts: string[];
-  /** The source offers search filters. What they are is the source's own business - the host only
-   * asks getSettings().filters and draws them (see SearchFilterDef). */
-  hasFilters: boolean;
   runtime?: "NODE" | "BROWSER";
   /**
    * The source admits its own metadata is the weaker half of what it returns, and asks the app to
@@ -369,6 +365,9 @@ export interface SearchFilterDef {
   options?: SearchFilterOption[];
   min?: number;
   max?: number;
+  /** `select` only: the options are sort orders that can also run backwards. The value is then
+   * { include: [id] } for ascending and { exclude: [id] } for descending, instead of a plain id. */
+  directional?: boolean;
 }
 
 export type FilterValue = string | string[] | { include: string[]; exclude: string[] } | { from?: number; to?: number };

@@ -69,7 +69,6 @@ export function TitleBar() {
   const activeSourceId = useUiStore((s) => s.activeSourceId);
   const sources = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });
   const source = sources.data?.find((s) => s.id === activeSourceId) ?? sources.data?.[0];
-  const showFilterButton = !searchHidden && !!source && source.hasFilters;
 
   const filters = useSearchFiltersStore((s) => s.filters);
   const setFilters = useSearchFiltersStore((s) => s.setFilters);
@@ -79,11 +78,13 @@ export function TitleBar() {
   useEffect(() => resetFilters(), [source?.id, resetFilters]);
 
   const [filtersPanelOpen, setFiltersPanelOpen] = useState(false);
+  // Same key as the catalog's query: the source is asked once for its sort orders and its filters.
   const filterCatalog = useQuery({
     queryKey: ["filterCatalog", source?.id],
-    enabled: showFilterButton,
+    enabled: !!source && !searchHidden,
     queryFn: () => hibiki.sources.filterCatalog(source!.id),
   });
+  const showFilterButton = !searchHidden && !!source && (filterCatalog.data?.filters.length ?? 0) > 0;
   const filterCount = activeFilterCount(filters);
 
   // The panel is portaled to document.body (see SearchFiltersPanel) instead of living inside this

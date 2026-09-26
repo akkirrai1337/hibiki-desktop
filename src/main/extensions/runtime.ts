@@ -31,7 +31,6 @@ import { logger } from "../logger";
 import { performBrowserResolve } from "./browserResolveHost";
 import type { BridgeRequestMessage } from "./syncHostBridge";
 import { ExtensionStorage } from "./extensionStorage";
-import { filterValuesToLegacy, legacyToFilterDefs, needsOptionList, type LegacySettings } from "./legacyFilters";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WORKER_TIMEOUT_MS = 30_000;
@@ -67,10 +66,6 @@ interface Manifest {
   isNsfw?: boolean;
   capabilities?: string[];
   useExternalMetadata?: boolean;
-  supportedSorts?: string[];
-  /** Legacy vocabulary, see legacyFilters.ts. New sources declare `customFilters` instead. */
-  supportedFilters?: string[];
-  customFilters?: boolean;
   resolverDependencies?: string[];
   settings?: SourceInfo["settings"];
 }
@@ -249,8 +244,6 @@ export class ExtensionRuntime {
       isNsfw: manifest.isNsfw === true,
       capabilities: (manifest.capabilities ?? []) as SourceInfo["capabilities"],
       useExternalMetadata: manifest.useExternalMetadata === true,
-      supportedSorts: manifest.supportedSorts ?? [],
-      hasFilters: manifest.customFilters === true || (manifest.supportedFilters ?? []).length > 0,
       runtime: "NODE",
       settings: manifest.settings ?? [],
     }));
@@ -488,26 +481,11 @@ export class ExtensionRuntime {
     return pending;
   }
 
-  async search(sourceId: string, request: SearchRequest, requestId?: string): Promise<AnimeTitle[]> {
-    const scriptRequest = await this.toScriptRequest(sourceId, request);
+  search(sourceId: string, request: SearchRequest, requestId?: string): Promise<AnimeTitle[]> {
     // A renderer search carries a cancellation id, so it must own its worker rather than sharing
     // one whose other caller might still need it. Background/catalog reads remain coalesced.
-    if (requestId) return this.run("search", sourceId, [scriptRequest], { requestId });
-    return this.shareRead("search", sourceId, [scriptRequest], () => this.run("search", sourceId, [scriptRequest]));
-  }
-
-  // A source that declares its own filters gets `filters` as is. One still on the old vocabulary is
-  // spoken to in it (legacyFilters.ts) - the host is the only place that translation lives.
-  private async toScriptRequest(sourceId: string, request: SearchRequest): Promise<unknown> {
-    const manifest = this.extensions.get(sourceId)?.manifest;
-    if (!manifest || manifest.customFilters || !request.filters) return request;
-    const { filters, ...rest } = request;
-    let settings = this.legacySettings.get(sourceId);
-    if (!settings && needsOptionList(filters)) {
-      await this.getFilterCatalog(sourceId);
-      settings = this.legacySettings.get(sourceId);
-    }
-    return { ...rest, ...filterValuesToLegacy(filters, settings ?? {}) };
+    if (requestId) return this.run("search", sourceId, [request], { requestId });
+    return this.shareRead("search", sourceId, [request], () => this.run("search", sourceId, [request]));
   }
 
   latest(sourceId: string, limit: number): Promise<AnimeTitle[]> {
@@ -879,23 +857,12 @@ export class ExtensionRuntime {
       .filter((candidate): candidate is PlayerLink => candidate.type !== undefined);
   }
 
-  // Option lists of legacy sources, kept from the last getFilterCatalog() so a search can turn
-  // "exclude this type" into "include the others" without asking the script again.
-  private readonly legacySettings = new Map<string, LegacySettings>();
-
+  /** What the source offers to search by: its own sort orders and filters, as it describes them. */
   async getFilterCatalog(sourceId: string): Promise<SearchFilterCatalog> {
-    const manifest = this.extensions.get(sourceId)?.manifest;
-    const settings = await this.run<Partial<SearchFilterCatalog> & LegacySettings>("getSettings", sourceId, []);
-    if (manifest?.customFilters) {
-      return {
-        sortOptions: settings.sortOptions ?? [],
-        filters: (settings.filters ?? []).filter((f) => f && f.id && f.title && FILTER_TYPES.includes(f.type)),
-      };
-    }
-    this.legacySettings.set(sourceId, settings);
+    const settings = await this.run<Partial<SearchFilterCatalog>>("getSettings", sourceId, []);
     return {
-      sortOptions: settings.sortOptions ?? [],
-      filters: legacyToFilterDefs(settings, manifest?.supportedFilters ?? []),
+      sortOptions: (settings.sortOptions ?? []).filter((o) => o && typeof o.id === "string" && o.id && typeof o.title === "string"),
+      filters: (settings.filters ?? []).filter((f) => f && f.id && f.title && FILTER_TYPES.includes(f.type)),
     };
   }
 

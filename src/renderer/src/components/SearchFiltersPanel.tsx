@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { motion } from "motion/react";
-import { ChevronDown, ChevronUp, Plus, X } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { usePopoverTheme } from "@/lib/usePopoverTheme";
 import {
   EMPTY_SEARCH_FILTERS as EMPTY_DRAFT,
   asList,
   asRange,
+  asTristate,
   cycleTristate,
   prettifyStatusLabel,
   prettifyTypeLabel,
@@ -17,10 +18,14 @@ import {
   type ChipState,
   type SearchFilters,
 } from "@/lib/searchFilters";
+import { ageRatingRank, chipIconFor, inDisplayOrder, isSortFilter, withoutUnknown, isAgeRatingFilter, isConnectedToggle, optionIcon, yearOptions } from "@/lib/filterVisuals";
+import type { LucideIcon } from "lucide-react";
 import type { FilterValue, SearchFilterCatalog, SearchFilterDef, SearchFilterOption } from "@shared/types";
 
-// A long flat chip wall is unscannable; past this many options the letters give it some structure.
-const GROUPED_OPTION_THRESHOLD = 24;
+// From this many options a list is sorted alphabetically and split by first letter, so one can be
+// found in it (the Android window's threshold). Shorter lists keep the order the source gave them,
+// as do lists that are mostly numbers (years, ratings), where alphabetical order means nothing.
+const SORTED_OPTION_MINIMUM = 75;
 const COLLAPSED_GROUPS = 3;
 
 function groupByLetter(options: SearchFilterOption[]): { letter: string; options: SearchFilterOption[] }[] {
@@ -85,7 +90,7 @@ export function SearchFiltersPanel({
             <p className="py-6 text-center text-sm text-muted">…</p>
           ) : (
             <div className="flex flex-col gap-5">
-              {(catalog?.filters ?? []).map((def) => (
+              {inDisplayOrder(withoutUnknown(catalog?.filters ?? [])).map((def) => (
                 <FilterSection key={def.id} title={t(`search.filters.${def.id}`, { defaultValue: def.title })}>
                   <FilterControl
                     def={def}
@@ -115,9 +120,19 @@ export function SearchFiltersPanel({
 // Type and status labels come from a short fixed vocabulary many sources report as raw ids
 // ("short_movie"), so those two get a translated label; everything else shows what the source said.
 function optionLabel(def: SearchFilterDef, option: SearchFilterOption, t: ReturnType<typeof useTranslation>["t"]): string {
-  if (def.id === "type") return prettifyTypeLabel(option.id, option.title, t);
-  if (def.id === "status") return prettifyStatusLabel(option.id, option.title, t);
-  return option.title;
+  const label = def.id === "type" ? prettifyTypeLabel(option.id, option.title, t) : def.id === "status" ? prettifyStatusLabel(option.id, option.title, t) : option.title;
+  return tidyLabel(label);
+}
+
+// "TV_SHORT" -> "TV Short": raw ids some sites use as their labels. Short all-caps words (TV, OVA,
+// ONA) stay as they are.
+function tidyLabel(label: string): string {
+  if (!label.includes("_")) return label;
+  return label
+    .split(/_+/)
+    .filter(Boolean)
+    .map((w) => (w.length <= 3 && w === w.toUpperCase() ? w : w[0].toUpperCase() + w.slice(1).toLowerCase()))
+    .join(" ");
 }
 
 function FilterControl({ def, value, onChange }: { def: SearchFilterDef; value: FilterValue | undefined; onChange: (value: FilterValue) => void }) {
@@ -140,8 +155,71 @@ function FilterControl({ def, value, onChange }: { def: SearchFilterDef; value: 
   }
 
   const options = def.options ?? [];
-  const stateOf = (id: string): ChipState => (def.type === "tristate" ? tristateOf(value, id) : asList(value).includes(id) ? "include" : "none");
+  const years = yearOptions(def);
+  if (years) {
+    // The source lists years; the user picks a span. The span goes back as the years inside it, and
+    // the full span is the same as no filter.
+    const included = def.type === "tristate" ? asTristate(value).include : asList(value);
+    const chosen = years.filter((y) => included.includes(y.id)).map((y) => y.year);
+    const full = { min: years[0].year, max: years[years.length - 1].year };
+    return (
+      <RangeSlider
+        min={full.min}
+        max={full.max}
+        from={chosen.length ? Math.min(...chosen) : null}
+        to={chosen.length ? Math.max(...chosen) : null}
+        onChange={(from, to) => {
+          const lo = from ?? full.min;
+          const hi = to ?? full.max;
+          const ids = lo <= full.min && hi >= full.max ? [] : years.filter((y) => y.year >= lo && y.year <= hi).map((y) => y.id);
+          onChange(def.type === "tristate" ? { include: ids, exclude: [] } : ids);
+        }}
+      />
+    );
+  }
+  if (isAgeRatingFilter(def)) {
+    const included = def.type === "tristate" ? asTristate(value).include : asList(value);
+    return (
+      <AgeRatingSlider
+        options={options}
+        included={included}
+        onChange={(ids) => onChange(def.type === "tristate" ? { include: ids, exclude: [] } : ids)}
+      />
+    );
+  }
+  if (isConnectedToggle(def)) {
+    const pressed = def.type === "tristate" ? asTristate(value).include[0] : asList(value)[0];
+    return (
+      <ConnectedToggle
+        options={options}
+        pressed={pressed}
+        label={(opt) => optionLabel(def, opt, t)}
+        onPress={(id) => onChange(def.type === "select" ? (id ?? "") : def.type === "multi" ? (id ? [id] : []) : { include: id ? [id] : [], exclude: [] })}
+      />
+    );
+  }
+  const iconFor = chipIconFor(def);
+  // Sort orders are picked, not filtered by: the chip shows a direction. Ascending is the first press
+  // (green, up arrow); a source that can run an order backwards (def.directional) gets a second one
+  // (red, down arrow); the last clears it - the same cycle as the Android window.
+  const sortLike = def.type === "select" && isSortFilter(def);
+  const directional = sortLike && def.directional === true;
+  const stateOf = (id: string): ChipState => {
+    if (directional) return tristateOf(value, id);
+    if (def.type === "tristate") return tristateOf(value, id);
+    return asList(value).includes(id) ? "include" : "none";
+  };
+  const markOf = (id: string): ChipMark => {
+    const state = stateOf(id);
+    if (state === "none") return null;
+    if (sortLike) return state === "include" ? "up" : "down";
+    return state === "include" ? "plus" : "minus";
+  };
   const toggle = (id: string) => {
+    if (directional) {
+      const state = tristateOf(value, id);
+      return onChange(state === "none" ? { include: [id], exclude: [] } : state === "include" ? { include: [], exclude: [id] } : "");
+    }
     if (def.type === "tristate") return onChange(cycleTristate(value, id));
     const selected = asList(value);
     const on = selected.includes(id);
@@ -153,14 +231,15 @@ function FilterControl({ def, value, onChange }: { def: SearchFilterDef; value: 
   const chips = (list: SearchFilterOption[]) => (
     <ChipRow>
       {list.map((opt) => (
-        <FilterChip key={opt.id} state={stateOf(opt.id)} onClick={() => toggle(opt.id)}>
+        <FilterChip key={opt.id} state={stateOf(opt.id)} mark={markOf(opt.id)} icon={iconFor?.(opt) ?? undefined} onClick={() => toggle(opt.id)}>
           {optionLabel(def, opt, t)}
         </FilterChip>
       ))}
     </ChipRow>
   );
 
-  if (options.length <= GROUPED_OPTION_THRESHOLD) return chips(options);
+  const mostlyNumbers = options.filter((o) => /^\d/.test(o.title.trim())).length >= options.length / 2;
+  if (options.length < SORTED_OPTION_MINIMUM || mostlyNumbers) return chips(options);
   const groups = groupByLetter(options);
   const visible = expanded ? groups : groups.slice(0, COLLAPSED_GROUPS);
   return (
@@ -184,26 +263,148 @@ function FilterControl({ def, value, onChange }: { def: SearchFilterDef; value: 
   );
 }
 
+// A section can be folded away, like the Android window's - a source with a dozen filters would
+// otherwise be one long scroll.
 function FilterSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return <div><h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-muted">{title}</h3>{children}</div>;
+  const [open, setOpen] = useState(true);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="mb-2 flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-muted transition-colors hover:text-text"
+      >
+        {title}
+        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-200", !open && "-rotate-90")} strokeWidth={2.5} />
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="content"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="overflow-hidden"
+          >
+            {children}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }
-function ChipRow({ children }: { children: React.ReactNode }) { return <div className="flex flex-wrap gap-1.5">{children}</div>; }
+function ChipRow({ children }: { children: React.ReactNode }) {
+  return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }} className="flex flex-wrap gap-2">{children}</motion.div>;
+}
 
-function FilterChip({ state, onClick, children }: { state: "none" | "include" | "exclude"; onClick: () => void; children: React.ReactNode }) {
+type ChipMark = "plus" | "minus" | "up" | "down" | null;
+
+// Same look as the Android chip: no border, a tint of the state's colour behind text in that colour,
+// the colour easing between states and the leading mark cross-fading in and out.
+const CHIP_TONE: Record<"none" | "include" | "exclude", string> = {
+  none: "bg-text/[.06] text-muted hover:bg-text/10",
+  include: "bg-[#80DF87]/20 text-[#80DF87]",
+  exclude: "bg-[#FF9999]/20 text-[#FF9999]",
+};
+
+function ChipMarkGlyph({ mark }: { mark: Exclude<ChipMark, null> }) {
+  if (mark === "up") return <ArrowUp className="h-3 w-3" strokeWidth={3} />;
+  if (mark === "down") return <ArrowDown className="h-3 w-3" strokeWidth={3} />;
+  return <span className="font-bold leading-none">{mark === "plus" ? "+" : "−"}</span>;
+}
+
+function FilterChip({ state, mark = null, icon: Icon, onClick, children }: { state: "none" | "include" | "exclude"; mark?: ChipMark; icon?: LucideIcon; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
-      className={cn(
-        "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
-        state === "include" && "border-emerald-500/50 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/50 dark:bg-emerald-400/10 dark:text-emerald-300",
-        state === "exclude" && "border-rose-500/50 bg-rose-500/10 text-rose-700 line-through dark:border-rose-400/50 dark:bg-rose-400/10 dark:text-rose-300",
-        state === "none" && "border-border text-muted hover:bg-text/[.06]",
-      )}
+      className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors duration-200", CHIP_TONE[state])}
     >
-      {state === "include" && <Plus className="mr-0.5 inline h-2.5 w-2.5 align-[-1px]" strokeWidth={3} />}
-      {state === "exclude" && <X className="mr-0.5 inline h-2.5 w-2.5 align-[-1px]" strokeWidth={3} />}
+      {Icon && <Icon className="h-3.5 w-3.5" strokeWidth={2} />}
+      <AnimatePresence initial={false} mode="popLayout">
+        {mark && (
+          <motion.span
+            key={mark}
+            initial={{ opacity: 0, scale: 0.6 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.6 }}
+            transition={{ duration: 0.15 }}
+            className="inline-flex"
+          >
+            <ChipMarkGlyph mark={mark} />
+          </motion.span>
+        )}
+      </AnimatePresence>
       {children}
     </button>
+  );
+}
+
+// Seasons, statuses and sub/dub: a short row of icon buttons joined at the edges, one pressed at a
+// time; pressing the pressed one clears it. Same geometry as the Android window (rounded ends, 2px
+// gaps, a pressed button rounding fully), drawn in this app's own colours.
+function ConnectedToggle({ options, pressed, label, onPress }: { options: SearchFilterOption[]; pressed: string | undefined; label: (option: SearchFilterOption) => string; onPress: (id: string | null) => void }) {
+  return (
+    // A grid, not a flex row: every button gets exactly the same width whatever its label, so the
+    // row stays symmetric.
+    <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
+      {options.map((opt, index) => {
+        const on = opt.id === pressed;
+        const Icon = optionIcon(opt)!;
+        const round = (edge: boolean) => (on || edge ? "24px" : "4px");
+        const first = index === 0;
+        const last = index === options.length - 1;
+        return (
+          <button
+            key={opt.id}
+            type="button"
+            onClick={() => onPress(on ? null : opt.id)}
+            style={{ borderRadius: `${round(first)} ${round(last)} ${round(last)} ${round(first)}` }}
+            className={cn(
+              "flex min-w-0 flex-col items-center justify-center gap-1 px-4 py-3 transition-[border-radius,background-color,color] duration-200",
+              on ? "bg-accent text-accent-fg" : "bg-text/[.06] text-muted hover:bg-text/10",
+            )}
+          >
+            <Icon className={cn("h-3.5 w-3.5", on ? "opacity-90" : "opacity-60")} strokeWidth={2} />
+            <span className={cn("text-balance text-center font-semibold leading-tight", options.length > 4 ? "text-xs" : "text-sm")}>{label(opt)}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Age ratings are ordered, so they are one slider: everything up to the chosen rating is included,
+// and the far left means "any rating" (the filter unset).
+function AgeRatingSlider({ options, included, onChange }: { options: SearchFilterOption[]; included: string[]; onChange: (ids: string[]) => void }) {
+  const { t } = useTranslation();
+  const ordered = [...options].sort((a, b) => (ageRatingRank(a.title) ?? 0) - (ageRatingRank(b.title) ?? 0));
+  let level = 0;
+  ordered.forEach((opt, i) => { if (included.includes(opt.id)) level = i + 1; });
+  const [drag, setDrag] = useState<number | null>(null);
+  const shown = drag ?? level;
+  const commit = (n: number) => {
+    setDrag(null);
+    onChange(ordered.slice(0, n).map((o) => o.id));
+  };
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <span className="text-sm font-semibold text-text">
+        {shown === 0 ? t("search.filters.ratingAny") : t("search.filters.ratingUpTo", { rating: ordered[shown - 1].title })}
+      </span>
+      <input
+        type="range"
+        min={0}
+        max={ordered.length}
+        step={1}
+        value={shown}
+        onChange={(e) => setDrag(Number(e.target.value))}
+        onPointerUp={() => drag !== null && commit(drag)}
+        onKeyUp={() => drag !== null && commit(drag)}
+        className="w-full accent-[rgb(var(--color-accent))]"
+      />
+    </div>
   );
 }
 

@@ -218,6 +218,8 @@
       "genres": "Genres",
       "genresExpand": "Show all genres",
       "genresCollapse": "Collapse genres",
+      "ratingAny": "Any rating",
+      "ratingUpTo": "Up to {{rating}}",
       "year": "Year",
       "reset": "Reset",
       "apply": "Apply",

@@ -22,7 +22,6 @@ import { fileURLToPath } from "node:url";
 import * as cheerio from "cheerio";
 import { executeExtensionCall } from "../src/main/extensions/execute";
 import type { ExtensionMethod } from "../src/main/extensions/execute";
-import { filterValuesToLegacy, legacyToFilterDefs } from "../src/main/extensions/legacyFilters";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DIR = path.resolve(here, "../../hibiki-sources/extensions");
@@ -65,9 +64,7 @@ const needsApp = (message: string) => /challenge|browserFetch|not implemented|br
 
 interface Manifest {
   id: string;
-  supportedSorts?: string[];
   supportedFilters?: string[];
-  customFilters?: boolean;
   resolverDependencies?: string[];
   capabilities?: string[];
 }
@@ -93,47 +90,16 @@ function sameSet(a: string[], b: string[]) {
 
 function probeManifest(ctx: Ctx, manifest: Manifest, settings: Settings | null) {
   if (!settings) return;
-  const declaredSorts = manifest.supportedSorts ?? [];
-  const sortIds = (settings.sortOptions ?? []).map((o) => o.id.toUpperCase());
-  for (const sort of declaredSorts) {
-    if (sortIds.length > 0 && !sortIds.includes(sort)) push(ctx, "manifest", `sort ${sort}`, "warn", undefined, "declared, absent from getSettings().sortOptions");
-  }
+  if ((settings.sortOptions ?? []).length === 0) push(ctx, "manifest", "sorts", "ok", undefined, "no sort orders offered (the catalog is one listing)");
 
-  if (manifest.customFilters) {
-    const defs = settings.filters ?? [];
-    push(ctx, "manifest", "filters", defs.length ? "ok" : "warn", undefined, defs.length ? defs.map((d) => `${d.id}:${d.type}`).join(", ") : "customFilters is true but getSettings().filters is empty");
-    for (const def of defs) {
-      if ((def.type === "select" || def.type === "multi" || def.type === "tristate") && !(def.options?.length)) push(ctx, "manifest", `filter ${def.id}`, "warn", undefined, `${def.type} filter without options`);
-    }
-    return;
+  const defs = settings.filters ?? [];
+  push(ctx, "manifest", "filters", defs.length ? "ok" : "warn", undefined, defs.length ? defs.map((d) => `${d.id}:${d.type}`).join(", ") : "no filters");
+  for (const def of defs) {
+    if ((def.type === "select" || def.type === "multi" || def.type === "tristate") && !(def.options?.length)) push(ctx, "manifest", `filter ${def.id}`, "warn", undefined, `${def.type} filter without options`);
   }
-
-  // Legacy contract (typeOptions/... + supportedFilters): drift between the two is a control that
-  // is hidden, or a filter that is offered but never drawn.
-  const declaredFilters = manifest.supportedFilters ?? [];
-  const optionCount: Record<string, number> = {
-    TYPE: settings.typeOptions?.length ?? 0,
-    STATUS: settings.statusOptions?.length ?? 0,
-    INCLUDED_GENRES: settings.genreOptions?.length ?? 0,
-  };
-  for (const kind of ["TYPE", "STATUS", "INCLUDED_GENRES"]) {
-    const declared = declaredFilters.includes(kind);
-    const has = optionCount[kind] > 0;
-    if (declared && !has) push(ctx, "manifest", kind, "warn", undefined, "declared, but getSettings() offers no options - the UI hides it");
-    else if (!declared && has) push(ctx, "manifest", kind, "warn", undefined, `getSettings() offers ${optionCount[kind]} options but the manifest does not declare it - never shown`);
-  }
-  if (declaredFilters.length === 0) push(ctx, "manifest", "filters", "warn", undefined, "no filters of any kind");
 }
 
-/** The filter definitions the host would show for this source, and the request body for a set of values. */
-function hostView(manifest: Manifest, settings: Settings) {
-  const defs: FilterDef[] = manifest.customFilters ? (settings.filters ?? []) : (legacyToFilterDefs(settings, manifest.supportedFilters ?? []) as FilterDef[]);
-  const toRequest = (filters: Record<string, unknown>): Record<string, unknown> =>
-    manifest.customFilters ? { filters } : filterValuesToLegacy(filters as never, settings);
-  return { defs, toRequest };
-}
-
-function probeFilters(ctx: Ctx, sourceId: string, manifest: Manifest, settings: Settings) {
+function probeFilters(ctx: Ctx, sourceId: string, settings: Settings) {
   const base = invoke<Title[]>(ctx.dir, sourceId, "search", { limit: 20 });
   if (base.error) {
     push(ctx, "filters", "baseline (no query)", needsApp(base.error) ? "skip" : "warn", base.ms, base.error);
@@ -163,7 +129,8 @@ function probeFilters(ctx: Ctx, sourceId: string, manifest: Manifest, settings: 
     return ids;
   };
 
-  const { defs, toRequest } = hostView(manifest, settings);
+  const defs = settings.filters ?? [];
+  const toRequest = (filters: Record<string, unknown>) => ({ filters });
   for (const def of defs) {
     const group = def.id;
     const options = (def.options ?? []).slice(0, 2);
@@ -189,19 +156,17 @@ function probeFilters(ctx: Ctx, sourceId: string, manifest: Manifest, settings: 
         }
         break;
       case "range":
-        attempt(group, `${def.id} 2015-2016`, toRequest({ [def.id]: { from: 2015, to: 2016 } }));
+        attempt(group, `${def.id} 2018-2020`, toRequest({ [def.id]: { from: 2018, to: 2020 } }));
         break;
       case "text":
         break;
     }
   }
 
-  // What the app really sends is the manifest's enum name (RATING, TITLE, ...), not the source's
-  // own sortOptions id - see catalog.tsx / home.tsx.
-  for (const sort of (manifest.supportedSorts ?? []).slice(0, 5)) {
-    if (sort === "RELEVANCE") continue;
-    attempt("sort", `sort=${sort}`, { sort });
-  }
+  // The catalog sends the id of one of the source's own sort orders.
+  const sorts = settings.sortOptions ?? [];
+  // The first order is the source's default - the baseline itself - so it is not expected to differ.
+  for (const sort of sorts.slice(1, 8)) attempt("sort", `sort=${sort.id}`, { sort: sort.id });
 
   for (const { index, group } of noEffect) {
     if (!applied.has(group)) continue;
@@ -328,7 +293,7 @@ async function probeSource(dir: string, sourceId: string, skipPlayback: boolean)
     push(ctx, "manifest", "getSettings()", "ok", settingsCall.ms,
       `sorts ${settings.sortOptions?.length ?? 0}, types ${settings.typeOptions?.length ?? 0}, statuses ${settings.statusOptions?.length ?? 0}, genres ${settings.genreOptions?.length ?? 0}, custom ${settings.filters?.length ?? 0}`);
     probeManifest(ctx, manifest, settings);
-    probeFilters(ctx, sourceId, manifest, settings);
+    probeFilters(ctx, sourceId, settings);
   }
   if (!skipPlayback) await probePlayback(ctx, sourceId, manifest);
   return ctx.checks;
