@@ -25,6 +25,7 @@ export function CatalogFilters({
   onChange,
   loading,
   lead,
+  layer = 50,
   children,
 }: {
   defs: SearchFilterDef[];
@@ -32,7 +33,11 @@ export function CatalogFilters({
   onChange: (filters: SearchFilters) => void;
   loading: boolean;
   /** What fills the left of the row: the catalog's heading. */
-  lead?: React.ReactNode;
+  /** What fills the left of the row. A function gets the filters control (button and clear) and lays the
+   * whole row out itself - the search page seats it inside its field. */
+  lead?: React.ReactNode | ((filtersControl: React.ReactNode) => React.ReactNode);
+  /** z-index of the drawer, for when it opens over another overlay (the search panel). */
+  layer?: number;
   children?: React.ReactNode;
 }) {
   const { t } = useTranslation();
@@ -61,14 +66,8 @@ export function CatalogFilters({
   const count = ordered.filter((d) => isFilterSet(filters[d.id])).length;
   const change = (def: SearchFilterDef, value: FilterValue) => setDraft((current) => withFilterValue(current, def.id, value));
 
-  return (
-    <div className="mb-6">
-      <div className="flex items-center justify-between gap-4">
-        <div className="min-w-0">{lead}</div>
-        <div className="flex shrink-0 items-center gap-2">
-        {/* One joined control: the button opens the drawer, and once something is picked a ✕ on its
-            right end clears every filter. */}
-        {defs.length > 0 && <div className="flex gap-0.5">
+  const filtersControl = (
+        defs.length > 0 ? <div className="flex gap-0.5">
           <button
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
@@ -99,17 +98,29 @@ export function CatalogFilters({
               </motion.button>
             )}
           </AnimatePresence>
-        </div>}
-        {children}
+        </div> : null
+  );
+
+  return (
+    <div className={typeof lead === "function" ? "" : "mb-6"}>
+      {typeof lead === "function" ? (
+        lead(filtersControl)
+      ) : (
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0 flex-1">{lead}</div>
+          <div className="flex shrink-0 items-center gap-2">
+            {filtersControl}
+            {children}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* A drawer over the catalog, not part of it: portaled to <body> below the title bar. Its scrim
           dims the catalog (which reloads live behind it as filters are picked) and closes it. */}
       {createPortal(
         <AnimatePresence>
           {open && (
-            <div className="fixed inset-x-0 bottom-0 top-10 z-50">
+            <div className="fixed inset-x-0 bottom-0 top-10" style={{ zIndex: layer }}>
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}

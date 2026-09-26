@@ -1,12 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Search } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { usePopoverTheme } from "@/lib/usePopoverTheme";
 import {
-  EMPTY_SEARCH_FILTERS as EMPTY_DRAFT,
   asList,
   asRange,
   asTristate,
@@ -14,13 +11,11 @@ import {
   prettifyStatusLabel,
   prettifyTypeLabel,
   tristateOf,
-  withFilterValue,
   type ChipState,
-  type SearchFilters,
 } from "@/lib/searchFilters";
-import { ageRatingRank, chipIconFor, inDisplayOrder, isSortFilter, withoutUnknown, isAgeRatingFilter, isConnectedToggle, optionIcon, yearOptions } from "@/lib/filterVisuals";
+import { ageRatingRank, chipIconFor, inDisplayOrder, isSortFilter, isAgeRatingFilter, isConnectedToggle, optionIcon, yearOptions } from "@/lib/filterVisuals";
 import type { LucideIcon } from "lucide-react";
-import type { FilterValue, SearchFilterCatalog, SearchFilterDef, SearchFilterOption } from "@shared/types";
+import type { FilterValue, SearchFilterDef, SearchFilterOption } from "@shared/types";
 
 // A list this long is a shelf to search in (genres, studios); shorter ones sit with the compact controls.
 const LONG_LIST_MINIMUM = 20;
@@ -47,104 +42,6 @@ function groupByLetter(options: SearchFilterOption[]): { letter: string; options
   return [...byLetter.entries()]
     .sort(([a], [b]) => a.localeCompare(b, "ru"))
     .map(([letter, groupOptions]) => ({ letter, options: [...groupOptions].sort((a, b) => a.title.localeCompare(b.title, "ru")) }));
-}
-
-// The panel knows nothing about what a filter *means*: it draws each of the source's declared
-// filters from its type and hands the picked value back under the filter's id.
-export function SearchFiltersPanel({
-  anchor,
-  catalog,
-  loading,
-  filters,
-  onApply,
-  onClose,
-}: {
-  // Screen coordinates (from getBoundingClientRect) of the search box this panel hangs off of.
-  anchor: { left: number; bottom: number };
-  catalog: Pick<SearchFilterCatalog, "filters"> | undefined;
-  loading: boolean;
-  filters: SearchFilters;
-  onApply: (filters: SearchFilters) => void;
-  onClose: () => void;
-}) {
-  const { t } = useTranslation();
-  const [draft, setDraft] = useState(filters);
-  const popoverTheme = usePopoverTheme();
-  useEffect(() => setDraft(filters), [filters]);
-  const root = useRef<HTMLDivElement>(null);
-
-  // Closes on a press outside the panel, or Escape. There is deliberately no full-screen backdrop for
-  // this: it would swallow the mouse wheel, and with the panel open the page behind it could not be
-  // scrolled. The button that opens the panel (data-filters-toggle) is not "outside" - it toggles.
-  useEffect(() => {
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as Element | null;
-      if (root.current?.contains(target) || target?.closest("[data-filters-toggle]")) return;
-      onClose();
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [onClose]);
-
-  return createPortal(
-    <>
-      {/* Framer-motion writes the whole `transform` property inline for its own animation (scale/y),
-          which would clobber a translate-based centering transform on the same element - so the
-          static horizontal centering lives on this plain wrapper instead, one level up. Portaled
-          to document.body (see the anchor prop) rather than positioned relative to the search box
-          in the titlebar - a blurred poster background elsewhere in the app can otherwise paint
-          over this panel despite a lower z-index, a GPU-compositing quirk with filter: blur()
-          that ordinary z-index/isolation can't reliably override. */}
-      <div ref={root} className="fixed z-50 mt-2 w-[30rem] max-w-[calc(100vw-24px)] -translate-x-1/2" style={{ left: anchor.left, top: anchor.bottom }}>
-      {/* No `scale` - animating transform:scale() on a panel full of text makes Chromium
-          re-rasterize the glyphs at a slightly different subpixel size every frame, reading as
-          the text shimmering/shifting while the panel settles in. */}
-      <motion.div
-        initial={{ opacity: 0, y: -4 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -4 }}
-        transition={{ type: "spring", stiffness: 500, damping: 45 }}
-        // Paint the selected theme independently of the content behind the popup.
-        className="overflow-hidden rounded-2xl border border-border bg-app-popover shadow-2xl"
-        style={popoverTheme}
-      >
-        <div className="no-scrollbar max-h-[60vh] overflow-y-auto p-4">
-          {loading ? (
-            <p className="py-6 text-center text-sm text-muted">…</p>
-          ) : (
-            <div className="flex flex-col gap-5">
-              {inWindowOrder(withoutUnknown(catalog?.filters ?? [])).map((def) => (
-                isLongList(def) ? (
-                  <LongList key={def.id} def={def} value={draft[def.id]} onChange={(value) => setDraft((f) => withFilterValue(f, def.id, value))} />
-                ) : (
-                  <FilterSection key={def.id} title={t(`search.filters.${def.id}`, { defaultValue: def.title })}>
-                    <FilterControl def={def} value={draft[def.id]} onChange={(value) => setDraft((f) => withFilterValue(f, def.id, value))} />
-                  </FilterSection>
-                )
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="flex items-center justify-between gap-2 border-t border-border p-3">
-          <button onClick={() => setDraft(EMPTY_DRAFT)} className="rounded-lg px-3 py-1.5 text-sm font-semibold text-muted transition-colors hover:bg-text/[.06] hover:text-text">
-            {t("search.filters.reset")}
-          </button>
-          <button onClick={() => onApply(draft)} className="rounded-lg bg-text px-4 py-1.5 text-sm font-bold text-bg transition-opacity hover:opacity-90">
-            {t("search.filters.apply")}
-          </button>
-        </div>
-      </motion.div>
-      </div>
-    </>,
-    document.body,
-  );
 }
 
 // Type and status labels come from a short fixed vocabulary many sources report as raw ids
