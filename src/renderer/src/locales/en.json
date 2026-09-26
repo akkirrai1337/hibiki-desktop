@@ -322,8 +322,7 @@
       },
       "noMatches": "Nothing matches these filters"
     },
-    "emptyFiltered": "Nothing matches these filters",
-    "shown": "Showing {{count}}"
+    "emptyFiltered": "Nothing matches these filters"
   },
   "history": {
     "title": "Watch history",
@@ -511,7 +510,9 @@
         "title": "Encyclopedist",
         "description": "{{target}} different genres in your library"
       }
-    }
+    },
+    "achievementLevels": "Levels",
+    "achievementMaxed": "All levels completed"
   },
   "settings": {
     "subtitle": "Fine-tune how hibiki looks and plays",

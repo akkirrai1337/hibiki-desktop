@@ -71,11 +71,11 @@ const CASES: VectorCase[] = [
   // Episode-equivalents floor at 20 real minutes each, so this pins the flooring too.
   { name: "episodes just under 50", input: { entries: [], lifetimeWatchedMs: 49 * 20 * 60_000 + 59_000, bestStreak: 0 } },
   { name: "episodes exactly 50", input: { entries: [], lifetimeWatchedMs: 50 * 20 * 60_000, bestStreak: 0 } },
-  { name: "genres 5 distinct", input: { entries: withGenres(20, 5), lifetimeWatchedMs: 0, bestStreak: 0 } },
-  { name: "genres 15 distinct", input: { entries: withGenres(30, 15), lifetimeWatchedMs: 0, bestStreak: 0 } },
+  { name: "genres 10 distinct", input: { entries: withGenres(20, 10), lifetimeWatchedMs: 0, bestStreak: 0 } },
+  { name: "genres 30 distinct", input: { entries: withGenres(40, 30), lifetimeWatchedMs: 0, bestStreak: 0 } },
   {
     name: "everything maxed",
-    input: { entries: [...entries(50, "completed", ["a"]), ...withGenres(15, 15)], lifetimeWatchedMs: 500 * HOUR, bestStreak: 30 },
+    input: { entries: [...entries(50, "completed", ["a"]), ...withGenres(30, 30)], lifetimeWatchedMs: 500 * HOUR, bestStreak: 30 },
   },
 ];
 

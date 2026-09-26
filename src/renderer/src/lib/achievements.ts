@@ -101,12 +101,12 @@ const EPISODES_TIERS: AchievementTier[] = [
   { id: "episodes_300", icon: Clapperboard, target: 300, xp: 1200 },
 ];
 const GENRES_TIERS: AchievementTier[] = [
-  { id: "genre_explorer", icon: Palette, target: 5, xp: 15 },
-  { id: "genre_explorer_10", icon: Sparkles, target: 10, xp: 35 },
-  { id: "genre_explorer_15", icon: BookOpen, target: 15, xp: 80 },
+  { id: "genre_explorer", icon: Palette, target: 10, xp: 25 },
+  { id: "genre_explorer_10", icon: Sparkles, target: 20, xp: 60 },
+  { id: "genre_explorer_15", icon: BookOpen, target: 30, xp: 150 },
 ];
 
-const FAMILY_TIERS: Record<string, AchievementTier[]> = {
+export const FAMILY_TIERS: Record<string, AchievementTier[]> = {
   first_title: FIRST_TITLE_TIER,
   collector: COLLECTOR_TIERS,
   finisher: FINISHER_TIERS,
@@ -237,7 +237,8 @@ export function computeAchievements({ entries, lifetimeWatchedMs, bestStreak }: 
     // cheap grind.
     leveled("episodes", EPISODES_TIERS, watchedEpisodeEquivalent),
     // Genre variety is a side effect of what you happen to add, not real effort on its own - kept
-    // cheap like "collector", not scaled up with the watch-time families.
+    // modest, not scaled up with the watch-time families. The tier ids keep their old numbers (5/10/15)
+    // so history and the Android app still match; the targets are what the tiers ask for.
     leveled("genres", GENRES_TIERS, genreCount),
   ];
 }

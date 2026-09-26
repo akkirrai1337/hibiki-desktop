@@ -80,11 +80,11 @@
           {
             "id": "genres",
             "current": 0,
-            "target": 5,
+            "target": 10,
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 15,
+            "xpReward": 25,
             "xpEarned": 0
           }
         ],
@@ -171,11 +171,11 @@
           {
             "id": "genres",
             "current": 0,
-            "target": 5,
+            "target": 10,
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 15,
+            "xpReward": 25,
             "xpEarned": 0
           }
         ],
@@ -298,11 +298,11 @@
           {
             "id": "genres",
             "current": 0,
-            "target": 5,
+            "target": 10,
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 15,
+            "xpReward": 25,
             "xpEarned": 0
           }
         ],
@@ -481,11 +481,11 @@
           {
             "id": "genres",
             "current": 0,
-            "target": 5,
+            "target": 10,
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 15,
+            "xpReward": 25,
             "xpEarned": 0
           }
         ],
@@ -768,11 +768,11 @@
           {
             "id": "genres",
             "current": 0,
-            "target": 5,
+            "target": 10,
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 15,
+            "xpReward": 25,
             "xpEarned": 0
           }
         ],
@@ -1335,11 +1335,11 @@
           {
             "id": "genres",
             "current": 0,
-            "target": 5,
+            "target": 10,
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 15,
+            "xpReward": 25,
             "xpEarned": 0
           }
         ],
@@ -1426,11 +1426,11 @@
           {
             "id": "genres",
             "current": 0,
-            "target": 5,
+            "target": 10,
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 15,
+            "xpReward": 25,
             "xpEarned": 0
           }
         ],
@@ -1553,11 +1553,11 @@
           {
             "id": "genres",
             "current": 0,
-            "target": 5,
+            "target": 10,
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 15,
+            "xpReward": 25,
             "xpEarned": 0
           }
         ],
@@ -1639,11 +1639,11 @@
           {
             "id": "genres",
             "current": 0,
-            "target": 5,
+            "target": 10,
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 15,
+            "xpReward": 25,
             "xpEarned": 0
           }
         ],
@@ -1725,11 +1725,11 @@
           {
             "id": "genres",
             "current": 0,
-            "target": 5,
+            "target": 10,
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 15,
+            "xpReward": 25,
             "xpEarned": 0
           }
         ],
@@ -1811,11 +1811,11 @@
           {
             "id": "genres",
             "current": 0,
-            "target": 5,
+            "target": 10,
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 15,
+            "xpReward": 25,
             "xpEarned": 0
           }
         ],
@@ -1897,11 +1897,11 @@
           {
             "id": "genres",
             "current": 0,
-            "target": 5,
+            "target": 10,
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 15,
+            "xpReward": 25,
             "xpEarned": 0
           }
         ],
@@ -1983,11 +1983,11 @@
           {
             "id": "genres",
             "current": 0,
-            "target": 5,
+            "target": 10,
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 15,
+            "xpReward": 25,
             "xpEarned": 0
           }
         ],
@@ -2069,11 +2069,11 @@
           {
             "id": "genres",
             "current": 0,
-            "target": 5,
+            "target": 10,
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 15,
+            "xpReward": 25,
             "xpEarned": 0
           }
         ],
@@ -2155,11 +2155,11 @@
           {
             "id": "genres",
             "current": 0,
-            "target": 5,
+            "target": 10,
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 15,
+            "xpReward": 25,
             "xpEarned": 0
           }
         ],
@@ -2241,11 +2241,11 @@
           {
             "id": "genres",
             "current": 0,
-            "target": 5,
+            "target": 10,
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 15,
+            "xpReward": 25,
             "xpEarned": 0
           }
         ],
@@ -2327,11 +2327,11 @@
           {
             "id": "genres",
             "current": 0,
-            "target": 5,
+            "target": 10,
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 15,
+            "xpReward": 25,
             "xpEarned": 0
           }
         ],
@@ -2342,7 +2342,7 @@
       }
     },
     {
-      "name": "genres 5 distinct",
+      "name": "genres 10 distinct",
       "input": {
         "entries": [
           {
@@ -2378,61 +2378,31 @@
           {
             "category": "planned",
             "genres": [
-              "genre-0"
+              "genre-5"
             ]
           },
           {
             "category": "planned",
             "genres": [
-              "genre-1"
+              "genre-6"
             ]
           },
           {
             "category": "planned",
             "genres": [
-              "genre-2"
+              "genre-7"
             ]
           },
           {
             "category": "planned",
             "genres": [
-              "genre-3"
+              "genre-8"
             ]
           },
           {
             "category": "planned",
             "genres": [
-              "genre-4"
-            ]
-          },
-          {
-            "category": "planned",
-            "genres": [
-              "genre-0"
-            ]
-          },
-          {
-            "category": "planned",
-            "genres": [
-              "genre-1"
-            ]
-          },
-          {
-            "category": "planned",
-            "genres": [
-              "genre-2"
-            ]
-          },
-          {
-            "category": "planned",
-            "genres": [
-              "genre-3"
-            ]
-          },
-          {
-            "category": "planned",
-            "genres": [
-              "genre-4"
+              "genre-9"
             ]
           },
           {
@@ -2463,6 +2433,36 @@
             "category": "planned",
             "genres": [
               "genre-4"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-5"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-6"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-7"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-8"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-9"
             ]
           }
         ],
@@ -2533,23 +2533,23 @@
           },
           {
             "id": "genres",
-            "current": 5,
-            "target": 10,
+            "current": 10,
+            "target": 20,
             "unlocked": false,
             "level": 1,
             "maxLevel": 3,
-            "xpReward": 35,
-            "xpEarned": 15
+            "xpReward": 60,
+            "xpEarned": 25
           }
         ],
-        "totalXp": 30,
+        "totalXp": 40,
         "level": 1,
-        "xpIntoLevel": 30,
+        "xpIntoLevel": 40,
         "xpForLevel": 100
       }
     },
     {
-      "name": "genres 15 distinct",
+      "name": "genres 30 distinct",
       "input": {
         "entries": [
           {
@@ -2645,6 +2645,96 @@
           {
             "category": "planned",
             "genres": [
+              "genre-15"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-16"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-17"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-18"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-19"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-20"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-21"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-22"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-23"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-24"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-25"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-26"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-27"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-28"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-29"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
               "genre-0"
             ]
           },
@@ -2701,36 +2791,6 @@
             "genres": [
               "genre-9"
             ]
-          },
-          {
-            "category": "planned",
-            "genres": [
-              "genre-10"
-            ]
-          },
-          {
-            "category": "planned",
-            "genres": [
-              "genre-11"
-            ]
-          },
-          {
-            "category": "planned",
-            "genres": [
-              "genre-12"
-            ]
-          },
-          {
-            "category": "planned",
-            "genres": [
-              "genre-13"
-            ]
-          },
-          {
-            "category": "planned",
-            "genres": [
-              "genre-14"
-            ]
           }
         ],
         "lifetimeWatchedMs": 0,
@@ -2750,7 +2810,7 @@
           },
           {
             "id": "collector",
-            "current": 30,
+            "current": 40,
             "target": 50,
             "unlocked": false,
             "level": 2,
@@ -2800,19 +2860,19 @@
           },
           {
             "id": "genres",
-            "current": 15,
-            "target": 15,
+            "current": 30,
+            "target": 30,
             "unlocked": true,
             "level": 3,
             "maxLevel": 3,
-            "xpReward": 80,
-            "xpEarned": 130
+            "xpReward": 150,
+            "xpEarned": 235
           }
         ],
-        "totalXp": 165,
-        "level": 2,
-        "xpIntoLevel": 65,
-        "xpForLevel": 150
+        "totalXp": 270,
+        "level": 3,
+        "xpIntoLevel": 20,
+        "xpForLevel": 200
       }
     },
     {
@@ -3208,6 +3268,96 @@
             "genres": [
               "genre-14"
             ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-15"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-16"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-17"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-18"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-19"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-20"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-21"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-22"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-23"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-24"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-25"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-26"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-27"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-28"
+            ]
+          },
+          {
+            "category": "planned",
+            "genres": [
+              "genre-29"
+            ]
           }
         ],
         "lifetimeWatchedMs": 1800000000,
@@ -3277,18 +3427,18 @@
           },
           {
             "id": "genres",
-            "current": 15,
-            "target": 15,
+            "current": 30,
+            "target": 30,
             "unlocked": true,
             "level": 3,
             "maxLevel": 3,
-            "xpReward": 80,
-            "xpEarned": 130
+            "xpReward": 150,
+            "xpEarned": 235
           }
         ],
-        "totalXp": 13055,
+        "totalXp": 13160,
         "level": 22,
-        "xpIntoLevel": 455,
+        "xpIntoLevel": 560,
         "xpForLevel": 1150
       }
     }

@@ -342,8 +342,7 @@
         "Thriller": "Трилер"
       }
     },
-    "emptyFiltered": "За цими фільтрами нічого не знайдено",
-    "shown": "Показано: {{count}}"
+    "emptyFiltered": "За цими фільтрами нічого не знайдено"
   },
   "history": {
     "title": "Історія перегляду",
@@ -531,7 +530,9 @@
         "title": "Енциклопедист",
         "description": "{{target}} різних жанрів у бібліотеці"
       }
-    }
+    },
+    "achievementLevels": "Рівні",
+    "achievementMaxed": "Усі рівні пройдено"
   },
   "settings": {
     "subtitle": "Налаштуйте, як hibiki виглядає та відтворює відео",

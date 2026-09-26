@@ -14,7 +14,8 @@ import { useUiStore } from "@/stores/uiStore";
 import { useAchievementsStore } from "@/stores/achievementsStore";
 import { cn } from "@/lib/cn";
 import { LIBRARY_CATEGORY_ICONS, LIBRARY_CATEGORY_LABEL_KEYS } from "@/lib/libraryCategories";
-import { ACHIEVEMENT_TIER_BY_ID, type Achievement } from "@/lib/achievements";
+import { AchievementGrid } from "@/components/AchievementCards";
+import { ACHIEVEMENT_TIER_BY_ID } from "@/lib/achievements";
 import { computeLevelProgress, totalXpEarned, type LevelProgress } from "@/lib/levelProgress";
 import { ACTIVITY_DAYS, buildActivitySeries, computeStreaks, StreakBadge, type StreakInfo } from "@/components/StreakBadge";
 import type { DailyActivity, LibraryEntry, XpEvent } from "@shared/types";
@@ -446,59 +447,6 @@ function StatCard({ icon: Icon, label, value, sub }: { icon: typeof Film; label:
       <p className={cn("mt-3 truncate font-bold text-text", isLong ? "text-lg" : "text-2xl")}>{value}</p>
       <p className="mt-0.5 text-xs text-muted">{label}</p>
       {sub && <p className="mt-1 text-[11px] text-muted/70">{sub}</p>}
-    </div>
-  );
-}
-
-function AchievementGrid({ achievements }: { achievements: Achievement[] }) {
-  // Unlocked first - the ones you've actually earned are more interesting than a wall of grey
-  // locked cards, and this way scrolling further down is "what's left to do" in a natural order.
-  const sorted = useMemo(() => [...achievements].sort((a, b) => Number(b.unlocked) - Number(a.unlocked)), [achievements]);
-  return <div className="space-y-2">{sorted.map((a) => <AchievementCard key={a.id} achievement={a} />)}</div>;
-}
-
-function AchievementCard({ achievement }: { achievement: Achievement }) {
-  const { t } = useTranslation();
-  const Icon = achievement.icon;
-  const percent = Math.min(100, (achievement.current / achievement.target) * 100);
-  return (
-    <div className={cn("flex items-center gap-3 rounded-xl border p-3 transition-colors", achievement.unlocked ? "border-accent/25 bg-accent/[.07]" : "border-border bg-text/[.02]")}>
-      <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full", achievement.unlocked ? "bg-accent/15 text-accent-text" : "bg-text/[.05] text-muted/70")}>
-        <Icon className="h-5 w-5" strokeWidth={2} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <p className={cn("truncate text-sm font-semibold", achievement.unlocked ? "text-text" : "text-muted")}>{t(achievement.titleKey)}</p>
-          {achievement.unlocked
-            ? <Check className="h-4 w-4 shrink-0 text-accent-text" strokeWidth={2.5} />
-            : <span className="shrink-0 text-[11px] tabular-nums text-muted/70">{achievement.current}/{achievement.target}</span>}
-        </div>
-        <div className="mt-0.5 flex items-center justify-between gap-2">
-          <p className="truncate text-xs text-muted">{t(achievement.descriptionKey, { target: achievement.target })}</p>
-          {/* What clearing this tier actually pays into the level bar - shown even once unlocked,
-              as a reminder of what that checkmark was worth. */}
-          <span className="shrink-0 text-[11px] font-semibold text-accent-text/80">+{achievement.xpReward} {t("profile.xp")}</span>
-        </div>
-        {!achievement.unlocked && (
-          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-text/[.06]">
-            <div className="h-full rounded-full bg-accent/60 ring-1 ring-inset ring-border" style={{ width: `${percent}%` }} />
-          </div>
-        )}
-        {/* Small dots, not another full-width bar - the first version used the same bar shape as
-            the progress bar above and just read as a second, broken one. One dot per tier
-            (Коллекционер/Энтузиаст/Куратор, ...) - only shown for a leveled family (maxLevel > 1);
-            a single-tier achievement like "Первый шаг" gets no indicator at all. */}
-        {achievement.maxLevel > 1 && (
-          <div className="mt-1.5 flex items-center gap-1.5">
-            <span className="text-[10px] text-muted/70">{t("profile.achievementLevel", { level: achievement.level, maxLevel: achievement.maxLevel })}</span>
-            <div className="flex gap-1">
-              {Array.from({ length: achievement.maxLevel }).map((_, i) => (
-                <span key={i} className={cn("h-1.5 w-1.5 rounded-full ring-1 ring-inset", i < achievement.level ? "bg-accent ring-border" : "bg-text/[.12] ring-transparent")} />
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
