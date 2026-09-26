@@ -30,33 +30,29 @@ export function LibraryPage() {
   return (
     <div className="min-h-full bg-app-bg px-8 py-8 pb-16">
       {libraryQuery.isError && <ErrorBanner message={(libraryQuery.error as Error).message} />}
-      {entries.length === 0 ? (
-        <EmptyState text={t("library.empty")} />
+      <div className="mb-6 flex flex-wrap gap-2">
+        <CategoryChip active={filter === "all"} onClick={() => setFilter("all")} label={t("library.filterAll")} count={entries.length} />
+        {ALL_LIBRARY_CATEGORIES.map((category) => (
+          <CategoryChip
+            key={category}
+            active={filter === category}
+            onClick={() => setFilter(category)}
+            label={t(LIBRARY_CATEGORY_LABEL_KEYS[category])}
+            count={counts.get(category) ?? 0}
+            icon={LIBRARY_CATEGORY_ICONS[category]}
+          />
+        ))}
+      </div>
+      {visible.length === 0 ? (
+        // The tabs are there either way; only the words under them differ: nothing at all yet, or
+        // nothing in this one.
+        <EmptyState text={entries.length === 0 ? t("library.empty") : t("library.categoryEmpty")} />
       ) : (
-        <>
-          <div className="mb-6 flex flex-wrap gap-2">
-            <CategoryChip active={filter === "all"} onClick={() => setFilter("all")} label={t("library.filterAll")} count={entries.length} />
-            {ALL_LIBRARY_CATEGORIES.map((category) => (
-              <CategoryChip
-                key={category}
-                active={filter === category}
-                onClick={() => setFilter(category)}
-                label={t(LIBRARY_CATEGORY_LABEL_KEYS[category])}
-                count={counts.get(category) ?? 0}
-                icon={LIBRARY_CATEGORY_ICONS[category]}
-              />
-            ))}
-          </div>
-          {visible.length === 0 ? (
-            <EmptyState text={t("library.categoryEmpty")} />
-          ) : (
-            <div className="grid grid-cols-5 gap-x-4 gap-y-6">
-              {visible.map((entry) => (
-                <LibraryCard key={`${entry.sourceId}:${entry.animeId}`} entry={entry} source={sourceById.get(entry.sourceId)} />
-              ))}
-            </div>
-          )}
-        </>
+        <div className="grid grid-cols-5 gap-x-4 gap-y-6">
+          {visible.map((entry) => (
+            <LibraryCard key={`${entry.sourceId}:${entry.animeId}`} entry={entry} source={sourceById.get(entry.sourceId)} />
+          ))}
+        </div>
       )}
     </div>
   );
