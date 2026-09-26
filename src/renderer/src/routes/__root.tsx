@@ -164,6 +164,11 @@ function RootLayoutContent() {
   useEffect(() => {
     if (pathname in PERSISTED_PAGES) setVisited((prev) => (prev.includes(pathname) ? prev : [...prev, pathname]));
   }, [pathname]);
+  // The page being opened is mounted in the very render that switches to it, not one effect later: the
+  // effect above only records it for the renders after. Waiting for it left one frame with the
+  // previous page already hidden and this one not there yet - just the app-wide theme gradient, which
+  // read as a flash the first time each tab was opened (most visible with a custom theme).
+  const mountedPages = pathname in PERSISTED_PAGES && !visited.includes(pathname) ? [...visited, pathname] : visited;
   // Discord presence outside the player: a single steady "using hibiki" line, not per-page text
   // (catalog/profile/settings/...) - that was tried and just read as noise. The watch page sets
   // its own detailed presence on mount and this effect only fires again once it's left (isWatching
@@ -229,7 +234,7 @@ function RootLayoutContent() {
             URL (anime details, the player) don't get this treatment - there can be unboundedly many
             of them over a session, so they keep the normal mount/unmount-per-visit behavior via
             Outlet below and rely on React Query's cache instead. */}
-        {visited.map((path) => {
+        {mountedPages.map((path) => {
           const Page = PERSISTED_PAGES[path];
           const isActive = pathname === path;
           // This wrapper only needs to be a flex ITEM of `main` (`flex-1 min-h-0`, so it claims its
