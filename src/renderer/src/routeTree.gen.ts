@@ -15,6 +15,7 @@ import { Route as DownloadsRouteImport } from './routes/downloads'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as LibraryRouteImport } from './routes/library'
 import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as SearchRouteImport } from './routes/search'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SourcesRouteImport } from './routes/sources'
 import { Route as AnimeSourceIdAnimeIdRouteImport } from './routes/anime.$sourceId.$animeId'
@@ -50,6 +51,11 @@ const ProfileRoute = ProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SearchRoute = SearchRouteImport.update({
+  id: '/search',
+  path: '/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -79,6 +85,7 @@ export interface FileRoutesByFullPath {
   '/history': typeof HistoryRoute
   '/library': typeof LibraryRoute
   '/profile': typeof ProfileRoute
+  '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/sources': typeof SourcesRoute
   '/anime/$sourceId/$animeId': typeof AnimeSourceIdAnimeIdRoute
@@ -91,6 +98,7 @@ export interface FileRoutesByTo {
   '/history': typeof HistoryRoute
   '/library': typeof LibraryRoute
   '/profile': typeof ProfileRoute
+  '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/sources': typeof SourcesRoute
   '/anime/$sourceId/$animeId': typeof AnimeSourceIdAnimeIdRoute
@@ -104,6 +112,7 @@ export interface FileRoutesById {
   '/history': typeof HistoryRoute
   '/library': typeof LibraryRoute
   '/profile': typeof ProfileRoute
+  '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/sources': typeof SourcesRoute
   '/anime/$sourceId/$animeId': typeof AnimeSourceIdAnimeIdRoute
@@ -118,6 +127,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/library'
     | '/profile'
+    | '/search'
     | '/settings'
     | '/sources'
     | '/anime/$sourceId/$animeId'
@@ -130,6 +140,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/library'
     | '/profile'
+    | '/search'
     | '/settings'
     | '/sources'
     | '/anime/$sourceId/$animeId'
@@ -142,6 +153,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/library'
     | '/profile'
+    | '/search'
     | '/settings'
     | '/sources'
     | '/anime/$sourceId/$animeId'
@@ -155,6 +167,7 @@ export interface RootRouteChildren {
   HistoryRoute: typeof HistoryRoute
   LibraryRoute: typeof LibraryRoute
   ProfileRoute: typeof ProfileRoute
+  SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
   SourcesRoute: typeof SourcesRoute
   AnimeSourceIdAnimeIdRoute: typeof AnimeSourceIdAnimeIdRoute
@@ -205,6 +218,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/search': {
+      id: '/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof SearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -243,6 +263,7 @@ const rootRouteChildren: RootRouteChildren = {
   HistoryRoute: HistoryRoute,
   LibraryRoute: LibraryRoute,
   ProfileRoute: ProfileRoute,
+  SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,
   SourcesRoute: SourcesRoute,
   AnimeSourceIdAnimeIdRoute: AnimeSourceIdAnimeIdRoute,

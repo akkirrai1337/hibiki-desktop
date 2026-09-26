@@ -4,11 +4,11 @@ import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
-import { Clock, CornerDownLeft, Search, X } from "lucide-react";
+import { ArrowRight, ChevronUp, Clock, CornerDownLeft, LayoutGrid, Search, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { hibiki, searchSource } from "@/lib/hibiki";
 import { animeTitle } from "@/components/AnimeCard";
-import { CatalogFilters } from "@/components/CatalogFilters";
+import { FilterSections, FiltersControl, pickedCount, useLiveFilters } from "@/components/CatalogFilters";
 import { SmoothImage } from "@/components/SmoothImage";
 import { usePopoverTheme } from "@/lib/usePopoverTheme";
 import { activeFilterCount, toSearchRequestFilters } from "@/lib/searchFilters";
@@ -19,7 +19,7 @@ import { useSearchFiltersStore } from "@/stores/searchFiltersStore";
 import type { AnimeTitle } from "@shared/types";
 
 const MIN_QUERY_LENGTH = 3;
-const RESULT_LIMIT = 24;
+const RESULT_LIMIT = 8;
 const TYPE_DEBOUNCE_MS = 250;
 
 /**
@@ -80,7 +80,15 @@ function SpotlightPanel() {
 
   const [value, setValue] = useState(() => useSpotlightStore.getState().initialValue);
   const [settled, setSettled] = useState(() => useSpotlightStore.getState().initialValue.trim());
+  // -1 is "no row": the pointer left the list, so the highlight it put there goes with it. A highlight the
+  // keyboard put there stays.
   const [selected, setSelected] = useState(0);
+  const viaPointer = useRef(false);
+  const pointAt = (index: number) => { viaPointer.current = true; setSelected(index); };
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const { draft, change } = useLiveFilters(filters, setFilters);
+  const filterDefs = filterCatalog.data?.filters ?? [];
+  const count = pickedCount(filterDefs, filters);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -102,17 +110,23 @@ function SpotlightPanel() {
   // A picked filter is a request on its own; a one- or two-letter fragment is left out of it (some sources
   // reject or answer noisily to it).
   const searching = longEnough || hasFilters;
+  // Only the first few: the panel is for getting to a title fast, and the rest is one step on (openAll).
   const results = useQuery({
-    queryKey: ["spotlight", source?.id, longEnough ? settled : "", filters],
+    queryKey: ["spotlightFirst", source?.id, longEnough ? settled : "", filters],
     enabled: !!source && searching,
     queryFn: ({ signal }) => searchSource(source!.id, { query: longEnough ? settled : undefined, limit: RESULT_LIMIT, ...toSearchRequestFilters(filters) }, signal),
   });
   const items: AnimeTitle[] = useMemo(() => (searching ? (results.data ?? []) : []), [searching, results.data]);
   // With nothing typed and no filter, the list is the recent queries; picking one fills the field.
   const showingRecent = value.trim().length === 0 && !hasFilters && recent.length > 0;
-  const rowCount = showingRecent ? recent.length : items.length;
-  useEffect(() => setSelected(0), [settled, showingRecent, filters]);
+  // The last row is "all results", reachable with the arrows like any other.
+  const hasAll = !showingRecent && items.length > 0;
+  const rowCount = showingRecent ? recent.length : items.length + (hasAll ? 1 : 0);
+  useEffect(() => { viaPointer.current = false; setSelected(0); }, [settled, showingRecent, filters]);
+  // Only a row the keyboard moved to is scrolled into view; one the pointer is over is already under it, and
+  // scrolling it would make the list jump away from the pointer.
   useEffect(() => {
+    if (viaPointer.current) return;
     listRef.current?.querySelector<HTMLElement>(`[data-row="${selected}"]`)?.scrollIntoView({ block: "nearest" });
   }, [selected]);
 
@@ -125,14 +139,25 @@ function SpotlightPanel() {
     void navigate({ to: "/anime/$sourceId/$animeId", params: { sourceId: anime.sourceId, animeId: anime.id } });
   };
 
+  const openAll = () => {
+    if (longEnough) addRecent(settled);
+    useSpotlightStore.getState().setReturnTo({ href: router.history.location.href, value });
+    close();
+    void navigate({ to: "/search", search: { q: longEnough ? settled : "" } });
+  };
+
   const onKeyDown = (event: React.KeyboardEvent) => {
-    if (event.key === "Escape") { event.preventDefault(); close(); return; }
-    if (event.key === "ArrowDown") { event.preventDefault(); if (rowCount > 0) setSelected((i) => (i + 1) % rowCount); return; }
-    if (event.key === "ArrowUp") { event.preventDefault(); if (rowCount > 0) setSelected((i) => (i - 1 + rowCount) % rowCount); return; }
+    // Esc peels one layer off: the filters first, then the panel.
+    if (event.key === "Escape") { event.preventDefault(); if (filtersOpen) setFiltersOpen(false); else close(); return; }
+    if (event.key === "ArrowDown") { event.preventDefault(); viaPointer.current = false; if (rowCount > 0) setSelected((i) => (i + 1) % rowCount); return; }
+    if (event.key === "ArrowUp") { event.preventDefault(); viaPointer.current = false; if (rowCount > 0) setSelected((i) => (i < 0 ? rowCount - 1 : (i - 1 + rowCount) % rowCount)); return; }
     if (event.key === "Enter") {
       event.preventDefault();
-      if (showingRecent) return setValue(recent[selected] ?? "");
-      const anime = items[selected];
+      const row = selected < 0 ? 0 : selected;
+      if (showingRecent) return setValue(recent[row] ?? "");
+      if (event.ctrlKey || event.metaKey) return hasAll ? openAll() : undefined;
+      if (row === items.length) return openAll();
+      const anime = items[row];
       if (anime) openTitle(anime);
     }
   };
@@ -140,56 +165,83 @@ function SpotlightPanel() {
   const hasList = showingRecent || searching || value.trim().length > 0;
 
   return (
-    <motion.div className="fixed inset-0 z-[70] flex items-start justify-center px-6 pt-[14vh]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} onKeyDown={onKeyDown}>
-      <div className="absolute inset-0 bg-black/45 backdrop-blur-[3px]" onClick={close} />
+    // The container itself does not fade: a backdrop blur inside an element whose opacity is animating is
+    // composited as its own group and only lines up once the opacity settles, which read as a crooked
+    // blur that snapped into place at the end. The scrim fades on its own; the panel has its own motion.
+    <div className="fixed inset-0 z-[70] flex items-start justify-center px-6 pt-[14vh]" onKeyDown={onKeyDown}>
+      <motion.div className="absolute inset-0 bg-black/45 backdrop-blur-[3px]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} onClick={close} />
       <motion.div
-        initial={{ opacity: 0, y: -10, scale: 0.985 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: -10, scale: 0.985 }}
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
         transition={{ type: "spring", stiffness: 520, damping: 38 }}
         className="relative w-full max-w-[680px]"
       >
-        <CatalogFilters
-          defs={filterCatalog.data?.filters ?? []}
-          filters={filters}
-          onChange={setFilters}
-          loading={filterCatalog.isLoading}
-          layer={90}
-          lead={(filtersControl) => (
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" strokeWidth={2} />
-              <input
-                ref={inputRef}
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                placeholder={t("catalog.searchPlaceholder")}
-                aria-label={t("catalog.searchPlaceholder")}
-                className={cn(
-                  "h-14 w-full rounded-2xl border border-border bg-app-popover pl-14 text-base text-text shadow-2xl outline-none placeholder:text-muted focus:border-accent/60",
-                  filterCatalog.data?.filters.length ? "pr-56" : "pr-24",
-                )}
-                style={popoverTheme}
-              />
-              <div className="absolute right-2.5 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
-                {value && (
-                  <button onClick={() => { setValue(""); inputRef.current?.focus(); }} aria-label={t("search.clear")} className="flex h-7 w-7 items-center justify-center rounded-lg text-muted transition-colors hover:bg-text/[.08] hover:text-text">
-                    <X className="h-4 w-4" strokeWidth={2.25} />
-                  </button>
-                )}
-                {filtersControl}
-                {!filterCatalog.data?.filters.length && <kbd className="rounded-md border border-border px-1.5 py-0.5 text-[11px] font-semibold text-muted">Esc</kbd>}
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" strokeWidth={2} />
+          <input
+            ref={inputRef}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder={t("catalog.searchPlaceholder")}
+            aria-label={t("catalog.searchPlaceholder")}
+            className={cn(
+              "h-14 w-full rounded-2xl border border-border bg-app-popover pl-14 text-base text-text shadow-2xl outline-none placeholder:text-muted focus:border-accent/60",
+              filterDefs.length ? "pr-56" : "pr-24",
+            )}
+            style={popoverTheme}
+          />
+          <div className="absolute right-2.5 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
+            {value && (
+              <button onClick={() => { setValue(""); inputRef.current?.focus(); }} aria-label={t("search.clear")} className="flex h-7 w-7 items-center justify-center rounded-lg text-muted transition-colors hover:bg-text/[.08] hover:text-text">
+                <X className="h-4 w-4" strokeWidth={2.25} />
+              </button>
+            )}
+            {filterDefs.length > 0 ? (
+              <FiltersControl count={count} open={filtersOpen} onToggle={() => setFiltersOpen((v) => !v)} onClear={() => setFilters({})} />
+            ) : (
+              <kbd className="rounded-md border border-border px-1.5 py-0.5 text-[11px] font-semibold text-muted">Esc</kbd>
+            )}
+          </div>
+        </div>
+
+        {/* The filters open as a card under the field, in the same glass as the results, and push the
+            results down instead of covering them - so what a filter does is visible while it is picked. */}
+        <AnimatePresence initial={false}>
+          {filtersOpen && filterDefs.length > 0 && (
+            <motion.div
+              key="filters"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="overflow-hidden"
+            >
+              <div style={popoverTheme} className="mt-2 rounded-2xl border border-border bg-app-popover shadow-2xl">
+                <div className="flex items-center justify-between px-4 pb-1 pt-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-muted">{t("search.filters.button")}</p>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => setFilters({})} disabled={count === 0} className="rounded-lg px-2 py-1 text-xs font-semibold text-muted transition-colors hover:text-text disabled:opacity-40">{t("search.filters.reset")}</button>
+                    <button onClick={() => setFiltersOpen(false)} aria-label={t("search.filters.done")} className="flex h-7 w-7 items-center justify-center rounded-lg text-muted transition-colors hover:bg-text/[.08] hover:text-text">
+                      <ChevronUp className="h-4 w-4" strokeWidth={2.25} />
+                    </button>
+                  </div>
+                </div>
+                <div className="no-scrollbar max-h-[38vh] overflow-y-auto px-4 pb-4 pt-2">
+                  {filterCatalog.isLoading ? <p className="py-4 text-center text-sm text-muted">…</p> : <FilterSections defs={filterDefs} draft={draft} onChange={change} />}
+                </div>
               </div>
-            </div>
+            </motion.div>
           )}
-        />
+        </AnimatePresence>
 
         {hasList && (
-          <div ref={listRef} style={popoverTheme} className="no-scrollbar mt-2 max-h-[56vh] overflow-y-auto rounded-2xl border border-border bg-app-popover p-1.5 shadow-2xl">
+          <div ref={listRef} style={popoverTheme} onMouseLeave={() => { if (viaPointer.current) setSelected(-1); }} className={cn("no-scrollbar mt-2 overflow-y-auto rounded-2xl border border-border bg-app-popover p-1.5 shadow-2xl", filtersOpen ? "max-h-[28vh]" : "max-h-[56vh]")}>
             {showingRecent && (
               <>
                 <p className="px-3 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wide text-muted">{t("search.recent")}</p>
                 {recent.map((query, index) => (
-                  <button key={query} data-row={index} onMouseMove={() => setSelected(index)} onClick={() => { setValue(query); inputRef.current?.focus(); }} className={cn("flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-text transition-colors", selected === index && "bg-text/[.08]")}>
+                  <button key={query} data-row={index} onMouseMove={() => pointAt(index)} onClick={() => { setValue(query); inputRef.current?.focus(); }} className={cn("flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-text transition-colors", selected === index && "bg-text/[.08]")}>
                     <Clock className="h-4 w-4 text-muted" strokeWidth={2} />
                     {query}
                   </button>
@@ -203,7 +255,7 @@ function SpotlightPanel() {
             {items.map((anime, index) => {
               const meta = [anime.type ? anime.type.toUpperCase() : null, anime.year || null].filter(Boolean).join(" · ");
               return (
-                <button key={`${anime.sourceId}:${anime.id}`} data-row={index} onMouseMove={() => setSelected(index)} onClick={() => openTitle(anime)} className={cn("flex w-full items-center gap-3.5 rounded-xl px-2.5 py-2 text-left transition-colors", selected === index && "bg-text/[.08]")}>
+                <button key={`${anime.sourceId}:${anime.id}`} data-row={index} onMouseMove={() => pointAt(index)} onClick={() => openTitle(anime)} className={cn("flex w-full items-center gap-3.5 rounded-xl px-2.5 py-2 text-left transition-colors", selected === index && "bg-text/[.08]")}>
                   <div className="h-[54px] w-9 shrink-0 overflow-hidden rounded-md bg-surface ring-1 ring-border">
                     {anime.posterUrl && <SmoothImage src={anime.posterUrl} alt="" className="h-full w-full object-cover" />}
                   </div>
@@ -215,9 +267,21 @@ function SpotlightPanel() {
                 </button>
               );
             })}
+            {hasAll && (
+              <button data-row={items.length} onMouseMove={() => pointAt(items.length)} onClick={openAll} className={cn("mt-1 flex w-full items-center gap-3.5 rounded-xl px-2.5 py-2 text-left transition-colors", selected === items.length && "bg-text/[.08]")}>
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent-text">
+                  <LayoutGrid className="h-[18px] w-[18px]" strokeWidth={2} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-text">{t("search.allResults")}</p>
+                  <p className="mt-0.5 line-clamp-1 text-xs text-muted">{longEnough ? `«${settled}»` : t("search.filteredResults")}</p>
+                </div>
+                <ArrowRight className="h-4 w-4 shrink-0 text-muted" strokeWidth={2.25} />
+              </button>
+            )}
           </div>
         )}
       </motion.div>
-    </motion.div>
+    </div>
   );
 }
