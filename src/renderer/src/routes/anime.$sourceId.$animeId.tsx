@@ -732,7 +732,7 @@ function PosterPreview({ posterUrl, title, onClose }: { posterUrl: string; title
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/[.78] p-8 backdrop-blur-sm"
+      className="fixed inset-x-0 bottom-0 top-10 z-[100] flex items-center justify-center bg-black/[.78] p-8 backdrop-blur-sm"
       onClick={onClose}
     >
       <motion.div
@@ -740,16 +740,17 @@ function PosterPreview({ posterUrl, title, onClose }: { posterUrl: string; title
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.94 }}
         transition={{ type: "spring", stiffness: 360, damping: 30 }}
-        className="relative flex h-full w-full items-center justify-center"
-        onClick={(event) => event.stopPropagation()}
+        // Click-through: only the image and the button take clicks, so the empty space around them
+        // reaches the overlay and closes the preview.
+        className="pointer-events-none relative flex h-full w-full items-center justify-center"
       >
-        <SmoothImage src={posterUrl} alt={title} className="max-h-full max-w-full rounded-xl object-contain shadow-2xl" />
+        <SmoothImage src={posterUrl} alt={title} className="pointer-events-auto max-h-full max-w-full rounded-xl object-contain shadow-2xl" />
         <button
           type="button"
           onClick={onClose}
           aria-label={t("detail.back")}
           title={t("detail.back")}
-          className="absolute right-0 top-0 flex h-10 w-10 items-center justify-center rounded-xl bg-black/45 text-white/80 shadow-lg backdrop-blur-sm transition-colors hover:bg-black/65 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="pointer-events-auto absolute right-0 top-0 flex h-10 w-10 items-center justify-center rounded-xl bg-black/45 text-white/80 shadow-lg backdrop-blur-sm transition-colors hover:bg-black/65 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <X className="h-5 w-5" strokeWidth={2.5} />
         </button>
