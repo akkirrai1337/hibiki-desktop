@@ -147,6 +147,18 @@
         "signed-out": "Saved here - sign in to sync",
         "failed": "Saved here - the source did not accept it"
       }
+    },
+    "episodesNewestFirst": "Newest first",
+    "episodesOldestFirst": "Oldest first",
+    "episodesView": {
+      "tiles": "Tiles",
+      "list": "List"
+    },
+    "episodeStatus": {
+      "watched": "Watched",
+      "progress": "{{percent}}% watched",
+      "next": "Up next",
+      "downloaded": "Downloaded"
     }
   },
   "watch": {

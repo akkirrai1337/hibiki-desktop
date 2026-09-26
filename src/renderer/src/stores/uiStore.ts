@@ -9,6 +9,10 @@ interface UiState {
   // Sidebar entries the user hid from its context menu, by route. Settings can never be in here: it is
   // the way back to everything else.
   hiddenNav: string[];
+  // The episode list on a title page: newest first instead of oldest first.
+  episodesNewestFirst: boolean;
+  // How the episodes are drawn: big tiles or a list of wide rows.
+  episodesView: "tiles" | "list";
   // Defaults to on, so a fresh install shows what you're watching in Discord without having to
   // find the switch first - Settings is where you turn it *off*. Only affects new installs: an
   // existing one keeps whatever its persisted "hibiki-ui" value already says.
@@ -54,6 +58,8 @@ interface UiState {
   setActiveSourceId: (id: string | null) => void;
   setSidebarWidth: (width: number) => void;
   setNavHidden: (to: string, hidden: boolean) => void;
+  setEpisodesNewestFirst: (newestFirst: boolean) => void;
+  setEpisodesView: (view: "tiles" | "list") => void;
   setDiscordRpcEnabled: (enabled: boolean) => void;
   setDiscordIgnoreNsfwSources: (enabled: boolean) => void;
   setOnboardingCompleted: (completed: boolean) => void;
@@ -72,6 +78,8 @@ export const useUiStore = create<UiState>()(
       activeSourceId: null,
       sidebarWidth: 236,
       hiddenNav: [],
+      episodesNewestFirst: false,
+      episodesView: "tiles",
       discordRpcEnabled: true,
       discordIgnoreNsfwSources: true,
       onboardingCompleted: false,
@@ -84,6 +92,8 @@ export const useUiStore = create<UiState>()(
       setTheme: (theme) => set({ theme }),
       setActiveSourceId: (activeSourceId) => set({ activeSourceId }),
       setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
+      setEpisodesNewestFirst: (episodesNewestFirst) => set({ episodesNewestFirst }),
+      setEpisodesView: (episodesView) => set({ episodesView }),
       setNavHidden: (to, hidden) =>
         set((state) => ({ hiddenNav: hidden ? [...new Set([...state.hiddenNav, to])] : state.hiddenNav.filter((item) => item !== to) })),
       setDiscordRpcEnabled: (discordRpcEnabled) => set({ discordRpcEnabled }),

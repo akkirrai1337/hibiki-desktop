@@ -14,7 +14,7 @@ const DROPDOWN_VIEWPORT_MARGIN = 16;
 // page's own episode-list header, pulled out here once the download dialog needed the exact same
 // picker (previously a wall of pill buttons there, one per dub, which didn't scale past a handful
 // of translation teams the way this dropdown already did).
-export function GroupDropdown({ groups, activeGroupId, onSelect }: { groups: PlaybackGroup[]; activeGroupId?: string; onSelect: (id: string) => void }) {
+export function GroupDropdown({ groups, activeGroupId, onSelect, align = "left" }: { groups: PlaybackGroup[]; activeGroupId?: string; onSelect: (id: string) => void; align?: "left" | "right" }) {
   const [open, setOpen] = useState(false);
   const [placement, setPlacement] = useState<{ direction: "down" | "up"; maxHeight: number }>({ direction: "down", maxHeight: DROPDOWN_MAX_HEIGHT });
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -76,7 +76,8 @@ export function GroupDropdown({ groups, activeGroupId, onSelect }: { groups: Pla
             transition={{ type: "spring", stiffness: 500, damping: 45 }}
             style={{ maxHeight: placement.maxHeight }}
             className={cn(
-              "absolute left-0 z-50 w-64 overflow-y-auto overflow-x-hidden overscroll-contain rounded-xl border border-border bg-surface shadow-2xl",
+              "absolute z-50 w-64 overflow-y-auto overflow-x-hidden overscroll-contain rounded-xl border border-border bg-surface shadow-2xl",
+              align === "right" ? "right-0" : "left-0",
               placement.direction === "down" ? "top-11" : "bottom-11",
             )}
           >

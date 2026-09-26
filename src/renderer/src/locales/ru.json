@@ -147,6 +147,18 @@
         "signed-out": "Сохранено здесь, войдите для синхронизации",
         "failed": "Сохранено здесь, источник не принял"
       }
+    },
+    "episodesNewestFirst": "Сначала новые",
+    "episodesOldestFirst": "Сначала старые",
+    "episodesView": {
+      "tiles": "Плитки",
+      "list": "Список"
+    },
+    "episodeStatus": {
+      "watched": "Просмотрено",
+      "progress": "Просмотрено {{percent}}%",
+      "next": "Следующая",
+      "downloaded": "Скачано"
     }
   },
   "watch": {

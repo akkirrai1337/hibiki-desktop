@@ -147,6 +147,18 @@
         "signed-out": "Збережено тут, увійдіть для синхронізації",
         "failed": "Збережено тут, джерело не прийняло"
       }
+    },
+    "episodesNewestFirst": "Спочатку нові",
+    "episodesOldestFirst": "Спочатку старі",
+    "episodesView": {
+      "tiles": "Плитки",
+      "list": "Список"
+    },
+    "episodeStatus": {
+      "watched": "Переглянуто",
+      "progress": "Переглянуто {{percent}}%",
+      "next": "Наступна",
+      "downloaded": "Завантажено"
     }
   },
   "watch": {

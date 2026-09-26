@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { AnimatePresence, motion } from "motion/react";
 import * as ContextMenu from "@radix-ui/react-context-menu";
-import { Play, Bookmark, Check, ChevronDown, Clock, Download, Eraser, ExternalLink, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
+import { ArrowUpDown, LayoutGrid, List, Mic, Play, Bookmark, Check, ChevronDown, Clock, Download, Eraser, ExternalLink, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
 import { CommentsSection } from "@/components/CommentsSection";
 import { RatingButton, SourceRatings } from "@/components/RatingButton";
 import { hibiki } from "@/lib/hibiki";
@@ -249,6 +249,11 @@ function AnimeDetailPage() {
     queryClient.invalidateQueries({ queryKey: ["recent-progress"] });
   };
   const continueTarget = resolveContinue(activeGroup, progressByEpisode, t);
+  const episodesNewestFirst = useUiStore((s) => s.episodesNewestFirst);
+  const setEpisodesNewestFirst = useUiStore((s) => s.setEpisodesNewestFirst);
+  // A view that no longer exists (a saved "compact") reads as the default.
+  const episodesView = useUiStore((s) => (s.episodesView === "list" ? "list" : "tiles"));
+  const setEpisodesView = useUiStore((s) => s.setEpisodesView);
 
   // Mirrors Android's DetailsUiModel: franchiseAnime (a source's own "Season 1, Season 2, Movie,
   // ..." sequence) and relatedAnime (prequels/sequels/side-stories) render as one merged section
@@ -332,21 +337,59 @@ function AnimeDetailPage() {
     {anime && <>
       <Overview anime={anime} libraryCategory={libraryEntry?.category ?? null} onSetLibraryCategory={setLibraryCategory} onRemoveFromLibrary={removeFromLibrary} onPosterClick={() => setPosterPreviewOpen(true)} continueTarget={continueTarget ? { groupId: activeGroup!.id, episodeId: continueTarget.episode.id, label: continueTarget.label } : undefined} sourceId={sourceId} animeId={animeId} source={source} related={related} />
       <div className="px-8 pt-6">
-        <h2 className="mb-4 text-xl font-bold tracking-[-.02em] text-text">{t("detail.episodes")}</h2>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="flex items-baseline gap-2 text-xl font-bold tracking-[-.02em] text-text">
+            {t("detail.episodes")}
+            {activeGroup && <span className="text-sm font-semibold tabular-nums text-muted">{activeGroup.episodes.length}</span>}
+          </h2>
+          <div className="flex items-center gap-2">
+            {groups.length > 1 && <GroupDropdown groups={groups} activeGroupId={activeGroup?.id} onSelect={setActiveGroupId} align="right" />}
+            {/* One dub is not a choice: named, but not something to press. */}
+            {groups.length === 1 && (
+              <span className="flex items-center gap-2 rounded-lg bg-text/[.06] px-3.5 py-2 text-sm font-semibold text-muted">
+                <Mic className="h-4 w-4" strokeWidth={2} />
+                {groups[0].title}{groups[0].qualityLabel ? ` · ${groups[0].qualityLabel}` : ""}
+              </span>
+            )}
+            {activeGroup && activeGroup.episodes.length > 1 && (
+              <div className="flex rounded-lg bg-text/[.06] p-0.5">
+                {([["tiles", LayoutGrid], ["list", List]] as const).map(([view, Icon]) => (
+                  <button
+                    key={view}
+                    onClick={() => setEpisodesView(view)}
+                    aria-label={t(`detail.episodesView.${view}`)}
+                    title={t(`detail.episodesView.${view}`)}
+                    className={cn("flex h-8 w-9 items-center justify-center rounded-md transition-colors", episodesView === view ? "bg-text/[.12] text-text" : "text-muted hover:text-text")}
+                  >
+                    <Icon className="h-4 w-4" strokeWidth={2} />
+                  </button>
+                ))}
+              </div>
+            )}
+            {activeGroup && activeGroup.episodes.length > 1 && (
+              <button
+                onClick={() => setEpisodesNewestFirst(!episodesNewestFirst)}
+                className="flex items-center gap-2 rounded-lg bg-text/[.06] px-3.5 py-2 text-sm font-semibold text-muted transition-colors hover:bg-text/[.1] hover:text-text"
+              >
+                <ArrowUpDown className="h-4 w-4" strokeWidth={2} />
+                {episodesNewestFirst ? t("detail.episodesNewestFirst") : t("detail.episodesOldestFirst")}
+              </button>
+            )}
+          </div>
+        </div>
         {groupsQuery.isLoading && <div className="text-sm text-muted">{t("detail.loadingEpisodes")}</div>}
         {groupsQuery.isError && <ErrorBanner message={(groupsQuery.error as Error).message} />}
         {groups.length === 0 && !groupsQuery.isLoading && !groupsQuery.isError && <div className="text-sm text-muted">{t("detail.noEpisodesYet")}</div>}
-        {groups.length > 1 && <div className="mb-5">
-          <GroupDropdown groups={groups} activeGroupId={activeGroup?.id} onSelect={setActiveGroupId} />
-        </div>}
-        {activeGroup && <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {activeGroup.episodes.map((ep) => (
+        {activeGroup && <div className={cn("grid gap-2.5", episodesView === "tiles" ? "grid-cols-[repeat(auto-fill,minmax(112px,1fr))]" : "grid-cols-[repeat(auto-fill,minmax(300px,1fr))]")}>
+          {(episodesNewestFirst ? [...activeGroup.episodes].reverse() : activeGroup.episodes).map((ep) => (
             <EpisodeChip
               key={ep.id}
               sourceId={sourceId}
               animeId={animeId}
               groupId={activeGroup.id}
               episode={ep}
+              isNext={continueTarget?.episode.id === ep.id}
+              view={episodesView}
               progress={progressByEpisode.get(ep.id)}
               download={downloads[ep.id]}
               isDownloaded={downloadedEpisodeIds.has(ep.id)}
@@ -413,11 +456,15 @@ function AnimeDetailPage() {
   </div>;
 }
 
+const GENERIC_EPISODE_TITLE = /^(эпизод|серия|серія|episode|ep\.?)\s*\d+$/i;
+
 function EpisodeChip({
   sourceId,
   animeId,
   groupId,
   episode,
+  isNext,
+  view,
   progress,
   download,
   isDownloaded,
@@ -430,6 +477,9 @@ function EpisodeChip({
   animeId: string;
   groupId: string;
   episode: Episode;
+  // The episode "continue" leads to: where the viewer left off.
+  isNext: boolean;
+  view: "tiles" | "list";
   progress?: WatchProgress;
   download?: DownloadProgress;
   // Persisted (survives a reload, a re-visit, this component never having mounted before) -
@@ -455,6 +505,8 @@ function EpisodeChip({
   const queued = download?.status === "queued";
   const downloadPercent = download?.percent ?? 0;
   const [menuOpen, setMenuOpen] = useState(false);
+  // The big number already says "episode N", so a title that only repeats it is not worth a line.
+  const subtitle = episode.title && !GENERIC_EPISODE_TITLE.test(episode.title.trim()) ? episode.title : null;
 
   // Both the pause button (below) and the context menu's "cancel" item are nested inside the
   // whole-card <Link> - without stopping the click here it'd also fire the Link's own navigation
@@ -472,49 +524,62 @@ function EpisodeChip({
         <Link
           to="/watch/$sourceId/$animeId/$groupId/$episodeId"
           params={{ sourceId, animeId, groupId, episodeId: episode.id }}
-          className={cn("group relative flex items-center gap-3 overflow-hidden rounded-xl border px-3 py-2.5 transition-colors", watched ? "border-border bg-text/[.02] opacity-60 hover:opacity-100" : "border-border bg-text/[.03] hover:border-accent/40 hover:bg-text/[.06]")}
-        >
-          <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold transition-colors", watched ? "bg-text/[.05] text-muted" : percent > 0 ? "bg-accent/20 text-accent-text" : "bg-text/[.06] text-muted group-hover:bg-accent/20 group-hover:text-accent-text")}>
-            {watched ? <Check className="h-3.5 w-3.5" strokeWidth={2.5} /> : episode.number}
-          </span>
-          <span className={cn("line-clamp-1 flex-1 select-text text-sm transition-colors", watched ? "text-muted" : "text-muted group-hover:text-text")}>{episode.title || t("detail.episodeFallback", { number: episode.number })}</span>
-          {isFavorite && <Heart className="h-3.5 w-3.5 shrink-0 fill-rose-400 text-rose-400" strokeWidth={0} />}
-          {(download?.status === "error" || download?.status === "unsupported") && (
-            <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-rose-400" strokeWidth={2.5} />
+          className={cn(
+            "group relative flex overflow-hidden rounded-xl border transition-colors",
+            view === "tiles" ? "h-[76px] flex-col items-center justify-center px-2 text-center" : "h-[62px] items-center gap-3.5 px-3.5",
+            isNext ? "border-accent/70 bg-accent/[.09]" : watched ? "border-border bg-text/[.02] opacity-60 hover:opacity-100" : "border-border bg-text/[.04] hover:border-accent/40 hover:bg-text/[.07]",
           )}
-          {queued && (
-            <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-muted">
-              <Clock className="h-3 w-3" strokeWidth={2} />
-              {t("detail.episodeMenu.queued")}
+        >
+          {view === "list" ? (
+            <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-base font-bold tabular-nums transition-colors", isNext || percent > 0 ? "bg-accent/20 text-accent-text" : "bg-text/[.07] text-text/80 group-hover:bg-accent/15 group-hover:text-accent-text")}>{episode.number}</span>
+          ) : (
+            // The number gives way to a play button under the pointer, in the same spot.
+            <span className="relative flex h-9 w-full items-center justify-center">
+              <span className={cn("text-xl font-bold leading-none tabular-nums transition-[opacity,transform] duration-200 group-hover:scale-75 group-hover:opacity-0", isNext || percent > 0 ? "text-accent-text" : watched ? "text-muted" : "text-text")}>{episode.number}</span>
+              <span className="absolute flex h-9 w-9 scale-75 items-center justify-center rounded-full bg-accent text-accent-fg opacity-0 shadow-lg transition-[opacity,transform] duration-200 group-hover:scale-100 group-hover:opacity-100">
+                <Play className="ml-0.5 h-4 w-4 fill-current" strokeWidth={0} />
+              </span>
             </span>
           )}
-          {(downloading || paused) && (
-            <>
-              <span className="shrink-0 text-[11px] font-semibold tabular-nums text-accent-text">{downloadPercent}%</span>
-              <button
-                type="button"
-                onClick={onTogglePause}
-                aria-label={downloading ? t("detail.episodeMenu.pauseDownload") : t("detail.episodeMenu.resumeDownload")}
-                title={downloading ? t("detail.episodeMenu.pauseDownload") : t("detail.episodeMenu.resumeDownload")}
-                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent-text transition-colors hover:bg-accent/25"
-              >
-                {downloading ? <Pause className="h-3 w-3 fill-current" strokeWidth={0} /> : <Play className="h-3 w-3 fill-current" strokeWidth={0} />}
-              </button>
-            </>
+          {view === "tiles" && subtitle && <span className="mt-1.5 line-clamp-1 w-full select-text text-[11px] text-muted">{subtitle}</span>}
+          {view === "list" && (
+            <span className="flex min-w-0 flex-1 flex-col text-left">
+              <span className="line-clamp-1 select-text text-sm font-semibold text-text/90">{subtitle ?? t("detail.episodeFallback", { number: episode.number })}</span>
+              {/* What became of it, in words: the row has room for one short line and this is the one worth having. */}
+              {(watched || percent > 0 || isNext || isDownloaded || download?.status === "done") && (
+                <span className="mt-0.5 line-clamp-1 text-[11px] text-muted">
+                  {watched ? t("detail.episodeStatus.watched") : percent > 0 ? t("detail.episodeStatus.progress", { percent: Math.round(percent) }) : isNext ? t("detail.episodeStatus.next") : t("detail.episodeStatus.downloaded")}
+                </span>
+              )}
+            </span>
           )}
-          {!downloading && !paused && (
-            (isDownloaded || download?.status === "done") ? (
-              // Same slot, not two side-by-side icons - the downloaded checkmark sits where the
-              // hover-play affordance normally would, and hovering swaps one for the other in
-              // place (slide + fade) instead of just permanently crowding both in at once.
-              <span className="relative h-3.5 w-3.5 shrink-0">
-                <Download className="absolute inset-0 h-3.5 w-3.5 text-emerald-400 transition-all duration-200 group-hover:-translate-x-1 group-hover:opacity-0" strokeWidth={2.5} />
-                <Play className="absolute inset-0 h-3.5 w-3.5 translate-x-1 fill-current text-accent-text opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100" strokeWidth={0} />
+          {isFavorite && <Heart className={cn("h-3 w-3 shrink-0 fill-rose-400 text-rose-400", view === "tiles" && "absolute left-1.5 top-1.5")} strokeWidth={0} />}
+          <span className={cn("flex items-center gap-1.5", view === "tiles" ? "absolute right-1.5 top-1.5 gap-1" : "shrink-0")}>
+            {queued && <Clock className="h-3 w-3 text-muted" strokeWidth={2.25} />}
+            {(download?.status === "error" || download?.status === "unsupported") && <TriangleAlert className="h-3 w-3 text-rose-400" strokeWidth={2.5} />}
+            {(downloading || paused) && (
+              <>
+                <span className="text-[10px] font-semibold tabular-nums text-accent-text">{downloadPercent}%</span>
+                <button
+                  type="button"
+                  onClick={onTogglePause}
+                  aria-label={downloading ? t("detail.episodeMenu.pauseDownload") : t("detail.episodeMenu.resumeDownload")}
+                  title={downloading ? t("detail.episodeMenu.pauseDownload") : t("detail.episodeMenu.resumeDownload")}
+                  className="flex h-4 w-4 items-center justify-center rounded-full bg-accent/15 text-accent-text transition-colors hover:bg-accent/25"
+                >
+                  {downloading ? <Pause className="h-2.5 w-2.5 fill-current" strokeWidth={0} /> : <Play className="h-2.5 w-2.5 fill-current" strokeWidth={0} />}
+                </button>
+              </>
+            )}
+            {!downloading && !paused && (isDownloaded || download?.status === "done") && <Download className="h-3 w-3 text-emerald-400" strokeWidth={2.5} />}
+            {watched && <Check className="h-3 w-3 text-muted" strokeWidth={2.5} />}
+            {/* The list's own affordance: a play button that appears under the pointer. */}
+            {view === "list" && !downloading && !paused && (
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-accent-fg opacity-0 transition-opacity group-hover:opacity-100">
+                <Play className="h-3 w-3 fill-current" strokeWidth={0} />
               </span>
-            ) : (
-              (!download || download.status === "cancelled") && <Play className="h-3.5 w-3.5 shrink-0 fill-current text-accent-text opacity-0 transition-opacity group-hover:opacity-100" strokeWidth={0} />
-            )
-          )}
+            )}
+          </span>
           {(downloading || paused) ? (
             <div className="absolute inset-x-0 bottom-0 h-[3px] bg-text/10"><div className={cn("h-full bg-accent transition-[width]", paused && "opacity-50")} style={{ width: `${downloadPercent}%` }} /></div>
           ) : percent > 0 ? (
