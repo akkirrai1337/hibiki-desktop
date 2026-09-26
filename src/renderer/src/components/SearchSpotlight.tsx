@@ -186,7 +186,7 @@ function SpotlightPanel() {
             placeholder={t("catalog.searchPlaceholder")}
             aria-label={t("catalog.searchPlaceholder")}
             className={cn(
-              "h-14 w-full rounded-2xl border border-border bg-app-popover pl-14 text-base text-text shadow-2xl outline-none placeholder:text-muted focus:border-accent/60",
+              "h-14 w-full rounded-2xl bg-app-popover pl-14 text-base text-text shadow-2xl outline-none placeholder:text-muted",
               filterDefs.length ? "pr-56" : "pr-24",
             )}
             style={popoverTheme}
