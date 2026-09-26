@@ -34,15 +34,6 @@ import type { MarketplaceExtension, RepositoryFetchResult, SourceCapability } fr
 
 type Tab = "extensions" | "repositories";
 
-const LANGUAGE_NAMES: Record<string, { native: string; english: string }> = {
-  ru: { native: "русский", english: "Russian" },
-  uk: { native: "Українська", english: "Ukrainian" },
-  en: { native: "English", english: "English" },
-  pt: { native: "Português", english: "Portuguese" },
-  tr: { native: "Türkçe", english: "Turkish" },
-  th: { native: "ไทย", english: "Thai" },
-};
-
 const CAPABILITY_ICONS: Record<SourceCapability, typeof Sparkles> = {
   LATEST_RELEASES: Sparkles,
   PLAYBACK: Play,
@@ -91,8 +82,28 @@ const CAPABILITY_LABEL_KEYS: Record<SourceCapability, string> = {
   ACTIVITY_SYNC: "sources.capability.activitySync",
 };
 
+/**
+ * A language tag as people read it: its own name and the English one. The platform knows the names of
+ * every real language, so there is no list here to keep in step with the repositories; a tag it does
+ * not know is shown as the tag.
+ */
 function languageLabel(lang: string): { native: string; english: string } {
-  return LANGUAGE_NAMES[lang.toLowerCase()] ?? { native: lang.toUpperCase(), english: lang.toUpperCase() };
+  const tag = lang.replace("_", "-");
+  try {
+    const native = new Intl.DisplayNames([tag], { type: "language" }).of(tag);
+    const english = new Intl.DisplayNames(["en"], { type: "language" }).of(tag);
+    if (native && english && native.toLowerCase() !== tag.toLowerCase()) {
+      return { native: native.charAt(0).toLocaleUpperCase(tag) + native.slice(1), english };
+    }
+  } catch {
+    // Not a language tag at all (a repository's own label): fall through to the tag itself.
+  }
+  return { native: lang.toUpperCase(), english: lang.toUpperCase() };
+}
+
+/** The short code shown next to a version: the tag in capitals, with Ukrainian as UA (the country people know it by). */
+function languageBadge(lang: string): string {
+  return lang.toLowerCase() === "uk" ? "UA" : lang.toUpperCase();
 }
 
 function repositoryDisplayName(url: string): string {
@@ -680,7 +691,7 @@ function ExtensionCard({
             </div>
             <div className="flex items-center gap-1.5">
               <p className={cn("truncate text-[11px] font-medium", installedVersion && !upToDate ? "text-accent-text" : "text-muted")}>
-                {extension.lang.toUpperCase()} · {versionLabel}
+                {languageBadge(extension.lang)} · {versionLabel}
                 {extension.isNsfw && <span className="ml-1 font-bold text-rose-400">· {t("sources.nsfwBadge")}</span>}
               </p>
               {extension.capabilities.length > 0 && (
