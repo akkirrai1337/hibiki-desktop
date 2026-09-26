@@ -137,7 +137,7 @@ export function WatchFrameCard({ slot, sourceById, dateLabel, showWatchedBadge, 
           </div>
           <div className="mt-1.5 flex min-h-4 items-center gap-1.5 text-xs text-muted">
             {anime?.type && <span className="rounded-md bg-text/10 px-1.5 py-0.5 text-[10px] font-bold uppercase">{anime.type}</span>}
-            {anime?.year && <span>{anime.year}</span>}
+            {anime?.year ? <span>{anime.year}</span> : null}
             {rating != null && Number.isFinite(rating) && <span>{anime?.type || anime?.year ? "· " : ""}★ {Number.isInteger(rating) ? rating : rating.toFixed(2)}</span>}
           </div>
         </div>
