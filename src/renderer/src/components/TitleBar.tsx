@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRouter, Link } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, Search, Home, Minus, Square, Copy, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, RotateCw, Search, Home, Minus, Square, Copy, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { hibiki } from "@/lib/hibiki";
 import { useUiStore } from "@/stores/uiStore";
@@ -102,6 +102,14 @@ export function TitleBar() {
           className="app-no-drag flex h-6 w-6 items-center justify-center rounded-full text-muted transition-colors hover:bg-text/10 hover:text-text"
         >
           <ChevronRight className="h-4 w-4" strokeWidth={2.5} />
+        </button>
+        <button
+          onClick={() => window.location.reload()}
+          aria-label="Reload"
+          title="Reload (Ctrl+R)"
+          className="app-no-drag flex h-6 w-6 items-center justify-center rounded-full text-muted transition-colors hover:bg-text/10 hover:text-text"
+        >
+          <RotateCw className="h-[15px] w-[15px]" strokeWidth={2.25} />
         </button>
       </div>
 
