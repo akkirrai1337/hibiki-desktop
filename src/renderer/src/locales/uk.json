@@ -159,7 +159,10 @@
       "progress": "Переглянуто {{percent}}%",
       "next": "Наступна",
       "downloaded": "Завантажено"
-    }
+    },
+    "relatedHere": "Ви тут",
+    "relatedShowMore": "Показати ще {{count}}",
+    "relatedShowLess": "Згорнути"
   },
   "watch": {
     "loadingLink": "Завантаження посилання…",

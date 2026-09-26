@@ -159,7 +159,10 @@
       "progress": "Просмотрено {{percent}}%",
       "next": "Следующая",
       "downloaded": "Скачано"
-    }
+    },
+    "relatedHere": "Вы здесь",
+    "relatedShowMore": "Показать ещё {{count}}",
+    "relatedShowLess": "Свернуть"
   },
   "watch": {
     "loadingLink": "Загрузка ссылки…",

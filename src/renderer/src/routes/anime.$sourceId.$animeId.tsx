@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { AnimatePresence, motion } from "motion/react";
 import * as ContextMenu from "@radix-ui/react-context-menu";
-import { ArrowUpDown, LayoutGrid, List, Mic, Play, Bookmark, Check, ChevronDown, Clock, Download, Eraser, ExternalLink, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
+import { ArrowUpDown, ChevronRight, LayoutGrid, List, Mic, Play, Bookmark, Check, ChevronDown, Clock, Download, Eraser, ExternalLink, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
 import { CommentsSection } from "@/components/CommentsSection";
 import { RatingButton, SourceRatings } from "@/components/RatingButton";
 import { hibiki } from "@/lib/hibiki";
@@ -760,19 +760,9 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
         </div>
       </div>
     </div>
-    {/* A sibling of the poster+text row above, not nested inside the text column with it - now
-        that its own cards are full-size (see RELATED_CARD_WIDTH_CLASSES), squeezing the strip into
-        that narrower column left it awkwardly indented under the metadata rather than reading as
-        its own section. Full section width instead lines its left edge up with the poster's own,
-        directly below it, the way the user actually asked for this to look. */}
-    <div className="mt-6">
-      <TitleStrip
-        items={related}
-        sourceId={sourceId}
-        currentAnimeId={animeId}
-        heading={<p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">{t("detail.relatedTitles")}</p>}
-      />
-    </div>
+    {related.length > 0 && <div className="mt-8">
+      <RelatedList items={related} sourceId={sourceId} currentAnimeId={animeId} />
+    </div>}
   </section>;
 }
 
@@ -1038,5 +1028,72 @@ function GenreChip({ genre, sourceId }: { genre: string; sourceId: string }) {
     >
       {genre}
     </button>
+  );
+}
+
+// Six fill two rows of the widest layout (three columns) and three of the usual two.
+const RELATED_COLLAPSED_COUNT = 6;
+
+// The franchise around this title (seasons, films, spin-offs) as a short list of continuations, not a
+// second row of posters: what tells them apart is their type, year and status, which a poster with a
+// near-identical name under it does not say. The current title stays in place - it shows where in the
+// order you are - marked, and not a link.
+function RelatedList({ items, sourceId, currentAnimeId }: { items: RelatedAnimeTitle[]; sourceId: string; currentAnimeId: string }) {
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? items : items.slice(0, RELATED_COLLAPSED_COUNT);
+  // The current title never hides behind the fold: cut off, the list would not say where you are.
+  const currentIndex = items.findIndex((item) => item.id === currentAnimeId);
+  const visible = !expanded && currentIndex >= RELATED_COLLAPSED_COUNT ? [...shown.slice(0, RELATED_COLLAPSED_COUNT - 1), items[currentIndex]] : shown;
+  return (
+    <div>
+      <h2 className="mb-3 flex items-baseline gap-2 text-xl font-bold tracking-[-.02em] text-text">
+        {t("detail.relatedTitles")}
+        <span className="text-sm font-semibold tabular-nums text-muted">{items.length}</span>
+      </h2>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(360px,1fr))] gap-2">
+        {visible.map((item) => {
+          const isCurrent = item.id === currentAnimeId;
+          const status = item.status ? (STATUS_ID_ALIASES[item.status] ?? item.status) : null;
+          const meta = [
+            item.type ? item.type.toUpperCase() : null,
+            item.year ? String(item.year) : null,
+            status ? t(`detail.status.${status}`, { defaultValue: status }) : null,
+          ].filter(Boolean).join(" · ");
+          const body = (
+            <>
+              {isCurrent && <span className="absolute inset-y-2 left-0 w-[3px] rounded-r-full bg-accent" />}
+              <div className="h-[72px] w-12 shrink-0 overflow-hidden rounded-md bg-surface ring-1 ring-border">
+                {item.posterUrl && <SmoothImage src={item.posterUrl} alt={item.title} className="h-full w-full object-cover" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className={cn("line-clamp-2 text-sm font-semibold leading-snug", isCurrent ? "text-text" : "text-text/90 group-hover:text-text")}>{item.title}</p>
+                {meta && <p className="mt-1 line-clamp-1 text-xs text-muted">{meta}</p>}
+              </div>
+              {isCurrent ? (
+                <span className="shrink-0 rounded-md bg-accent/15 px-2 py-1 text-[11px] font-semibold text-accent-text">{t("detail.relatedHere")}</span>
+              ) : (
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-text" strokeWidth={2.25} />
+              )}
+            </>
+          );
+          const rowClass = "group relative flex items-center gap-3.5 rounded-xl border p-2.5 pl-3.5 transition-colors";
+          return isCurrent ? (
+            <div key={item.id} title={t("detail.relatedCurrentTitle")} className={cn(rowClass, "border-accent/30 bg-accent/[.06]")}>{body}</div>
+          ) : (
+            <Link key={item.id} to="/anime/$sourceId/$animeId" params={{ sourceId, animeId: item.id }} className={cn(rowClass, "border-border bg-text/[.03] hover:border-accent/40 hover:bg-text/[.06]")}>{body}</Link>
+          );
+        })}
+      </div>
+      {items.length > RELATED_COLLAPSED_COUNT && (
+        <button
+          onClick={() => setExpanded((open) => !open)}
+          className="mt-2 flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-muted transition-colors hover:text-text"
+        >
+          {expanded ? t("detail.relatedShowLess") : t("detail.relatedShowMore", { count: items.length - visible.length })}
+          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} strokeWidth={2.5} />
+        </button>
+      )}
+    </div>
   );
 }

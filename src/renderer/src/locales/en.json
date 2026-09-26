@@ -159,7 +159,10 @@
       "progress": "{{percent}}% watched",
       "next": "Up next",
       "downloaded": "Downloaded"
-    }
+    },
+    "relatedHere": "You are here",
+    "relatedShowMore": "Show {{count}} more",
+    "relatedShowLess": "Show less"
   },
   "watch": {
     "loadingLink": "Loading link…",
