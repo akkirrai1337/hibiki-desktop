@@ -1,0 +1,442 @@
+// Source probe: runs a scripted extension through the same executor the app uses and reports what
+// actually works, with timings - so writing or fixing a source starts from facts, not guesses.
+//
+//   npx tsx scripts/probe-source.ts <id|all> [--dir <extensions dir>] [--json] [--skip-playback]
+//   npx tsx scripts/probe-source.ts discover <url>
+//
+// What it checks per source:
+//   manifest   declared filters/sorts vs. what getSettings() really offers (drift = a control that
+//              is hidden or a filter that silently does nothing)
+//   filters    each option is sent as a real search and the result ids are compared with an
+//              unfiltered baseline: APPLIED / NO-EFFECT / EMPTY / ERROR
+//   playback   first title -> groups -> first episode -> player links, then every EMBED link is
+//              matched to a resolver by host and resolved (NODE resolvers only; BROWSER ones need
+//              the app), each timed, and the first stream is fetched to prove it is reachable
+//
+// It runs in plain Node: fetch() falls back to sync-fetch (see globals.ts), so a source that needs
+// challenge()/browserFetch() is reported as "needs app" rather than failing the whole run.
+import fs from "node:fs";
+import path from "node:path";
+import { performance } from "node:perf_hooks";
+import { fileURLToPath } from "node:url";
+import * as cheerio from "cheerio";
+import { executeExtensionCall } from "../src/main/extensions/execute";
+import type { ExtensionMethod } from "../src/main/extensions/execute";
+import { filterValuesToLegacy, legacyToFilterDefs } from "../src/main/extensions/legacyFilters";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const DEFAULT_DIR = path.resolve(here, "../../hibiki-sources/extensions");
+
+type Status = "ok" | "warn" | "fail" | "skip";
+interface Check {
+  area: string;
+  name: string;
+  status: Status;
+  ms?: number;
+  detail?: string;
+}
+
+interface Ctx {
+  dir: string;
+  resolverDir: string;
+  checks: Check[];
+}
+
+// ---------------------------------------------------------------------------------------------
+
+function timed<T>(fn: () => T): { value?: T; error?: string; ms: number } {
+  const start = performance.now();
+  try {
+    return { value: fn(), ms: Math.round(performance.now() - start) };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error), ms: Math.round(performance.now() - start) };
+  }
+}
+
+function invoke<T>(dir: string, sourceId: string, method: ExtensionMethod, ...args: unknown[]) {
+  return timed(() => executeExtensionCall({ extensionsDir: dir, sourceId, method, args }) as T);
+}
+
+function push(ctx: Ctx, area: string, name: string, status: Status, ms?: number, detail?: string) {
+  ctx.checks.push({ area, name, status, ms, detail });
+}
+
+const needsApp = (message: string) => /challenge|browserFetch|not implemented|bridge/i.test(message);
+
+interface Manifest {
+  id: string;
+  supportedSorts?: string[];
+  supportedFilters?: string[];
+  customFilters?: boolean;
+  resolverDependencies?: string[];
+  capabilities?: string[];
+}
+interface Option { id: string; title: string }
+interface FilterDef { id: string; title: string; type: "select" | "multi" | "tristate" | "text" | "range"; options?: Option[] }
+interface Settings {
+  sortOptions?: Option[];
+  typeOptions?: Option[];
+  statusOptions?: Option[];
+  genreOptions?: Option[];
+  filters?: FilterDef[];
+}
+type Title = { id: string; sourceId?: string; name?: string; russianName?: string; englishName?: string; originalName?: string };
+
+const titleOf = (t: Title) => t.englishName || t.russianName || t.originalName || t.name || t.id;
+const idsOf = (list: Title[]) => list.map((t) => t.id);
+
+function sameSet(a: string[], b: string[]) {
+  return a.length === b.length && a.every((id, i) => id === b[i]);
+}
+
+// ---------------------------------------------------------------------------------------------
+
+function probeManifest(ctx: Ctx, manifest: Manifest, settings: Settings | null) {
+  if (!settings) return;
+  const declaredSorts = manifest.supportedSorts ?? [];
+  const sortIds = (settings.sortOptions ?? []).map((o) => o.id.toUpperCase());
+  for (const sort of declaredSorts) {
+    if (sortIds.length > 0 && !sortIds.includes(sort)) push(ctx, "manifest", `sort ${sort}`, "warn", undefined, "declared, absent from getSettings().sortOptions");
+  }
+
+  if (manifest.customFilters) {
+    const defs = settings.filters ?? [];
+    push(ctx, "manifest", "filters", defs.length ? "ok" : "warn", undefined, defs.length ? defs.map((d) => `${d.id}:${d.type}`).join(", ") : "customFilters is true but getSettings().filters is empty");
+    for (const def of defs) {
+      if ((def.type === "select" || def.type === "multi" || def.type === "tristate") && !(def.options?.length)) push(ctx, "manifest", `filter ${def.id}`, "warn", undefined, `${def.type} filter without options`);
+    }
+    return;
+  }
+
+  // Legacy contract (typeOptions/... + supportedFilters): drift between the two is a control that
+  // is hidden, or a filter that is offered but never drawn.
+  const declaredFilters = manifest.supportedFilters ?? [];
+  const optionCount: Record<string, number> = {
+    TYPE: settings.typeOptions?.length ?? 0,
+    STATUS: settings.statusOptions?.length ?? 0,
+    INCLUDED_GENRES: settings.genreOptions?.length ?? 0,
+  };
+  for (const kind of ["TYPE", "STATUS", "INCLUDED_GENRES"]) {
+    const declared = declaredFilters.includes(kind);
+    const has = optionCount[kind] > 0;
+    if (declared && !has) push(ctx, "manifest", kind, "warn", undefined, "declared, but getSettings() offers no options - the UI hides it");
+    else if (!declared && has) push(ctx, "manifest", kind, "warn", undefined, `getSettings() offers ${optionCount[kind]} options but the manifest does not declare it - never shown`);
+  }
+  if (declaredFilters.length === 0) push(ctx, "manifest", "filters", "warn", undefined, "no filters of any kind");
+}
+
+/** The filter definitions the host would show for this source, and the request body for a set of values. */
+function hostView(manifest: Manifest, settings: Settings) {
+  const defs: FilterDef[] = manifest.customFilters ? (settings.filters ?? []) : (legacyToFilterDefs(settings, manifest.supportedFilters ?? []) as FilterDef[]);
+  const toRequest = (filters: Record<string, unknown>): Record<string, unknown> =>
+    manifest.customFilters ? { filters } : filterValuesToLegacy(filters as never, settings);
+  return { defs, toRequest };
+}
+
+function probeFilters(ctx: Ctx, sourceId: string, manifest: Manifest, settings: Settings) {
+  const base = invoke<Title[]>(ctx.dir, sourceId, "search", { limit: 20 });
+  if (base.error) {
+    push(ctx, "filters", "baseline (no query)", needsApp(base.error) ? "skip" : "warn", base.ms, base.error);
+    return;
+  }
+  const baseIds = idsOf(base.value!);
+  push(ctx, "filters", "baseline (no query)", baseIds.length > 0 ? "ok" : "warn", base.ms, `${baseIds.length} results`);
+  if (baseIds.length === 0) return;
+
+  // A filter that returns the baseline may simply match the default view (status=released on a
+  // catalogue that lists finished shows first). So a no-effect result only counts as a failure
+  // when no sibling option of the same filter changed anything either.
+  const noEffect: Array<{ index: number; group: string }> = [];
+  const applied = new Set<string>();
+  const attempt = (group: string, label: string, request: Record<string, unknown>): string[] => {
+    const r = invoke<Title[]>(ctx.dir, sourceId, "search", { limit: 20, ...request });
+    if (r.error) { push(ctx, "filters", label, "fail", r.ms, r.error); return []; }
+    const ids = idsOf(r.value!);
+    if (ids.length === 0) { push(ctx, "filters", label, "warn", r.ms, "EMPTY (valid filter, or a broken alias?)"); return ids; }
+    if (sameSet(ids, baseIds)) {
+      noEffect.push({ index: ctx.checks.length, group });
+      push(ctx, "filters", label, "fail", r.ms, "NO-EFFECT: same results as the unfiltered baseline");
+      return ids;
+    }
+    applied.add(group);
+    push(ctx, "filters", label, "ok", r.ms, `APPLIED (${ids.length} results)`);
+    return ids;
+  };
+
+  const { defs, toRequest } = hostView(manifest, settings);
+  for (const def of defs) {
+    const group = def.id;
+    const options = (def.options ?? []).slice(0, 2);
+    switch (def.type) {
+      case "select":
+        for (const o of options) attempt(group, `${def.id}=${o.id}`, toRequest({ [def.id]: o.id }));
+        break;
+      case "multi":
+        for (const o of options) attempt(group, `${def.id}=${o.id}`, toRequest({ [def.id]: [o.id] }));
+        break;
+      case "tristate":
+        {
+          // Excluding an option only shows if the baseline contains some of it, so exclude the one
+          // whose include-search overlaps the baseline the most (skip when none does).
+          let best: { id: string; overlap: number } | null = null;
+          for (const o of options) {
+            const ids = attempt(group, `${def.id}=${o.id}`, toRequest({ [def.id]: { include: [o.id], exclude: [] } }));
+            const overlap = ids.filter((id) => baseIds.includes(id)).length;
+            if (overlap > 0 && (!best || overlap > best.overlap)) best = { id: o.id, overlap };
+          }
+          if (best) attempt(`${def.id}-exclude`, `${def.id} exclude ${best.id}`, toRequest({ [def.id]: { include: [], exclude: [best.id] } }));
+          else if (options.length > 0) push(ctx, "filters", `${def.id} exclude`, "skip", undefined, "not verifiable: no tried option appears in the baseline results");
+        }
+        break;
+      case "range":
+        attempt(group, `${def.id} 2015-2016`, toRequest({ [def.id]: { from: 2015, to: 2016 } }));
+        break;
+      case "text":
+        break;
+    }
+  }
+
+  // What the app really sends is the manifest's enum name (RATING, TITLE, ...), not the source's
+  // own sortOptions id - see catalog.tsx / home.tsx.
+  for (const sort of (manifest.supportedSorts ?? []).slice(0, 5)) {
+    if (sort === "RELEVANCE") continue;
+    attempt("sort", `sort=${sort}`, { sort });
+  }
+
+  for (const { index, group } of noEffect) {
+    if (!applied.has(group)) continue;
+    ctx.checks[index].status = "warn";
+    ctx.checks[index].detail = "same as baseline, but another option of this filter did change results - probably matches the default view";
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+
+interface ResolverInfo { id: string; hosts: string[]; runtime: string }
+
+function loadResolvers(resolverDir: string): ResolverInfo[] {
+  if (!fs.existsSync(resolverDir)) return [];
+  return fs
+    .readdirSync(resolverDir)
+    .filter((f) => f.endsWith(".manifest.json"))
+    .map((f) => JSON.parse(fs.readFileSync(path.join(resolverDir, f), "utf-8")))
+    .map((m) => ({ id: m.id as string, hosts: (m.hosts ?? []) as string[], runtime: (m.runtime ?? "NODE") as string }));
+}
+
+function resolverFor(resolvers: ResolverInfo[], url: string) {
+  let host = "";
+  try { host = new URL(url).hostname.toLowerCase(); } catch { return null; }
+  return resolvers.find((r) => r.hosts.some((h) => host === h || host.endsWith(`.${h}`))) ?? null;
+}
+
+async function reachable(url: string, headers: Record<string, string> | null | undefined) {
+  const started = performance.now();
+  try {
+    const res = await fetch(url, { headers: { ...(headers ?? {}), Range: "bytes=0-1023" }, signal: AbortSignal.timeout(10_000) });
+    return { ok: res.status < 400, status: res.status, ms: Math.round(performance.now() - started) };
+  } catch (error) {
+    return { ok: false, status: 0, ms: Math.round(performance.now() - started), error: String(error) };
+  }
+}
+
+type Link = { url: string; type: string; playerName?: string | null; translation?: string | null; headers?: Record<string, string> | null; quality?: string | null };
+
+async function probePlayback(ctx: Ctx, sourceId: string, manifest: Manifest) {
+  const latest = invoke<Title[]>(ctx.dir, sourceId, "latest", 12);
+  if (latest.error) push(ctx, "catalog", "latest(12)", needsApp(latest.error) ? "skip" : "fail", latest.ms, latest.error);
+  else push(ctx, "catalog", "latest(12)", latest.value!.length ? "ok" : "warn", latest.ms, `${latest.value!.length} titles`);
+
+  let pool = latest.value ?? [];
+  if (pool.length === 0) {
+    const s = invoke<Title[]>(ctx.dir, sourceId, "search", { limit: 12 });
+    pool = s.value ?? [];
+  }
+  if (pool.length === 0) return;
+
+  const query = titleOf(pool[0]).split(/\s+/)[0];
+  const search = invoke<Title[]>(ctx.dir, sourceId, "search", { query, limit: 10 });
+  if (search.error) push(ctx, "catalog", `search("${query}")`, "fail", search.ms, search.error);
+  else push(ctx, "catalog", `search("${query}")`, search.value!.length ? "ok" : "warn", search.ms, `${search.value!.length} titles`);
+
+  // First title that yields an episode. Some catalog entries (announcements) have none.
+  const resolvers = loadResolvers(ctx.resolverDir);
+  for (const title of pool.slice(0, 4)) {
+    const groups = invoke<Array<{ id: string; title: string; episodes: Array<{ id: string; number: number }> }>>(ctx.dir, sourceId, "getPlaybackGroups", title.id);
+    if (groups.error) {
+      push(ctx, "playback", `getPlaybackGroups(${title.id})`, needsApp(groups.error) ? "skip" : "fail", groups.ms, groups.error);
+      continue;
+    }
+    const group = groups.value!.find((g) => g.episodes.length > 0);
+    if (!group) {
+      push(ctx, "playback", `getPlaybackGroups(${title.id})`, "warn", groups.ms, "no episodes");
+      continue;
+    }
+    const episodeCount = groups.value!.reduce((n, g) => n + g.episodes.length, 0);
+    push(ctx, "playback", `getPlaybackGroups(${title.id})`, "ok", groups.ms, `${groups.value!.length} groups, ${episodeCount} episodes`);
+
+    const episode = group.episodes[0];
+    const links = invoke<Link[]>(ctx.dir, sourceId, "getPlayerLinks", title.id, group.id, episode.id);
+    if (links.error) return push(ctx, "playback", "getPlayerLinks", needsApp(links.error) ? "skip" : "fail", links.ms, links.error);
+    const list = links.value!;
+    const embeds = list.filter((l) => l.type === "EMBED").length;
+    push(ctx, "playback", "getPlayerLinks", list.length ? "ok" : "fail", links.ms, `${list.length} links (${list.length - embeds} direct, ${embeds} embed)`);
+
+    // Unique host x translation is enough: a dozen mirrors of one provider prove nothing extra.
+    const seen = new Set<string>();
+    for (const link of list) {
+      let host = "?";
+      try { host = new URL(link.url).hostname; } catch { /* keep "?" */ }
+      const key = `${link.type}|${host}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const label = `${link.type} ${host}${link.playerName ? ` [${link.playerName}]` : ""}`;
+
+      let streams: Link[] = [link];
+      if (link.type === "EMBED") {
+        const resolver = resolverFor(resolvers, link.url);
+        if (!resolver) { push(ctx, "resolve", label, "warn", undefined, "no resolver for this host - would fall back to an iframe"); continue; }
+        if (!(manifest.resolverDependencies ?? []).includes(resolver.id)) push(ctx, "manifest", `resolver ${resolver.id}`, "warn", undefined, "used by a link but missing from resolverDependencies");
+        if (resolver.runtime === "BROWSER") { push(ctx, "resolve", label, "skip", undefined, `${resolver.id}: BROWSER runtime (hidden window, ~2-5s) - run inside the app`); continue; }
+        const r = invoke<Array<Link & { type: string }>>(ctx.resolverDir, resolver.id, "resolve", JSON.stringify(link));
+        if (r.error) { push(ctx, "resolve", label, needsApp(r.error) ? "skip" : "fail", r.ms, `${resolver.id}: ${r.error}`); continue; }
+        streams = r.value!;
+        push(ctx, "resolve", label, streams.length ? "ok" : "fail", r.ms, `${resolver.id}: ${streams.length} streams [${streams.map((s) => s.quality ?? "?").join(", ")}]`);
+        if (streams.length === 0) continue;
+      }
+      const first = streams[0];
+      if (/^DIRECT_|^HLS$|^MP4$|^DASH$/.test(first.type)) {
+        const reach = await reachable(first.url, first.headers);
+        push(ctx, "stream", label, reach.ok ? "ok" : "fail", reach.ms, `HTTP ${reach.status || "ERR"} ${first.url.slice(0, 90)}`);
+      }
+    }
+    return;
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+
+async function probeSource(dir: string, sourceId: string, skipPlayback: boolean): Promise<Check[]> {
+  const ctx: Ctx = { dir, resolverDir: path.join(dir, "extractors"), checks: [] };
+  const manifestPath = path.join(dir, `${sourceId}.manifest.json`);
+  if (!fs.existsSync(manifestPath)) throw new Error(`No manifest at ${manifestPath}`);
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8")) as Manifest;
+
+  const settingsCall = invoke<Settings>(dir, sourceId, "getSettings");
+  if (settingsCall.error) push(ctx, "manifest", "getSettings()", needsApp(settingsCall.error) ? "skip" : "fail", settingsCall.ms, settingsCall.error);
+  const settings = settingsCall.value ?? null;
+  if (settings) {
+    push(ctx, "manifest", "getSettings()", "ok", settingsCall.ms,
+      `sorts ${settings.sortOptions?.length ?? 0}, types ${settings.typeOptions?.length ?? 0}, statuses ${settings.statusOptions?.length ?? 0}, genres ${settings.genreOptions?.length ?? 0}, custom ${settings.filters?.length ?? 0}`);
+    probeManifest(ctx, manifest, settings);
+    probeFilters(ctx, sourceId, manifest, settings);
+  }
+  if (!skipPlayback) await probePlayback(ctx, sourceId, manifest);
+  return ctx.checks;
+}
+
+const ICON: Record<Status, string> = { ok: "PASS", warn: "WARN", fail: "FAIL", skip: "SKIP" };
+
+function printReport(sourceId: string, checks: Check[]) {
+  console.log(`\n=== ${sourceId} ${"=".repeat(Math.max(3, 60 - sourceId.length))}`);
+  for (const c of checks) {
+    const ms = c.ms === undefined ? "      " : `${String(c.ms).padStart(5)}ms`;
+    console.log(`  ${ICON[c.status]}  ${c.area.padEnd(9)} ${ms}  ${c.name}${c.detail ? `  - ${c.detail}` : ""}`);
+  }
+  const count = (s: Status) => checks.filter((c) => c.status === s).length;
+  console.log(`  -> ${count("ok")} pass, ${count("warn")} warn, ${count("fail")} fail, ${count("skip")} skip`);
+}
+
+// ---------------------------------------------------------------------------------------------
+// discover: what does this site offer that a source could use?
+
+const KNOWN_EMBED_HOSTS = ["kodik", "aniboom", "alloha", "vk.com", "vkvideo", "ok.ru", "sibnet", "dailymotion", "ashdi", "megaplay", "vidwish", "krussdomi", "moonanime", "streamwish", "filemoon", "mixdrop", "doodstream", "voe.sx", "streamtape", "mp4upload", "megacloud", "rapid-cloud", "kwik"];
+
+async function discover(rawUrl: string) {
+  const url = new URL(rawUrl).toString();
+  console.log(`Discovering ${url}\n`);
+  const started = performance.now();
+  const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36", "Accept-Language": "en-US,en;q=0.9" }, redirect: "follow" });
+  const html = await res.text();
+  const ms = Math.round(performance.now() - started);
+  const cloudflare = res.headers.get("cf-mitigated") === "challenge" || /Just a moment|cf-chl|challenge-platform/i.test(html) || (res.status === 403 && /cloudflare/i.test(res.headers.get("server") ?? ""));
+  console.log(`HTTP ${res.status} in ${ms}ms, ${html.length} bytes, server: ${res.headers.get("server") ?? "?"}${res.redirected ? `, redirected to ${res.url}` : ""}`);
+  console.log(`Cloudflare challenge: ${cloudflare ? "YES - a source will need challenge()" : "no"}`);
+
+  const $ = cheerio.load(html);
+  const engine: string[] = [];
+  if (/dle_root|DataLife Engine|\/engine\/ajax\//i.test(html)) engine.push("DataLife Engine (search: /index.php?do=search, ajax under /engine/ajax)");
+  if (/wp-content|wp-json|dooplay/i.test(html)) engine.push(`WordPress${/dooplay/i.test(html) ? " + DooPlay theme (search: /?s=, API: /wp-json/dooplayer/)" : ""}`);
+  if ($("script#__NEXT_DATA__").length) engine.push("Next.js (data is inline JSON in #__NEXT_DATA__ - no HTML scraping needed)");
+  if (/window\.__NUXT__|__NUXT_DATA__/.test(html)) engine.push("Nuxt (inline state payload)");
+  if (/<script[^>]+type="application\/json"/i.test(html)) engine.push("inline application/json blocks present");
+  console.log(`Engine: ${engine.join("; ") || "unknown"}`);
+
+  const apis = new Set<string>();
+  for (const m of html.matchAll(/["'`](\/(?:api|ajax|engine\/ajax|wp-json)\/[A-Za-z0-9_\-./{}$?=&]*)["'`]/g)) apis.add(m[1]);
+  if (apis.size) console.log(`\nAPI paths mentioned in the page (${apis.size}):\n  ${[...apis].slice(0, 25).join("\n  ")}`);
+
+  const controls: string[] = [];
+  $("select[name]").each((_, el) => {
+    const options = $(el).find("option").map((__, o) => $(o).attr("value")).get().filter(Boolean);
+    controls.push(`select  ${$(el).attr("name")}  (${options.length} options: ${options.slice(0, 6).join(", ")}${options.length > 6 ? ", ..." : ""})`);
+  });
+  const checkboxNames = new Map<string, number>();
+  $("input[type=checkbox][name], input[type=radio][name]").each((_, el) => {
+    const name = $(el).attr("name")!;
+    checkboxNames.set(name, (checkboxNames.get(name) ?? 0) + 1);
+  });
+  for (const [name, n] of checkboxNames) controls.push(`choice  ${name}  (${n} inputs)`);
+  const facets = new Set<string>();
+  $("a[href]").each((_, el) => {
+    const m = ($(el).attr("href") ?? "").match(/[?&](genre|genres|year|season|status|type|category|producer|sort|order|format)(?:\[\])?=([^&]+)/i) ?? ($(el).attr("href") ?? "").match(/\/(genre|genres|year|season|status|type|category|producer|tag)\/([^/?#]+)/i);
+    if (m) facets.add(`${m[1].toLowerCase()}`);
+  });
+  if (facets.size) controls.push(`link facets: ${[...facets].join(", ")}`);
+  console.log(`\nFilter-like controls (${controls.length}):\n  ${controls.slice(0, 30).join("\n  ") || "(none in the server-rendered HTML - filters may be client-side or in an API)"}`);
+
+  const hosts = new Map<string, string>();
+  $("iframe[src], iframe[data-src], [data-embed], [data-src*='//']").each((_, el) => {
+    const raw = $(el).attr("src") ?? $(el).attr("data-src") ?? $(el).attr("data-embed");
+    if (!raw) return;
+    try { hosts.set(new URL(raw, url).hostname, raw); } catch { /* not a URL */ }
+  });
+  for (const known of KNOWN_EMBED_HOSTS) if (html.toLowerCase().includes(known)) hosts.set(known, "(mentioned in page source)");
+  if (hosts.size) console.log(`\nPlayer hosts:\n  ${[...hosts].map(([h, u]) => `${h}  ${u.slice(0, 80)}`).join("\n  ")}`);
+
+  const search = $("form[action*=search], form[action*='?s'], input[type=search], input[name=q], input[name=story], input[name=s], input[name=query]").first();
+  if (search.length) console.log(`\nSearch input: <${search.prop("tagName")?.toLowerCase()} name="${search.attr("name") ?? ""}" action="${search.attr("action") ?? search.closest("form").attr("action") ?? ""}">`);
+}
+
+// ---------------------------------------------------------------------------------------------
+
+async function main() {
+  const argv = process.argv.slice(2);
+  if (argv[0] === "discover") {
+    if (!argv[1]) throw new Error("usage: probe-source.ts discover <url>");
+    return discover(argv[1]);
+  }
+  const flag = (name: string) => argv.includes(name);
+  const dirIndex = argv.indexOf("--dir");
+  const dir = dirIndex >= 0 ? path.resolve(argv[dirIndex + 1]) : DEFAULT_DIR;
+  const target = argv.find((a, i) => !a.startsWith("--") && argv[i - 1] !== "--dir");
+  if (!target) {
+    console.error("usage: probe-source.ts <id|all> [--dir <extensions dir>] [--json] [--skip-playback]\n       probe-source.ts discover <url>");
+    process.exit(2);
+  }
+  const ids = target === "all"
+    ? fs.readdirSync(dir).filter((f) => f.endsWith(".manifest.json")).map((f) => f.replace(/\.manifest\.json$/, ""))
+    : [target];
+
+  const all: Record<string, Check[]> = {};
+  for (const id of ids) {
+    all[id] = await probeSource(dir, id, flag("--skip-playback"));
+    if (!flag("--json")) printReport(id, all[id]);
+  }
+  if (flag("--json")) console.log(JSON.stringify(all, null, 2));
+  if (Object.values(all).some((checks) => checks.some((c) => c.status === "fail"))) process.exitCode = 1;
+}
+
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : error);
+  process.exit(2);
+});

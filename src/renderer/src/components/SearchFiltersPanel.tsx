@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { motion } from "motion/react";
@@ -7,22 +7,23 @@ import { cn } from "@/lib/cn";
 import { usePopoverTheme } from "@/lib/usePopoverTheme";
 import {
   EMPTY_SEARCH_FILTERS as EMPTY_DRAFT,
-  FILTER_YEAR_MAX,
-  FILTER_YEAR_MIN,
-  chipState,
-  cycleChip,
-  filterTypeOptions,
+  asList,
+  asRange,
+  cycleTristate,
   prettifyStatusLabel,
   prettifyTypeLabel,
+  tristateOf,
+  withFilterValue,
+  type ChipState,
   type SearchFilters,
 } from "@/lib/searchFilters";
-import type { SearchFilterCatalog, SearchFilterKind, SearchFilterOption } from "@shared/types";
+import type { FilterValue, SearchFilterCatalog, SearchFilterDef, SearchFilterOption } from "@shared/types";
 
-// Same grouping the Android app uses for its genre picker - a long flat chip wall is unscannable,
-// alphabetical letter headers make it a lot easier to find one genre in a list of 50+.
-const COLLAPSED_GENRE_GROUPS = 3;
+// A long flat chip wall is unscannable; past this many options the letters give it some structure.
+const GROUPED_OPTION_THRESHOLD = 24;
+const COLLAPSED_GROUPS = 3;
 
-function groupGenresByLetter(options: SearchFilterOption[]): { letter: string; options: SearchFilterOption[] }[] {
+function groupByLetter(options: SearchFilterOption[]): { letter: string; options: SearchFilterOption[] }[] {
   const byLetter = new Map<string, SearchFilterOption[]>();
   for (const option of options) {
     const letter = (option.title.trim()[0] ?? "#").toUpperCase();
@@ -33,9 +34,10 @@ function groupGenresByLetter(options: SearchFilterOption[]): { letter: string; o
     .map(([letter, groupOptions]) => ({ letter, options: [...groupOptions].sort((a, b) => a.title.localeCompare(b.title, "ru")) }));
 }
 
+// The panel knows nothing about what a filter *means*: it draws each of the source's declared
+// filters from its type and hands the picked value back under the filter's id.
 export function SearchFiltersPanel({
   anchor,
-  supportedFilters,
   catalog,
   loading,
   filters,
@@ -44,8 +46,7 @@ export function SearchFiltersPanel({
 }: {
   // Screen coordinates (from getBoundingClientRect) of the search box this panel hangs off of.
   anchor: { left: number; bottom: number };
-  supportedFilters: SearchFilterKind[];
-  catalog: SearchFilterCatalog | undefined;
+  catalog: Pick<SearchFilterCatalog, "filters"> | undefined;
   loading: boolean;
   filters: SearchFilters;
   onApply: (filters: SearchFilters) => void;
@@ -55,16 +56,6 @@ export function SearchFiltersPanel({
   const [draft, setDraft] = useState(filters);
   const popoverTheme = usePopoverTheme();
   useEffect(() => setDraft(filters), [filters]);
-  const [genresExpanded, setGenresExpanded] = useState(false);
-
-  const supports = (kind: SearchFilterKind) => supportedFilters.includes(kind);
-  const typeOptions = filterTypeOptions(catalog?.typeOptions ?? []);
-  const showType = supports("TYPE") && typeOptions.length > 0;
-  const showStatus = supports("STATUS") && (catalog?.statusOptions.length ?? 0) > 0;
-  const showGenres = supports("INCLUDED_GENRES") && (catalog?.genreOptions.length ?? 0) > 0;
-  const showYear = supports("YEAR_RANGE");
-  const genreGroups = useMemo(() => groupGenresByLetter(catalog?.genreOptions ?? []), [catalog?.genreOptions]);
-  const visibleGenreGroups = genresExpanded ? genreGroups : genreGroups.slice(0, COLLAPSED_GENRE_GROUPS);
 
   return createPortal(
     <>
@@ -94,76 +85,15 @@ export function SearchFiltersPanel({
             <p className="py-6 text-center text-sm text-muted">…</p>
           ) : (
             <div className="flex flex-col gap-5">
-              {showType && (
-                <FilterSection title={t("search.filters.type")}>
-                  <ChipRow>
-                    {typeOptions.map((opt) => (
-                      <FilterChip
-                        key={opt.id}
-                        state={chipState(draft, opt.id, "includedTypes", "excludedTypes")}
-                        onClick={() => setDraft((f) => cycleChip(f, opt.id, "includedTypes", "excludedTypes"))}
-                      >
-                        {prettifyTypeLabel(opt.id, opt.title, t)}
-                      </FilterChip>
-                    ))}
-                  </ChipRow>
-                </FilterSection>
-              )}
-              {showStatus && (
-                <FilterSection title={t("search.filters.status")}>
-                  <ChipRow>
-                    {catalog!.statusOptions.map((opt) => (
-                      <FilterChip
-                        key={opt.id}
-                        state={chipState(draft, opt.id, "includedStatuses", "excludedStatuses")}
-                        onClick={() => setDraft((f) => cycleChip(f, opt.id, "includedStatuses", "excludedStatuses"))}
-                      >
-                        {prettifyStatusLabel(opt.id, opt.title, t)}
-                      </FilterChip>
-                    ))}
-                  </ChipRow>
-                </FilterSection>
-              )}
-              {showYear && (
-                <FilterSection title={t("search.filters.year")}>
-                  <YearRangeSlider
-                    from={draft.yearFrom}
-                    to={draft.yearTo}
-                    onChange={(yearFrom, yearTo) => setDraft((f) => ({ ...f, yearFrom, yearTo }))}
+              {(catalog?.filters ?? []).map((def) => (
+                <FilterSection key={def.id} title={t(`search.filters.${def.id}`, { defaultValue: def.title })}>
+                  <FilterControl
+                    def={def}
+                    value={draft[def.id]}
+                    onChange={(value) => setDraft((f) => withFilterValue(f, def.id, value))}
                   />
                 </FilterSection>
-              )}
-              {showGenres && (
-                <FilterSection title={t("search.filters.genres")}>
-                  <div className="flex flex-col gap-3">
-                    {visibleGenreGroups.map((group) => (
-                      <div key={group.letter}>
-                        <p className="mb-1.5 text-xs font-bold text-muted">{group.letter}</p>
-                        <ChipRow>
-                          {group.options.map((opt) => (
-                            <FilterChip
-                              key={opt.id}
-                              state={chipState(draft, opt.id, "includedGenres", "excludedGenres")}
-                              onClick={() => setDraft((f) => cycleChip(f, opt.id, "includedGenres", "excludedGenres"))}
-                            >
-                              {opt.title}
-                            </FilterChip>
-                          ))}
-                        </ChipRow>
-                      </div>
-                    ))}
-                    {genreGroups.length > COLLAPSED_GENRE_GROUPS && (
-                      <button
-                        onClick={() => setGenresExpanded((v) => !v)}
-                        aria-label={genresExpanded ? t("search.filters.genresCollapse") : t("search.filters.genresExpand")}
-                        className="flex items-center justify-center rounded-lg py-1 text-muted transition-colors hover:bg-text/[.06] hover:text-text"
-                      >
-                        <ChevronDown className={cn("h-4 w-4 transition-transform", genresExpanded && "rotate-180")} strokeWidth={2.25} />
-                      </button>
-                    )}
-                  </div>
-                </FilterSection>
-              )}
+              ))}
             </div>
           )}
         </div>
@@ -179,6 +109,78 @@ export function SearchFiltersPanel({
       </div>
     </>,
     document.body,
+  );
+}
+
+// Type and status labels come from a short fixed vocabulary many sources report as raw ids
+// ("short_movie"), so those two get a translated label; everything else shows what the source said.
+function optionLabel(def: SearchFilterDef, option: SearchFilterOption, t: ReturnType<typeof useTranslation>["t"]): string {
+  if (def.id === "type") return prettifyTypeLabel(option.id, option.title, t);
+  if (def.id === "status") return prettifyStatusLabel(option.id, option.title, t);
+  return option.title;
+}
+
+function FilterControl({ def, value, onChange }: { def: SearchFilterDef; value: FilterValue | undefined; onChange: (value: FilterValue) => void }) {
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+
+  if (def.type === "text") {
+    return (
+      <input
+        type="text"
+        value={typeof value === "string" ? value : ""}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-8 w-full rounded-lg border border-border bg-text/[.04] px-2.5 text-xs text-text outline-none focus:border-accent/70"
+      />
+    );
+  }
+  if (def.type === "range") {
+    const range = asRange(value);
+    return <RangeSlider min={def.min ?? 0} max={def.max ?? 100} from={range.from ?? null} to={range.to ?? null} onChange={(from, to) => onChange({ from: from ?? undefined, to: to ?? undefined })} />;
+  }
+
+  const options = def.options ?? [];
+  const stateOf = (id: string): ChipState => (def.type === "tristate" ? tristateOf(value, id) : asList(value).includes(id) ? "include" : "none");
+  const toggle = (id: string) => {
+    if (def.type === "tristate") return onChange(cycleTristate(value, id));
+    const selected = asList(value);
+    const on = selected.includes(id);
+    // "select" behaves like a radio row that can be switched off again - a filter you can never
+    // clear is a trap.
+    if (def.type === "multi") onChange(on ? selected.filter((x) => x !== id) : [...selected, id]);
+    else onChange(on ? "" : id);
+  };
+  const chips = (list: SearchFilterOption[]) => (
+    <ChipRow>
+      {list.map((opt) => (
+        <FilterChip key={opt.id} state={stateOf(opt.id)} onClick={() => toggle(opt.id)}>
+          {optionLabel(def, opt, t)}
+        </FilterChip>
+      ))}
+    </ChipRow>
+  );
+
+  if (options.length <= GROUPED_OPTION_THRESHOLD) return chips(options);
+  const groups = groupByLetter(options);
+  const visible = expanded ? groups : groups.slice(0, COLLAPSED_GROUPS);
+  return (
+    <div className="flex flex-col gap-3">
+      {visible.map((group) => (
+        <div key={group.letter}>
+          <p className="mb-1.5 text-xs font-bold text-muted">{group.letter}</p>
+          {chips(group.options)}
+        </div>
+      ))}
+      {groups.length > COLLAPSED_GROUPS && (
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          aria-label={expanded ? t("search.filters.genresCollapse") : t("search.filters.genresExpand")}
+          className="flex items-center justify-center rounded-lg py-1 text-muted transition-colors hover:bg-text/[.06] hover:text-text"
+        >
+          <ChevronDown className={cn("h-4 w-4 transition-transform", expanded && "rotate-180")} strokeWidth={2.25} />
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -205,15 +207,13 @@ function FilterChip({ state, onClick, children }: { state: "none" | "include" | 
   );
 }
 
-function YearRangeSlider({ from, to, onChange }: { from: number | null; to: number | null; onChange: (from: number | null, to: number | null) => void }) {
-  const min = FILTER_YEAR_MIN;
-  const max = FILTER_YEAR_MAX;
+function RangeSlider({ min, max, from, to, onChange }: { min: number; max: number; from: number | null; to: number | null; onChange: (from: number | null, to: number | null) => void }) {
   const fromValue = from ?? min;
   const toValue = to ?? max;
 
   return (
     <div className="flex items-center gap-2">
-      <YearNumberInput value={from} base={min} onChange={(v) => onChange(v === null ? null : Math.min(v, toValue), to)} />
+      <RangeNumberInput min={min} max={max} value={from} base={min} onChange={(v) => onChange(v === null ? null : Math.min(v, toValue), to)} />
       <div className="relative h-4 flex-1">
         <div className="absolute left-0 right-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-text/10" />
         <div
@@ -237,14 +237,14 @@ function YearRangeSlider({ from, to, onChange }: { from: number | null; to: numb
           onChange={(e) => onChange(from, Math.max(Number(e.target.value), fromValue))}
         />
       </div>
-      <YearNumberInput value={to} base={max} onChange={(v) => onChange(from, v === null ? null : Math.max(v, fromValue))} />
+      <RangeNumberInput min={min} max={max} value={to} base={max} onChange={(v) => onChange(from, v === null ? null : Math.max(v, fromValue))} />
     </div>
   );
 }
 
-function YearNumberInput({ value, base, onChange }: { value: number | null; base: number; onChange: (value: number | null) => void }) {
+function RangeNumberInput({ min, max, value, base, onChange }: { min: number; max: number; value: number | null; base: number; onChange: (value: number | null) => void }) {
   function step(delta: number) {
-    onChange(Math.min(FILTER_YEAR_MAX, Math.max(FILTER_YEAR_MIN, (value ?? base) + delta)));
+    onChange(Math.min(max, Math.max(min, (value ?? base) + delta)));
   }
   return (
     <div className="flex h-8 w-16 shrink-0 items-stretch overflow-hidden rounded-lg border border-border bg-text/[.04] focus-within:border-accent/70">
@@ -252,13 +252,13 @@ function YearNumberInput({ value, base, onChange }: { value: number | null; base
         type="number"
         value={value ?? ""}
         placeholder={String(base)}
-        min={FILTER_YEAR_MIN}
-        max={FILTER_YEAR_MAX}
+        min={min}
+        max={max}
         onChange={(e) => {
           const raw = e.target.value.trim();
           if (raw === "") return onChange(null);
           const parsed = Number(raw);
-          onChange(Number.isFinite(parsed) ? Math.min(FILTER_YEAR_MAX, Math.max(FILTER_YEAR_MIN, parsed)) : null);
+          onChange(Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : null);
         }}
         className="no-spinner min-w-0 flex-1 bg-transparent pl-1.5 text-center text-xs text-text outline-none"
       />

@@ -246,10 +246,6 @@ export interface SourceReview {
   likes?: number;
 }
 
-// Mirrors Android's AnimeSearchFilter enum (hibiki/parsers/.../model/Models.kt) - what a source's
-// manifest declares it accepts in a search request, gating which filter controls the UI shows.
-export type SearchFilterKind = "TYPE" | "STATUS" | "INCLUDED_GENRES" | "EXCLUDED_GENRES" | "YEAR_RANGE";
-
 export interface SourceInfo {
   id: string;
   name: string;
@@ -260,7 +256,9 @@ export interface SourceInfo {
   isNsfw: boolean;
   capabilities: SourceCapability[];
   supportedSorts: string[];
-  supportedFilters: SearchFilterKind[];
+  /** The source offers search filters. What they are is the source's own business - the host only
+   * asks getSettings().filters and draws them (see SearchFilterDef). */
+  hasFilters: boolean;
   runtime?: "NODE" | "BROWSER";
   /**
    * The source admits its own metadata is the weaker half of what it returns, and asks the app to
@@ -344,14 +342,37 @@ export interface SearchFilterOption {
   title: string;
 }
 
-// Mirrors Android's AnimeSearchFilterCatalog - what populates the filter panel's controls for one
-// source, fetched from the extension's getSettings().
+// What populates the filter panel for one source, fetched from the extension's getSettings().
+// Filters are wholly the source's: the host has no notion of "genre" or "year", it draws whatever
+// the source declares and hands the values back untouched.
 export interface SearchFilterCatalog {
   sortOptions: SearchFilterOption[];
-  typeOptions: SearchFilterOption[];
-  statusOptions: SearchFilterOption[];
-  genreOptions: SearchFilterOption[];
+  filters: SearchFilterDef[];
 }
+
+/**
+ * One source-defined filter; the control is drawn from `type`, and the chosen value goes back to the
+ * source in SearchRequest.filters[id] with the shape below.
+ *
+ *   select    one option or none      -> "option-id"
+ *   multi     any number of options   -> ["option-id", ...]
+ *   tristate  include and/or exclude  -> { include: [...], exclude: [...] }
+ *   text      free text               -> "typed text"
+ *   range     numeric bounds          -> { from?: number, to?: number }   (min/max on the def)
+ *
+ * An unset filter is absent from the request, never an empty value.
+ */
+export interface SearchFilterDef {
+  id: string;
+  title: string;
+  type: "select" | "multi" | "tristate" | "text" | "range";
+  options?: SearchFilterOption[];
+  min?: number;
+  max?: number;
+}
+
+export type FilterValue = string | string[] | { include: string[]; exclude: string[] } | { from?: number; to?: number };
+export type FilterValues = Record<string, FilterValue>;
 
 // A source not yet installed, as listed by a repository's index.json (see hibiki-sources'
 // repository/index.json / extensions/<id>.manifest.json convention). Mirrors the Android app's
@@ -380,12 +401,8 @@ export interface SearchRequest {
   offset?: number;
   limit?: number;
   sort?: string;
-  typeAliases?: string[];
-  statusAliases?: string[];
-  includedGenreAliases?: string[];
-  excludedGenreAliases?: string[];
-  yearFrom?: number;
-  yearTo?: number;
+  /** Values of the source's filters (SearchFilterDef), keyed by filter id. */
+  filters?: FilterValues;
 }
 
 export type LibraryCategory = "watching" | "planned" | "completed" | "dropped" | "on_hold" | "favorite";

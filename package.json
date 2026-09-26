@@ -15,8 +15,10 @@
     "lint": "eslint .",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
+    "test:main": "vitest run --config vitest.main.config.ts",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "probe": "tsx scripts/probe-source.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/main/db/migrate.ts"
   },

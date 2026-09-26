@@ -54,16 +54,11 @@ export function SearchPage() {
   // fragment, however, is deliberately omitted from that request: YummyAnime rejects it and
   // other sources often return noisy, expensive results for it.
   const shouldSearch = queryIsLongEnough || hasFilters;
-  const filterCatalog = useQuery({
-    queryKey: ["filterCatalog", source?.id],
-    enabled: !!source && source.supportedFilters.length > 0,
-    queryFn: () => hibiki.sources.filterCatalog(source!.id),
-  });
 
   const results = useQuery({
     queryKey: ["search", source?.id, queryIsLongEnough ? trimmedQuery : "", filters],
     enabled: !!source && shouldSearch,
-    queryFn: ({ signal }) => searchSource(source!.id, { query: queryIsLongEnough ? trimmedQuery : undefined, limit: 30, ...toSearchRequestFilters(filters, filterCatalog.data) }, signal),
+    queryFn: ({ signal }) => searchSource(source!.id, { query: queryIsLongEnough ? trimmedQuery : undefined, limit: 30, ...toSearchRequestFilters(filters) }, signal),
   });
 
   const { titles: items, loadingIds } = useDescribedTitles(source?.id, results.data, providerKey);

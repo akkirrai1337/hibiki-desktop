@@ -31,10 +31,14 @@ import { logger } from "../logger";
 import { performBrowserResolve } from "./browserResolveHost";
 import type { BridgeRequestMessage } from "./syncHostBridge";
 import { ExtensionStorage } from "./extensionStorage";
+import { filterValuesToLegacy, legacyToFilterDefs, needsOptionList, type LegacySettings } from "./legacyFilters";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WORKER_TIMEOUT_MS = 30_000;
+const FILTER_TYPES = ["select", "multi", "tristate", "text", "range"];
 const RESOLVE_TOTAL_TIMEOUT_MS = 45_000;
+// How long a resolver attempt may run alone before the next candidate is started beside it.
+const RESOLVE_STAGGER_MS = 1_200;
 
 function playerUrlLabel(raw: string): string {
   try {
@@ -64,7 +68,9 @@ interface Manifest {
   capabilities?: string[];
   useExternalMetadata?: boolean;
   supportedSorts?: string[];
+  /** Legacy vocabulary, see legacyFilters.ts. New sources declare `customFilters` instead. */
   supportedFilters?: string[];
+  customFilters?: boolean;
   resolverDependencies?: string[];
   settings?: SourceInfo["settings"];
 }
@@ -244,7 +250,7 @@ export class ExtensionRuntime {
       capabilities: (manifest.capabilities ?? []) as SourceInfo["capabilities"],
       useExternalMetadata: manifest.useExternalMetadata === true,
       supportedSorts: manifest.supportedSorts ?? [],
-      supportedFilters: (manifest.supportedFilters ?? []) as SourceInfo["supportedFilters"],
+      hasFilters: manifest.customFilters === true || (manifest.supportedFilters ?? []).length > 0,
       runtime: "NODE",
       settings: manifest.settings ?? [],
     }));
@@ -482,11 +488,26 @@ export class ExtensionRuntime {
     return pending;
   }
 
-  search(sourceId: string, request: SearchRequest, requestId?: string): Promise<AnimeTitle[]> {
+  async search(sourceId: string, request: SearchRequest, requestId?: string): Promise<AnimeTitle[]> {
+    const scriptRequest = await this.toScriptRequest(sourceId, request);
     // A renderer search carries a cancellation id, so it must own its worker rather than sharing
     // one whose other caller might still need it. Background/catalog reads remain coalesced.
-    if (requestId) return this.run("search", sourceId, [request], { requestId });
-    return this.shareRead("search", sourceId, [request], () => this.run("search", sourceId, [request]));
+    if (requestId) return this.run("search", sourceId, [scriptRequest], { requestId });
+    return this.shareRead("search", sourceId, [scriptRequest], () => this.run("search", sourceId, [scriptRequest]));
+  }
+
+  // A source that declares its own filters gets `filters` as is. One still on the old vocabulary is
+  // spoken to in it (legacyFilters.ts) - the host is the only place that translation lives.
+  private async toScriptRequest(sourceId: string, request: SearchRequest): Promise<unknown> {
+    const manifest = this.extensions.get(sourceId)?.manifest;
+    if (!manifest || manifest.customFilters || !request.filters) return request;
+    const { filters, ...rest } = request;
+    let settings = this.legacySettings.get(sourceId);
+    if (!settings && needsOptionList(filters)) {
+      await this.getFilterCatalog(sourceId);
+      settings = this.legacySettings.get(sourceId);
+    }
+    return { ...rest, ...filterValuesToLegacy(filters, settings ?? {}) };
   }
 
   latest(sourceId: string, limit: number): Promise<AnimeTitle[]> {
@@ -695,27 +716,26 @@ export class ExtensionRuntime {
   // Mirrors Android's PlaybackResolver: an EMBED link is a third-party player *page*, not a media
   // file, so try the resolvers installed for it (see resolverDependencies in marketplace.ts) to
   // turn it into a real DIRECT_HLS/DIRECT_MP4 stream before the UI ever falls back to showing that
-  // page in an iframe. Stops at the first resolver that actually returns something playable.
+  // page in an iframe. The first resolver to return something playable wins.
   //
   // A source can return a dozen+ EMBED mirrors for one episode (YummyAnime does), most of them
-  // pointing at the same handful of providers. Trying every one of them in order would spend the
-  // whole budget re-confirming that a broken provider is broken, so the budget is spread two ways:
-  // MAX_ATTEMPTS caps the total work, and MAX_ATTEMPTS_PER_RESOLVER caps how much of it any single
-  // provider may consume before the loop moves on to a different one.
+  // pointing at the same handful of providers. The plan below caps the work two ways:
+  // MAX_ATTEMPTS caps the total, and MAX_ATTEMPTS_PER_RESOLVER caps how much of it any single
+  // provider may consume. A per-resolver allowance of 1 was the bug behind "Kodik sometimes just
+  // doesn't load" - a *mirror* failing is not the same as a *provider* failing, and one retry on a
+  // *different* mirror costs nothing on the normal path.
   //
-  // That per-resolver allowance used to be 1, which is the bug behind "Kodik sometimes just
-  // doesn't load": a *mirror* failing is not the same as a *provider* failing. YummyAnime's Kodik
-  // links are per-dub, and an individual one can be a dead season/serial id, or hit an edge node
-  // that drops the connection - in which case Kodik as a whole was written off after one attempt
-  // and the episode silently fell through to a slow browser-runtime provider or a bare iframe,
-  // even though the very next Kodik mirror in the same list resolves fine. One retry on a
-  // *different* mirror costs one extra request on the rare failing path and nothing at all on the
-  // normal one (the first mirror succeeds and the loop returns immediately).
+  // Attempts used to run strictly one after another, so a slow or dead provider at the head of the
+  // list (a browser-runtime resolver that fails after ~2.5s, twice, for its two mirrors) was paid
+  // for in full before the next provider was even tried. They now overlap: the first starts at
+  // once, and each next one starts as soon as the previous fails - or after RESOLVE_STAGGER_MS of
+  // it still being in flight, whichever comes first. The stagger keeps the source's preferred
+  // provider ahead in a healthy race (it gets a head start rather than a handicap), and keeps a
+  // fast plain-HTTP fallback from waiting behind a slow one. Browser-runtime resolvers open a real
+  // hidden window, so only one of them runs at a time.
   private async resolveEmbedLinks(links: PlayerLink[], preferredIndex = -1): Promise<PlayerLink[]> {
     const MAX_ATTEMPTS = 5;
     const MAX_ATTEMPTS_PER_RESOLVER = 2;
-    const attemptsByResolver = new Map<string, number>();
-    let attempts = 0;
     const startedAt = Date.now();
     const deadline = startedAt + RESOLVE_TOTAL_TIMEOUT_MS;
 
@@ -737,83 +757,145 @@ export class ExtensionRuntime {
       return failuresByIndex[a] - failuresByIndex[b] || a - b;
     });
 
-    for (const i of orderedIndexes) {
-      if (attempts >= MAX_ATTEMPTS || Date.now() >= deadline) break;
-      const link = links[i];
+    interface Candidate { index: number; link: PlayerLink; resolver: ResolverManifest }
+    const plan: Candidate[] = [];
+    const plannedByResolver = new Map<string, number>();
+    for (const index of orderedIndexes) {
+      if (plan.length >= MAX_ATTEMPTS) break;
+      const link = links[index];
       if (link.type !== "EMBED") continue;
       const resolver = this.findResolverForUrl(link.url);
       if (!resolver) continue;
-      const used = attemptsByResolver.get(resolver.id) ?? 0;
+      const used = plannedByResolver.get(resolver.id) ?? 0;
       if (used >= MAX_ATTEMPTS_PER_RESOLVER) continue;
-      attemptsByResolver.set(resolver.id, used + 1);
-      attempts += 1;
-      const attemptStartedAt = Date.now();
-      logger.info("resolve", `attempt ${attempts}/${MAX_ATTEMPTS} via ${resolver.id} (${resolver.runtime ?? "NODE"}) for ${link.playerName ?? "?"}/${link.translation ?? "?"} ${playerUrlLabel(link.url)}`);
-      try {
-        const raw =
-          resolver.runtime === "BROWSER"
-            ? await this.runBrowserResolver(resolver.id, link, deadline)
-            : await this.run<Array<PlayerLink & { type: string }>>("resolve", resolver.id, [JSON.stringify(link)], {
-                extensionsDir: this.resolversDir,
-                timeoutMs: Math.max(1, Math.min(WORKER_TIMEOUT_MS, deadline - Date.now())),
-              });
-        // Resolvers speak the same VideoStream.type vocabulary as their compiled-in Kotlin
-        // originals (HLS/MP4/DASH - see extractors/kodik.js's streamTypeFor), not this app's own
-        // PlayerLinkType - mapped to the DIRECT_* counterpart the player actually understands.
-        //
-        // A resolver only ever returns stream-technical info (url/quality/type) - it has no way to
-        // know which dub studio or embed provider the EMBED link it resolved even came from, so
-        // without this the in-player "Озвучка"/"Плеер" picker shows a blank selection for whatever
-        // resolved link ends up auto-selected, even though the source's *other* links (still-EMBED
-        // ones further down the list) clearly have that metadata. Carrying it over from the
-        // original link it resolved (only where the resolver itself didn't already supply one)
-        // keeps the picker's selection in sync with reality.
-        //
-        // Same story for `segments` (opening/ending skip windows): only kodik.js actually parses
-        // its own from the embed page - every other extractor (aksor/sibnet/vk/cvh/dailymotion/
-        // anitube-ashdi/aniboom) just hardcodes `segments: []`, which would otherwise silently
-        // break "auto-skip opening/ending" for any episode that resolves through one of those, even
-        // though the source's own getPlayerLinks() (yummy-anime.js, at least) already had real
-        // timings on that EMBED link.
-        const resolved = raw
-          .map((candidate): Omit<PlayerLink, "type"> & { type: PlayerLinkType | undefined } => ({
-            ...candidate,
-            type: RESOLVER_STREAM_TYPE_TO_PLAYER_LINK_TYPE[candidate.type],
-            translation: candidate.translation ?? link.translation,
-            playerName: candidate.playerName ?? link.playerName,
-            segments: candidate.segments && candidate.segments.length > 0 ? candidate.segments : link.segments,
-            // Same reason as the three above, and now it matters: this is the source's own id for
-            // the episode, and reporting watch time to an account is addressed by it. A resolver
-            // has no idea what it is, so dropping it here left every resolved stream - which is
-            // most of them - unable to report anything.
-            videoId: candidate.videoId ?? link.videoId,
-          }))
-          .filter((candidate): candidate is PlayerLink => candidate.type !== undefined);
-        if (resolved.length > 0) {
-          this.noteResolverResult(resolver.id, true);
-          logger.info("resolve", `${resolver.id} resolved ${resolved.length} stream(s) [${resolved.map((r) => r.quality ?? "?").join(", ")}] in ${Date.now() - attemptStartedAt}ms (${Date.now() - startedAt}ms total)`);
-          return [...resolved, ...links.slice(0, i), ...links.slice(i + 1)];
+      plannedByResolver.set(resolver.id, used + 1);
+      plan.push({ index, link, resolver });
+    }
+    if (plan.length === 0) return links;
+
+    const total = plan.length;
+    let launched = 0;
+    let active = 0;
+    let browserActive = 0;
+    let settled = false;
+    let stagger: NodeJS.Timeout | undefined;
+
+    return new Promise<PlayerLink[]>((resolveAll) => {
+      const finish = (result: PlayerLink[], winner?: { resolverId: string; resolved: PlayerLink[] }) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(stagger);
+        if (winner) {
+          logger.info("resolve", `${winner.resolverId} resolved ${winner.resolved.length} stream(s) [${winner.resolved.map((r) => r.quality ?? "?").join(", ")}] (${Date.now() - startedAt}ms total, ${launched}/${total} attempts started)`);
+        } else {
+          logger.warn("resolve", `no resolver produced a playable stream after ${launched} attempt(s) in ${Date.now() - startedAt}ms - falling back to the raw embed list`);
         }
-        this.noteResolverResult(resolver.id, false);
-        logger.warn("resolve", `${resolver.id} returned nothing playable in ${Date.now() - attemptStartedAt}ms`);
-      } catch (error) {
-        this.noteResolverResult(resolver.id, false);
-        logger.warn("resolve", `${resolver.id} failed on ${link.url} after ${Date.now() - attemptStartedAt}ms: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-    if (attempts > 0) {
-      logger.warn("resolve", `no resolver produced a playable stream after ${attempts} attempt(s) in ${Date.now() - startedAt}ms - falling back to the raw embed list`);
-    }
-    return links;
+        resolveAll(result);
+      };
+
+      const launchNext = () => {
+        clearTimeout(stagger);
+        if (settled) return;
+        if (plan.length === 0 || Date.now() >= deadline) {
+          if (active === 0) finish(links);
+          return;
+        }
+        // The first candidate that is allowed to run now: a browser resolver has to wait for the
+        // one before it, but must not hold up a plain-HTTP candidate queued behind it.
+        const pick = plan.findIndex((c) => c.resolver.runtime !== "BROWSER" || browserActive === 0);
+        if (pick < 0) return; // Only browser candidates are left and one is running: its end relaunches.
+        const [candidate] = plan.splice(pick, 1);
+        launched += 1;
+        active += 1;
+        const isBrowser = candidate.resolver.runtime === "BROWSER";
+        if (isBrowser) browserActive += 1;
+        if (plan.length > 0) stagger = setTimeout(launchNext, RESOLVE_STAGGER_MS);
+
+        void this.attemptResolve(candidate.resolver, candidate.link, launched, total, deadline)
+          .then((resolved) => {
+            if (resolved.length > 0) {
+              this.noteResolverResult(candidate.resolver.id, true);
+              finish([...resolved, ...links.slice(0, candidate.index), ...links.slice(candidate.index + 1)], {
+                resolverId: candidate.resolver.id,
+                resolved,
+              });
+              return;
+            }
+            this.noteResolverResult(candidate.resolver.id, false);
+            logger.warn("resolve", `${candidate.resolver.id} returned nothing playable`);
+          })
+          .catch((error: unknown) => {
+            this.noteResolverResult(candidate.resolver.id, false);
+            logger.warn("resolve", `${candidate.resolver.id} failed on ${candidate.link.url}: ${error instanceof Error ? error.message : String(error)}`);
+          })
+          .finally(() => {
+            active -= 1;
+            if (isBrowser) browserActive -= 1;
+            launchNext();
+          });
+      };
+
+      launchNext();
+    });
   }
 
+  /** One resolver run for one link, with the resolver's stream vocabulary mapped onto this app's
+   * PlayerLink. Resolves to [] when the resolver found nothing playable. */
+  private async attemptResolve(resolver: ResolverManifest, link: PlayerLink, attemptNo: number, of: number, deadline: number): Promise<PlayerLink[]> {
+    logger.info("resolve", `attempt ${attemptNo}/${of} via ${resolver.id} (${resolver.runtime ?? "NODE"}) for ${link.playerName ?? "?"}/${link.translation ?? "?"} ${playerUrlLabel(link.url)}`);
+    const raw =
+      resolver.runtime === "BROWSER"
+        ? await this.runBrowserResolver(resolver.id, link, deadline)
+        : await this.run<Array<PlayerLink & { type: string }>>("resolve", resolver.id, [JSON.stringify(link)], {
+            extensionsDir: this.resolversDir,
+            timeoutMs: Math.max(1, Math.min(WORKER_TIMEOUT_MS, deadline - Date.now())),
+          });
+    // Resolvers speak the same VideoStream.type vocabulary as their compiled-in Kotlin originals
+    // (HLS/MP4/DASH - see extractors/kodik.js's streamTypeFor), not this app's own PlayerLinkType -
+    // mapped to the DIRECT_* counterpart the player actually understands.
+    //
+    // A resolver only ever returns stream-technical info (url/quality/type) - it has no way to know
+    // which dub studio or embed provider the EMBED link it resolved even came from, so without this
+    // the in-player "Озвучка"/"Плеер" picker shows a blank selection for whatever resolved link ends
+    // up auto-selected. Carrying it over from the original link (only where the resolver itself
+    // didn't already supply one) keeps the picker's selection in sync with reality.
+    //
+    // Same story for `segments` (opening/ending skip windows): only kodik.js parses its own from the
+    // embed page - every other extractor just hardcodes `segments: []`, which would otherwise
+    // silently break "auto-skip opening/ending" for any episode that resolves through one of those.
+    //
+    // And `videoId`: the source's own id for the episode, which reporting watch time to an account
+    // is addressed by. A resolver has no idea what it is, so dropping it here left every resolved
+    // stream - which is most of them - unable to report anything.
+    return raw
+      .map((candidate): Omit<PlayerLink, "type"> & { type: PlayerLinkType | undefined } => ({
+        ...candidate,
+        type: RESOLVER_STREAM_TYPE_TO_PLAYER_LINK_TYPE[candidate.type],
+        translation: candidate.translation ?? link.translation,
+        playerName: candidate.playerName ?? link.playerName,
+        segments: candidate.segments && candidate.segments.length > 0 ? candidate.segments : link.segments,
+        videoId: candidate.videoId ?? link.videoId,
+      }))
+      .filter((candidate): candidate is PlayerLink => candidate.type !== undefined);
+  }
+
+  // Option lists of legacy sources, kept from the last getFilterCatalog() so a search can turn
+  // "exclude this type" into "include the others" without asking the script again.
+  private readonly legacySettings = new Map<string, LegacySettings>();
+
   async getFilterCatalog(sourceId: string): Promise<SearchFilterCatalog> {
-    const settings = await this.run<Partial<SearchFilterCatalog>>("getSettings", sourceId, []);
+    const manifest = this.extensions.get(sourceId)?.manifest;
+    const settings = await this.run<Partial<SearchFilterCatalog> & LegacySettings>("getSettings", sourceId, []);
+    if (manifest?.customFilters) {
+      return {
+        sortOptions: settings.sortOptions ?? [],
+        filters: (settings.filters ?? []).filter((f) => f && f.id && f.title && FILTER_TYPES.includes(f.type)),
+      };
+    }
+    this.legacySettings.set(sourceId, settings);
     return {
       sortOptions: settings.sortOptions ?? [],
-      typeOptions: settings.typeOptions ?? [],
-      statusOptions: settings.statusOptions ?? [],
-      genreOptions: settings.genreOptions ?? [],
+      filters: legacyToFilterDefs(settings, manifest?.supportedFilters ?? []),
     };
   }
 

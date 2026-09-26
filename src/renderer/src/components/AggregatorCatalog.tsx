@@ -12,10 +12,10 @@ import {
   type ExternalMetadata,
   type MetadataProviderId,
 } from "@shared/externalMetadata";
-import type { SearchFilterCatalog, SearchFilterKind, SourceInfo } from "@shared/types";
+import type { SourceInfo } from "@shared/types";
 import { hibiki } from "@/lib/hibiki";
 import { useMetadataProviderKey } from "@/lib/aggregatorBrowsing";
-import { EMPTY_SEARCH_FILTERS, activeFilterCount, type SearchFilters } from "@/lib/searchFilters";
+import { EMPTY_SEARCH_FILTERS, activeFilterCount, asRange, asTristate, type SearchFilters } from "@/lib/searchFilters";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { PosterCard, PosterGrid, PosterGridSkeleton } from "@/components/AnimeCard";
 import { CatalogModeMenu } from "@/components/CatalogModeMenu";
@@ -29,18 +29,23 @@ const PANEL_HALF_WIDTH_WITH_MARGIN = 192 + 12;
 type Mode = ExternalCatalogRequest["mode"];
 const MODES: Mode[] = ["trending", "season", "popular"];
 
-const AGGREGATOR_FILTER_KINDS: SearchFilterKind[] = ["TYPE", "STATUS", "INCLUDED_GENRES", "EXCLUDED_GENRES", "YEAR_RANGE"];
 
+// The aggregator's own filters, declared the same way a source declares its. The ids are what
+// toCatalogFilters reads back; type and status ids double as the labels' translation keys.
 function toCatalogFilters(filters: SearchFilters): Partial<ExternalCatalogRequest> {
+  const genres = asTristate(filters.genres);
+  const types = asTristate(filters.type);
+  const statuses = asTristate(filters.status);
+  const year = asRange(filters.year);
   return {
-    genres: filters.includedGenres,
-    excludedGenres: filters.excludedGenres,
-    types: filters.includedTypes,
-    excludedTypes: filters.excludedTypes,
-    statuses: filters.includedStatuses,
-    excludedStatuses: filters.excludedStatuses,
-    yearFrom: filters.yearFrom,
-    yearTo: filters.yearTo,
+    genres: genres.include,
+    excludedGenres: genres.exclude,
+    types: types.include,
+    excludedTypes: types.exclude,
+    statuses: statuses.include,
+    excludedStatuses: statuses.exclude,
+    yearFrom: year.from,
+    yearTo: year.to,
   };
 }
 
@@ -71,13 +76,20 @@ export function AggregatorCatalog({ source }: { source: SourceInfo }) {
   const filterButtonRef = useRef<HTMLButtonElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
-  const filterCatalog = useMemo<SearchFilterCatalog>(
+  const filterCatalog = useMemo(
     () => ({
-      sortOptions: [],
-      // id === title on purpose: the panel translates the fixed type/status vocabulary by id.
-      typeOptions: ["tv", "movie", "ova", "ona", "special"].map((id) => ({ id, title: id })),
-      statusOptions: ["ongoing", "released", "announced"].map((id) => ({ id, title: id })),
-      genreOptions: ANILIST_GENRES.map((id) => ({ id, title: t(`catalogPage.aggregator.genres.${id}`, { defaultValue: id }) })),
+      filters: [
+        // id === title on purpose: the panel translates the fixed type/status vocabulary by id.
+        { id: "type", title: "type", type: "tristate" as const, options: ["tv", "movie", "ova", "ona", "special"].map((id) => ({ id, title: id })) },
+        { id: "status", title: "status", type: "tristate" as const, options: ["ongoing", "released", "announced"].map((id) => ({ id, title: id })) },
+        {
+          id: "genres",
+          title: "genres",
+          type: "tristate" as const,
+          options: ANILIST_GENRES.map((id) => ({ id, title: t(`catalogPage.aggregator.genres.${id}`, { defaultValue: id }) })),
+        },
+        { id: "year", title: "year", type: "range" as const, min: 1940, max: new Date().getFullYear() + 1 },
+      ],
     }),
     [t],
   );
@@ -152,7 +164,6 @@ export function AggregatorCatalog({ source }: { source: SourceInfo }) {
         {filterable && panelAnchor && (
           <SearchFiltersPanel
             anchor={panelAnchor}
-            supportedFilters={AGGREGATOR_FILTER_KINDS}
             catalog={filterCatalog}
             loading={false}
             filters={filters}
