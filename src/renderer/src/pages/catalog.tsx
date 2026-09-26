@@ -113,7 +113,6 @@ export function CatalogBrowsePage() {
             filters={filters}
             onChange={setFilters}
             loading={settings.isLoading}
-            lead={<p className="truncate text-base font-bold text-text/85">{isLoading ? " " : t("catalogPage.shown", { count: items.length })}</p>}
           >
             {modes.length > 1 && <SortMenu mode={mode} modes={modes} onChange={setRequestedMode} />}
           </CatalogFilters>
