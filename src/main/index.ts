@@ -85,6 +85,27 @@ function createWindow(): void {
     return { action: "deny" };
   });
 
+  // Right-click menu like a browser's: copy for selected text, the editing set in fields. Built from
+  // roles, so the labels follow the system language. Nothing to offer -> no menu.
+  mainWindow.webContents.on("context-menu", (_e, params) => {
+    const items: Electron.MenuItemConstructorOptions[] = [];
+    if (params.isEditable) {
+      items.push(
+        { role: "undo", enabled: params.editFlags.canUndo },
+        { role: "redo", enabled: params.editFlags.canRedo },
+        { type: "separator" },
+        { role: "cut", enabled: params.editFlags.canCut },
+        { role: "copy", enabled: params.editFlags.canCopy },
+        { role: "paste", enabled: params.editFlags.canPaste },
+        { type: "separator" },
+        { role: "selectAll" },
+      );
+    } else if (params.selectionText.trim()) {
+      items.push({ role: "copy" }, { type: "separator" }, { role: "selectAll" });
+    }
+    if (items.length > 0) Menu.buildFromTemplate(items).popup();
+  });
+
   // Keeps the custom maximize/restore button's icon (see TitleBar.tsx) in sync with reality even
   // when the window's maximized state changes from somewhere other than that button itself -
   // double-clicking the title bar, dragging to a screen edge, Win+Up/Down, the taskbar's own
