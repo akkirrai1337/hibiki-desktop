@@ -204,6 +204,35 @@ async function reachable(url: string, headers: Record<string, string> | null | u
   }
 }
 
+type Details = { id: string; posterUrl?: string | null; description?: string | null; genres?: string[]; screenshots?: string[]; relatedAnime?: unknown[]; franchiseAnime?: unknown[]; similarAnime?: unknown[]; studios?: unknown[] };
+
+// What a title's own page gives: the fields the detail screen draws. Reports each title's counts and
+// one summary line for the gallery, so "which sources have stills" is a run away, not a guess.
+async function probeDetails(ctx: Ctx, sourceId: string) {
+  // Fresh titles have the least on them (no stills yet, no related ones), so the newest few are mixed
+  // with what the catalog lists by default, which is older and fuller.
+  const latest = invoke<Title[]>(ctx.dir, sourceId, "latest", 8).value ?? [];
+  const listed = invoke<Title[]>(ctx.dir, sourceId, "search", { limit: 8 }).value ?? [];
+  const seenIds = new Set<string>();
+  const pool = [...latest.slice(0, 2), ...listed.slice(0, 4), ...latest.slice(2)].filter((t) => (seenIds.has(t.id) ? false : (seenIds.add(t.id), true)));
+  if (pool.length === 0) return;
+  let withScreens = 0;
+  let maxScreens = 0;
+  let checked = 0;
+  for (const title of pool.slice(0, 5)) {
+    const r = invoke<Details>(ctx.dir, sourceId, "getById", title.id);
+    if (r.error) { push(ctx, "details", `getById(${title.id})`, needsApp(r.error) ? "skip" : "fail", r.ms, r.error); continue; }
+    const d = r.value!;
+    checked++;
+    const shots = (d.screenshots ?? []).filter((u) => typeof u === "string" && u).length;
+    if (shots > 0) withScreens++;
+    maxScreens = Math.max(maxScreens, shots);
+    push(ctx, "details", `getById(${title.id})`, d.posterUrl ? "ok" : "warn", r.ms,
+      `poster ${d.posterUrl ? "yes" : "NO"}, description ${d.description ? "yes" : "no"}, genres ${d.genres?.length ?? 0}, screenshots ${shots}, related ${(d.relatedAnime?.length ?? 0) + (d.franchiseAnime?.length ?? 0)}, similar ${d.similarAnime?.length ?? 0}`);
+  }
+  if (checked > 0) push(ctx, "details", "screenshots", withScreens > 0 ? "ok" : "warn", undefined, withScreens > 0 ? `${withScreens}/${checked} titles have stills (up to ${maxScreens})` : "no stills on any checked title");
+}
+
 type Link = { url: string; type: string; playerName?: string | null; translation?: string | null; headers?: Record<string, string> | null; quality?: string | null };
 
 async function probePlayback(ctx: Ctx, sourceId: string, manifest: Manifest) {
@@ -295,6 +324,7 @@ async function probeSource(dir: string, sourceId: string, skipPlayback: boolean)
     probeManifest(ctx, manifest, settings);
     probeFilters(ctx, sourceId, settings);
   }
+  await probeDetails(ctx, sourceId);
   if (!skipPlayback) await probePlayback(ctx, sourceId, manifest);
   return ctx.checks;
 }
