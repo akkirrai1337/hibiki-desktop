@@ -6,6 +6,9 @@ interface UiState {
   theme: "light" | "dark";
   activeSourceId: string | null;
   sidebarWidth: number;
+  // Sidebar entries the user hid from its context menu, by route. Settings can never be in here: it is
+  // the way back to everything else.
+  hiddenNav: string[];
   // Defaults to on, so a fresh install shows what you're watching in Discord without having to
   // find the switch first - Settings is where you turn it *off*. Only affects new installs: an
   // existing one keeps whatever its persisted "hibiki-ui" value already says.
@@ -50,6 +53,7 @@ interface UiState {
   setTheme: (theme: "light" | "dark") => void;
   setActiveSourceId: (id: string | null) => void;
   setSidebarWidth: (width: number) => void;
+  setNavHidden: (to: string, hidden: boolean) => void;
   setDiscordRpcEnabled: (enabled: boolean) => void;
   setDiscordIgnoreNsfwSources: (enabled: boolean) => void;
   setOnboardingCompleted: (completed: boolean) => void;
@@ -67,6 +71,7 @@ export const useUiStore = create<UiState>()(
       theme: "dark",
       activeSourceId: null,
       sidebarWidth: 236,
+      hiddenNav: [],
       discordRpcEnabled: true,
       discordIgnoreNsfwSources: true,
       onboardingCompleted: false,
@@ -79,6 +84,8 @@ export const useUiStore = create<UiState>()(
       setTheme: (theme) => set({ theme }),
       setActiveSourceId: (activeSourceId) => set({ activeSourceId }),
       setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
+      setNavHidden: (to, hidden) =>
+        set((state) => ({ hiddenNav: hidden ? [...new Set([...state.hiddenNav, to])] : state.hiddenNav.filter((item) => item !== to) })),
       setDiscordRpcEnabled: (discordRpcEnabled) => set({ discordRpcEnabled }),
       setDiscordIgnoreNsfwSources: (discordIgnoreNsfwSources) => set({ discordIgnoreNsfwSources }),
       setOnboardingCompleted: (onboardingCompleted) => set({ onboardingCompleted }),

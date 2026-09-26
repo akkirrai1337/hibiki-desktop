@@ -1,7 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { Home, LayoutGrid, Bookmark, Download, Radio, User, Settings } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { Check, Home, LayoutGrid, Bookmark, Download, Radio, User, Settings } from "lucide-react";
+import { usePopoverTheme } from "@/lib/usePopoverTheme";
 import { useUiStore } from "@/stores/uiStore";
 import { useSourceUpdateCount } from "@/lib/sourceUpdates";
 import { cn } from "@/lib/cn";
@@ -23,6 +26,14 @@ const navigation = [
   { to: "/sources", labelKey: "nav.sources", icon: Radio },
 ] as const;
 
+const bottomNavigation = [
+  { to: "/settings", labelKey: "nav.settings", icon: Settings },
+  { to: "/profile", labelKey: "nav.profile", icon: User },
+] as const;
+
+// Settings is where the hidden entries are brought back from, so it is never offered for hiding.
+const ALWAYS_SHOWN = "/settings";
+
 export function Sidebar() {
   const { t } = useTranslation();
   const width = useUiStore((s) => s.sidebarWidth);
@@ -30,6 +41,8 @@ export function Sidebar() {
   const compact = width <= COMPACT_WIDTH;
   const draggingRef = useRef(false);
   const sourceUpdateCount = useSourceUpdateCount();
+  const hiddenNav = useUiStore((s) => s.hiddenNav);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
   // Exposed as a CSS var (not just this element's own inline `width` below) so pages that paint a
   // full-viewport-width fixed background of their own - the anime detail page's blurred-poster
@@ -64,11 +77,17 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="relative flex shrink-0 flex-col border-r border-border bg-app-surface px-3 pb-5 pt-4" style={{ width }}>
-      <nav className="flex flex-col gap-0.5">{navigation.map((item) => <NavLink key={item.to} to={item.to} label={t(item.labelKey)} icon={item.icon} compact={compact} badgeCount={item.to === "/sources" ? sourceUpdateCount : 0} />)}</nav>
+    <aside
+      className="relative flex shrink-0 flex-col border-r border-border bg-app-surface px-3 pb-5 pt-4"
+      style={{ width }}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        setMenu({ x: event.clientX, y: event.clientY });
+      }}
+    >
+      <nav className="flex flex-col gap-0.5">{navigation.filter((item) => !hiddenNav.includes(item.to)).map((item) => <NavLink key={item.to} to={item.to} label={t(item.labelKey)} icon={item.icon} compact={compact} badgeCount={item.to === "/sources" ? sourceUpdateCount : 0} />)}</nav>
       <div className="mt-auto flex flex-col gap-0.5 border-t border-border pt-3">
-        <NavLink to="/settings" label={t("nav.settings")} icon={Settings} compact={compact} />
-        <NavLink to="/profile" label={t("nav.profile")} icon={User} compact={compact} />
+        {bottomNavigation.filter((item) => !hiddenNav.includes(item.to)).map((item) => <NavLink key={item.to} to={item.to} label={t(item.labelKey)} icon={item.icon} compact={compact} />)}
       </div>
       <div
         onPointerDown={onHandlePointerDown}
@@ -79,6 +98,7 @@ export function Sidebar() {
       >
         <div className="mx-auto h-full w-px bg-transparent transition-colors group-hover:bg-accent/50" />
       </div>
+      <AnimatePresence>{menu && <NavMenu at={menu} onClose={() => setMenu(null)} />}</AnimatePresence>
     </aside>
   );
 }
@@ -135,5 +155,68 @@ function NavBadge({ count }: { count: number }) {
     <span className="absolute -right-1.5 -top-1.5 flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-rose-500 px-[3px] text-[9px] font-bold leading-none text-white">
       {count > 9 ? "9+" : count}
     </span>
+  );
+}
+
+/** Right-click on the sidebar: every entry with a check, to show or hide it. */
+function NavMenu({ at, onClose }: { at: { x: number; y: number }; onClose: () => void }) {
+  const { t } = useTranslation();
+  const popoverTheme = usePopoverTheme();
+  const hiddenNav = useUiStore((s) => s.hiddenNav);
+  const setNavHidden = useUiStore((s) => s.setNavHidden);
+  const root = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      if (!root.current?.contains(event.target as Node)) onClose();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("blur", onClose);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("blur", onClose);
+    };
+  }, [onClose]);
+
+  const items = [...navigation, ...bottomNavigation];
+  // Kept inside the window: opened low on the screen it would otherwise hang off the bottom.
+  const height = items.length * 36 + 44;
+  const top = Math.min(at.y, window.innerHeight - height - 8);
+  const left = Math.min(at.x, window.innerWidth - 232);
+
+  return createPortal(
+    <motion.div
+      ref={root}
+      initial={{ opacity: 0, scale: 0.97 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.97 }}
+      transition={{ duration: 0.12 }}
+      style={{ ...popoverTheme, top, left, transformOrigin: "top left" }}
+      className="fixed z-50 w-56 overflow-hidden rounded-xl border border-border bg-app-popover py-1 shadow-2xl"
+    >
+      <p className="px-3.5 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wide text-muted">{t("nav.customize")}</p>
+      {items.map((item) => {
+        const shown = !hiddenNav.includes(item.to);
+        const locked = item.to === ALWAYS_SHOWN;
+        return (
+          <button
+            key={item.to}
+            disabled={locked}
+            onClick={() => setNavHidden(item.to, shown)}
+            className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-sm text-text transition-colors hover:bg-text/[.06] disabled:opacity-50 disabled:hover:bg-transparent"
+          >
+            <item.icon className="h-4 w-4 text-muted" strokeWidth={2} />
+            <span className="flex-1 truncate">{t(item.labelKey)}</span>
+            {shown && <Check className="h-4 w-4 text-accent-text" strokeWidth={2.5} />}
+          </button>
+        );
+      })}
+    </motion.div>,
+    document.body,
   );
 }
