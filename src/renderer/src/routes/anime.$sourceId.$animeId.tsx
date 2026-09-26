@@ -350,7 +350,8 @@ function AnimeDetailPage() {
           <div className="flex items-center gap-2">
             {groups.length > 1 && <GroupDropdown groups={groups} activeGroupId={activeGroup?.id} onSelect={setActiveGroupId} align="right" />}
             {/* One dub is not a choice: named, but not something to press. */}
-            {groups.length === 1 && (
+            {/* A source with no dubs names its only group "Episodes" - nothing to show then. */}
+            {groups.length === 1 && groups[0].title.trim().toLowerCase() !== "episodes" && (
               <span className="flex items-center gap-2 rounded-lg bg-text/[.06] px-3.5 py-2 text-sm font-semibold text-muted">
                 <Mic className="h-4 w-4" strokeWidth={2} />
                 {groups[0].title}{groups[0].qualityLabel ? ` · ${groups[0].qualityLabel}` : ""}
