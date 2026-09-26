@@ -119,33 +119,33 @@ function TitleStrip({ items, sourceId, currentAnimeId, heading }: { items: Relat
       cardWidthClassName={RELATED_CARD_WIDTH_CLASSES}
       renderItem={(item) => {
         const isCurrent = item.id === currentAnimeId;
-        // Not a checkmark - that reads as "watched", which this isn't saying. This is just "you
-        // are here": a plain eye badge + a desaturated, slightly dimmed cover (not an accent
-        // highlight, since it isn't a call to action - the rest of the row is what's clickable).
-        // The cover frame itself stays put and the poster zooms inside it, matching AnimeCard's own
-        // hover (see AnimeCard) - scaling the whole frame instead made this strip read as a
-        // different kind of card than every other poster in the app.
-        const cover = <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg bg-surface ring-1 ring-border">
-          {item.posterUrl ? <SmoothImage src={item.posterUrl} alt={item.title} className={cn("h-full w-full transition-transform duration-500 ease-out", isCurrent ? "opacity-50 grayscale" : "group-hover:scale-[1.035] group-hover:will-change-transform")} /> : null}
-          {isCurrent && <div className="absolute bottom-1 left-1 flex items-center gap-0.5 rounded bg-black/75 px-1 py-0.5">
-            <Eye className="h-2.5 w-2.5 text-white/80" strokeWidth={2.5} />
+        const status = item.status ? (STATUS_ID_ALIASES[item.status] ?? item.status) : null;
+        const meta = [
+          item.type ? item.type.toUpperCase() : null,
+          item.year ? String(item.year) : null,
+          status ? t(`detail.status.${status}`, { defaultValue: status }) : null,
+        ].filter(Boolean).join(" · ");
+        // The name lives on the poster itself, over a gradient that is always there - not repeated
+        // under it, and not something that only shows on hover; the line below it says what kind of
+        // title it is, when it came out and how it stands.
+        const cover = <div className="relative aspect-[2/3] w-full overflow-hidden rounded-xl bg-surface ring-1 ring-border">
+          {item.posterUrl ? <SmoothImage src={item.posterUrl} alt={item.title} className={cn("h-full w-full transition-transform duration-500 ease-out", isCurrent ? "opacity-50 grayscale" : "group-hover:scale-[1.05] group-hover:will-change-transform")} /> : <div className="flex h-full items-center justify-center px-3 text-center text-xs text-muted">{t("common.noPoster")}</div>}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-black/90 via-black/55 to-transparent transition-opacity duration-300" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 p-3">
+            <p className="line-clamp-3 text-[13px] font-semibold leading-snug text-white drop-shadow">{item.title}</p>
+            {meta && <p className="mt-1 line-clamp-1 text-[11px] font-medium text-white/65">{meta}</p>}
+          </div>
+          {/* The hover frame is its own layer inside the clip, not a ring on the outside of it: drawn
+              by the same box on all four sides, so it is even all the way round. */}
+          <div className="pointer-events-none absolute inset-0 rounded-xl border-[1.7px] border-transparent transition-colors duration-200 group-hover:border-accent" />
+          {isCurrent && <div className="absolute left-2 top-2 flex items-center gap-1 rounded-md bg-black/75 px-1.5 py-1 text-[10px] font-semibold text-white/85">
+            <Eye className="h-3 w-3" strokeWidth={2.5} />
+            {t("detail.relatedHere")}
           </div>}
-          {/* The same hover reveal AnimeCard uses in every poster grid: the cover darkens
-              under a bottom-up gradient and the title rises into it. Skipped on the current title -
-              nothing there is a link, so a hover affordance would be promising an action that
-              doesn't exist. Kept off the label below too, which stays clipped to two lines: this
-              overlay is where a long title actually gets read. */}
-          {!isCurrent && <>
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-1.5 p-2 opacity-0 transition-[opacity,transform] duration-300 group-hover:translate-y-0 group-hover:opacity-100">
-              <p className="line-clamp-3 text-xs font-semibold leading-snug text-white">{item.title}</p>
-            </div>
-          </>}
         </div>;
-        const label = <p className={cn("mt-1.5 line-clamp-2 w-full text-xs leading-snug", isCurrent ? "text-muted" : "text-muted group-hover:text-text")}>{item.title}</p>;
         return isCurrent
-          ? <div className="min-w-0" title={t("detail.relatedCurrentTitle")}>{cover}{label}</div>
-          : <Link to="/anime/$sourceId/$animeId" params={{ sourceId, animeId: item.id }} className="group block min-w-0">{cover}{label}</Link>;
+          ? <div className="min-w-0" title={t("detail.relatedCurrentTitle")}>{cover}</div>
+          : <Link to="/anime/$sourceId/$animeId" params={{ sourceId, animeId: item.id }} className="group block min-w-0">{cover}</Link>;
       }}
     />
   </div>;
