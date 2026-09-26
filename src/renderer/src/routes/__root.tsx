@@ -6,6 +6,7 @@ import { useKnownSourcesStore } from "@/stores/knownSourcesStore";
 import { applyAccentColor, applyBackgroundTheme, BACKGROUND_THEME_PRESETS } from "@/lib/theme";
 import { TitleBar } from "@/components/TitleBar";
 import { Sidebar } from "@/components/Sidebar";
+import { SearchSpotlight } from "@/components/SearchSpotlight";
 import { AchievementToast } from "@/components/AchievementToast";
 import { useAchievementUnlocks } from "@/lib/achievementUnlocks";
 import { hibiki } from "@/lib/hibiki";
@@ -28,7 +29,6 @@ const PERSISTED_PAGES: Record<string, React.LazyExoticComponent<React.ComponentT
   "/profile": lazy(() => import("@/pages/profile").then((module) => ({ default: module.ProfilePage }))),
   "/settings": lazy(() => import("@/pages/settings").then((module) => ({ default: module.SettingsPage }))),
   "/sources": lazy(() => import("@/pages/sources").then((module) => ({ default: module.SourcesPage }))),
-  "/search": lazy(() => import("@/pages/search").then((module) => ({ default: module.SearchPage }))),
 };
 
 // A lazy page has no DOM of its own until its chunk arrives. Keep the same page background in
@@ -217,12 +217,14 @@ function RootLayoutContent() {
   if (isWatching) return <div className="flex h-screen w-screen flex-col overflow-hidden bg-black" style={{ backgroundImage: backgroundGradient }}>
     {hibiki.platform !== "darwin" && <TitleBar />}
     <AchievementToast />
+    <SearchSpotlight />
     <div className="min-h-0 flex-1"><Outlet /></div>
   </div>;
 
   return <div className="flex h-screen w-screen flex-col overflow-hidden bg-app-bg text-text" style={{ backgroundImage: backgroundGradient }}>
     {hibiki.platform !== "darwin" && <TitleBar />}
     <AchievementToast />
+    <SearchSpotlight />
     <div className="flex min-h-0 flex-1">
       <Sidebar />
       <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">

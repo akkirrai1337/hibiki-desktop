@@ -7,7 +7,8 @@
     "yourSpace": "Your space",
     "profile": "Profile",
     "settings": "Settings",
-    "customize": "Show in the sidebar"
+    "customize": "Show in the sidebar",
+    "search": "Search"
   },
   "onboarding": {
     "getStarted": "Get started",
@@ -223,7 +224,12 @@
       },
       "findOption": "Find…",
       "done": "Done"
-    }
+    },
+    "recent": "Recent searches",
+    "clearRecent": "Clear",
+    "removeRecent": "Remove",
+    "clear": "Clear the field",
+    "allResults": "All results"
   },
   "library": {
     "title": "Library",

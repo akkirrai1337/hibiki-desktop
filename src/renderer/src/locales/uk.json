@@ -7,7 +7,8 @@
     "yourSpace": "Ваш простір",
     "profile": "Профіль",
     "settings": "Налаштування",
-    "customize": "Показувати в боковому меню"
+    "customize": "Показувати в боковому меню",
+    "search": "Пошук"
   },
   "onboarding": {
     "getStarted": "Почати",
@@ -223,7 +224,12 @@
       },
       "findOption": "Знайти…",
       "done": "Готово"
-    }
+    },
+    "recent": "Нещодавні запити",
+    "clearRecent": "Очистити",
+    "removeRecent": "Прибрати",
+    "clear": "Очистити поле",
+    "allResults": "Усі результати"
   },
   "library": {
     "title": "Бібліотека",

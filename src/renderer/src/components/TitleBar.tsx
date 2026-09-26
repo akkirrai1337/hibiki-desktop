@@ -1,19 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-import { useRouter, useRouterState, useNavigate, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { AnimatePresence } from "motion/react";
-import { ChevronLeft, ChevronRight, Search, Home, SlidersHorizontal, Minus, Square, Copy, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useRouter, Link } from "@tanstack/react-router";
+import { ChevronLeft, ChevronRight, Search, Home, Minus, Square, Copy, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { hibiki } from "@/lib/hibiki";
 import { useUiStore } from "@/stores/uiStore";
-import { useSearchFiltersStore } from "@/stores/searchFiltersStore";
-import { activeFilterCount } from "@/lib/searchFilters";
-import { SearchFiltersPanel } from "@/components/SearchFiltersPanel";
+import { useSpotlightStore } from "@/stores/spotlightStore";
 import { UpdateButton } from "@/components/UpdateButton";
 import { cn } from "@/lib/cn";
 import appIcon from "@/assets/app-icon.png";
-
-const SEARCH_HIDDEN_ON = ["/settings", "/profile", "/sources"];
 
 // Windows/Linux: the native title bar is hidden entirely (see main/index.ts's titleBarStyle:
 // "hidden") and this draws everything, minimize/maximize/close included (see WindowControls below)
@@ -25,86 +19,33 @@ const SEARCH_HIDDEN_ON = ["/settings", "/profile", "/sources"];
 export function TitleBar() {
   const { t } = useTranslation();
   const router = useRouter();
-  const navigate = useNavigate();
   const [canGoBack, setCanGoBack] = useState(router.history.canGoBack());
 
   useEffect(() => router.history.subscribe(() => setCanGoBack(router.history.canGoBack())), [router]);
 
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const searchParams = useRouterState({ select: (s) => s.location.search as { q?: string; source?: boolean } });
-  const searchQuery = searchParams.q ?? "";
-  const sourceSearchOnly = searchParams.source === true;
-  const isSearchPage = pathname === "/search";
   // There's nothing yet to search, and nowhere else to jump "home" to, while onboarding still owns
   // the whole screen (see __root.tsx) - both would just be dead chrome floating over it.
   const onboardingCompleted = useUiStore((s) => s.onboardingCompleted);
-  const searchHidden = SEARCH_HIDDEN_ON.includes(pathname) || !onboardingCompleted;
+  const spotlightOpen = useSpotlightStore((s) => s.open);
 
-  const [value, setValue] = useState(isSearchPage ? searchQuery : "");
-
-  // Reflect the URL's own query when it changes from elsewhere (landing on /search, browser
-  // back/forward); reset to empty once we leave /search so stale text doesn't linger.
-  useEffect(() => setValue(isSearchPage ? searchQuery : ""), [isSearchPage, searchQuery]);
-
-  // While already on the results page, live-update as you type (debounced, replacing the URL
-  // rather than pushing a new history entry per keystroke).
+  // Quick search over whatever is on screen (see SearchSpotlight): Ctrl/Cmd+K anywhere, or "/" when the
+  // cursor is not already in a field. The button next to it is the way to the Search page itself.
   useEffect(() => {
-    if (!isSearchPage) return;
-    const trimmed = value.trim();
-    if (trimmed === searchQuery) return;
-    const timer = setTimeout(() => navigate({
-      to: "/search",
-      search: { q: trimmed, source: sourceSearchOnly ? true : undefined },
-      replace: true,
-    }), 400);
-    return () => clearTimeout(timer);
-  }, [value, isSearchPage, searchQuery, sourceSearchOnly, navigate]);
-
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && value.trim() && !isSearchPage) {
-      navigate({ to: "/search", search: { q: value.trim() } });
-    }
-  };
-
-  const activeSourceId = useUiStore((s) => s.activeSourceId);
-  const sources = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });
-  const source = sources.data?.find((s) => s.id === activeSourceId) ?? sources.data?.[0];
-
-  const filters = useSearchFiltersStore((s) => s.filters);
-  const setFilters = useSearchFiltersStore((s) => s.setFilters);
-  const resetFilters = useSearchFiltersStore((s) => s.resetFilters);
-  // A different source has its own type/status/genre id space - stale aliases from the previous
-  // one wouldn't mean anything to it.
-  useEffect(() => resetFilters(), [source?.id, resetFilters]);
-
-  const [filtersPanelOpen, setFiltersPanelOpen] = useState(false);
-  // Same key as the catalog's query: the source is asked once for its sort orders and its filters.
-  const filterCatalog = useQuery({
-    queryKey: ["filterCatalog", source?.id],
-    enabled: !!source && !searchHidden,
-    queryFn: () => hibiki.sources.filterCatalog(source!.id),
-  });
-  const showFilterButton = !searchHidden && !!source && (filterCatalog.data?.filters.length ?? 0) > 0;
-  const filterCount = activeFilterCount(filters);
-
-  // The panel is portaled to document.body (see SearchFiltersPanel) instead of living inside this
-  // absolutely-positioned search box - a blurred poster background elsewhere in the app (Hero,
-  // anime detail) can otherwise paint over it despite a lower z-index, a GPU-compositing quirk
-  // with filter: blur() that ordinary z-index/isolation can't reliably override. Portaling to the
-  // end of <body> sidesteps it entirely, so we track the anchor's screen position by hand instead
-  // of relying on CSS to position the panel relative to it.
-  const searchBoxRef = useRef<HTMLDivElement>(null);
-  const [anchorRect, setAnchorRect] = useState<{ left: number; bottom: number } | null>(null);
-  useEffect(() => {
-    if (!filtersPanelOpen) return;
-    const update = () => {
-      const rect = searchBoxRef.current?.getBoundingClientRect();
-      if (rect) setAnchorRect({ left: rect.left + rect.width / 2, bottom: rect.bottom });
+    if (!onboardingCompleted) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const typing = !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable);
+      // By the physical key (`code`), not the character (`key`): on a Russian or Ukrainian layout the K key
+      // types "л" / "л" and the slash key types ".", so matching characters worked on English only.
+      const plain = !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey;
+      const shortcut = ((event.ctrlKey || event.metaKey) && !event.altKey && event.code === "KeyK") || (event.code === "Slash" && plain && !typing);
+      if (!shortcut) return;
+      event.preventDefault();
+      useSpotlightStore.getState().toggle();
     };
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, [filtersPanelOpen]);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onboardingCompleted]);
 
   // `-webkit-app-region: drag` correctly detects the drag region even while maximized, but Windows
   // never actually engages the "unmaximize and follow the cursor" behavior a real titlebar gives
@@ -142,6 +83,16 @@ export function TitleBar() {
         >
           <ChevronLeft className="h-4 w-4" strokeWidth={2.5} />
         </button>
+        {onboardingCompleted && (
+          <button
+            onClick={() => useSpotlightStore.getState().toggle()}
+            aria-label={t("nav.search")}
+            title={`${t("nav.search")} (Ctrl+K)`}
+            className={cn("app-no-drag flex h-6 w-6 items-center justify-center rounded-full transition-colors hover:bg-text/10 hover:text-text", spotlightOpen ? "text-accent-text" : "text-muted")}
+          >
+            <Search className="h-[15px] w-[15px]" strokeWidth={2.25} />
+          </button>
+        )}
         <button
           onClick={() => router.history.forward()}
           aria-label="Forward"
@@ -151,55 +102,6 @@ export function TitleBar() {
         </button>
       </div>
 
-      {!searchHidden && (
-        <div ref={searchBoxRef} className="wco-centered-search app-no-drag w-[360px] max-w-[calc(100vw-280px)]">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" strokeWidth={2} />
-          <input
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={onKeyDown}
-            aria-label={t("catalog.searchPlaceholder")}
-            placeholder={t("catalog.searchPlaceholder")}
-            className={cn(
-              "h-7 w-full rounded-lg border border-border bg-text/[.06] pl-8 text-[13px] text-text outline-none transition-colors placeholder:text-muted focus:border-accent/70 focus:bg-text/[.09]",
-              showFilterButton ? "pr-8" : "pr-3",
-            )}
-          />
-          {showFilterButton && (
-            <button
-              data-filters-toggle
-              onClick={() => setFiltersPanelOpen((v) => !v)}
-              aria-label={t("search.filters.button")}
-              title={t("search.filters.button")}
-              className="absolute right-1.5 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-muted transition-colors hover:text-text"
-            >
-              <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={2.25} />
-              {filterCount > 0 && <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-accent" />}
-            </button>
-          )}
-          {showFilterButton && (
-            <AnimatePresence>
-              {filtersPanelOpen && anchorRect && (
-                <SearchFiltersPanel
-                  anchor={anchorRect}
-                  catalog={filterCatalog.data}
-                  loading={filterCatalog.isLoading}
-                  filters={filters}
-                  onApply={(next) => {
-                    setFilters(next);
-                    setFiltersPanelOpen(false);
-                    // Filters are a search in their own right. Navigate even when the box is
-                    // empty, so a genre/year selection made from any screen immediately shows
-                    // matching titles instead of merely leaving a dot on the filter icon.
-                    navigate({ to: "/search", search: { q: value.trim(), source: sourceSearchOnly ? true : undefined } });
-                  }}
-                  onClose={() => setFiltersPanelOpen(false)}
-                />
-              )}
-            </AnimatePresence>
-          )}
-        </div>
-      )}
       {/* One right-aligned cluster, not two independently right-aligned items. Flexbox splits the
           free space *equally* between every auto margin in the row, so giving both this and
           WindowControls their own `ml-auto` parked the update pill halfway across the bar, on top

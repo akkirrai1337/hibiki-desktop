@@ -3,9 +3,10 @@ import { createPortal } from "react-dom";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
-import { Check, Home, LayoutGrid, Bookmark, Download, Radio, User, Settings } from "lucide-react";
+import { Check, Search, Home, LayoutGrid, Bookmark, Download, Radio, User, Settings } from "lucide-react";
 import { usePopoverTheme } from "@/lib/usePopoverTheme";
 import { useUiStore } from "@/stores/uiStore";
+import { useSpotlightStore } from "@/stores/spotlightStore";
 import { useSourceUpdateCount } from "@/lib/sourceUpdates";
 import { cn } from "@/lib/cn";
 import { clearSectionTitle, getSectionTitle, isRememberedTitlePath, type BrowseSection } from "@/lib/sectionTitleMemory";
@@ -21,6 +22,7 @@ const SNAP_POINT = (MIN_FULL_WIDTH + COMPACT_WIDTH) / 2;
 const navigation = [
   { to: "/", labelKey: "nav.home", icon: Home },
   { to: "/catalog", labelKey: "nav.catalog", icon: LayoutGrid },
+  { to: "/search", labelKey: "nav.search", icon: Search },
   { to: "/library", labelKey: "library.title", icon: Bookmark },
   { to: "/downloads", labelKey: "downloads.title", icon: Download },
   { to: "/sources", labelKey: "nav.sources", icon: Radio },
@@ -110,7 +112,7 @@ function NavLink({
   compact,
   badgeCount = 0,
 }: {
-  to: "/" | "/catalog" | "/library" | "/downloads" | "/sources" | "/settings" | "/profile";
+  to: "/" | "/catalog" | "/search" | "/library" | "/downloads" | "/sources" | "/settings" | "/profile";
   label: string;
   icon: typeof Home;
   compact: boolean;
@@ -119,6 +121,18 @@ function NavLink({
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => (state.resolvedLocation ?? state.location).pathname });
   const section: BrowseSection | null = to === "/" ? "home" : to === "/catalog" ? "catalog" : null;
+  const spotlightOpen = useSpotlightStore((s) => s.open);
+  if (to === "/search") {
+    // Quick search is a panel (Ctrl+K), not a page to move to.
+    return (
+      <button onClick={() => useSpotlightStore.getState().toggle()} title={compact ? label : undefined} className={cn("app-no-drag group relative flex w-full items-center rounded-lg py-2 text-[13px] font-medium text-muted transition-colors hover:bg-text/[.05] hover:text-text", compact ? "justify-center px-0" : "gap-3 px-3")}>
+        <span className={cn("absolute -left-3 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-accent transition-opacity", spotlightOpen ? "opacity-100" : "opacity-0")} />
+        {spotlightOpen && <span className="absolute inset-0 rounded-lg bg-text/[.08]" />}
+        <span className="relative z-10 shrink-0"><Icon className="h-[17px] w-[17px]" strokeWidth={2} /></span>
+        {!compact && <span className="relative z-10 truncate">{label}</span>}
+      </button>
+    );
+  }
   return <Link to={to} title={compact ? label : undefined} data-browse-section={section ?? undefined} onClick={(event) => {
     if (!section || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     // Clicking the section while already there, or while viewing its remembered title, returns
