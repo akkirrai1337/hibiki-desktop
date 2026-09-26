@@ -14,8 +14,9 @@ import appIcon from "@/assets/app-icon.png";
 // - not Electron's titleBarOverlay (Window Controls Overlay), which technically also works but
 // always paints a solid, opaque rectangle behind the OS-drawn buttons that a gradient "background
 // theme" (see lib/theme.ts) couldn't follow. Plain page content follows app theming exactly like
-// everything else. macOS keeps its native hiddenInset traffic lights (see createWindow in
-// main/index.ts) - WindowControls only renders on other platforms.
+// everything else. macOS keeps its normal system title bar (close/minimize/zoom, drag - see createWindow in
+// main/index.ts) and this bar sits below it as the app's own: navigation, search, updates. WindowControls
+// only renders on other platforms.
 export function TitleBar() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -54,8 +55,10 @@ export function TitleBar() {
   // do") fixes that specific case; a genuinely empty click on the bar itself is the only thing that
   // should trigger it, not a click that landed on the search box or a button (those already work
   // fine and shouldn't unmaximize as a side effect).
+  // On macOS the system title bar above this one is what moves and maximizes the window; this bar is the app's own.
+  const nativeFrame = hibiki.platform === "darwin";
   const onBarMouseDown = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) hibiki.window.unmaximizeForDrag(e.screenX);
+    if (!nativeFrame && e.target === e.currentTarget) hibiki.window.unmaximizeForDrag(e.screenX);
   };
   // A real OS title bar toggles maximize/restore on a double-click anywhere on the bar itself -
   // free with a native frame, but a fully custom one (see the comment up top for why this isn't
@@ -63,7 +66,7 @@ export function TitleBar() {
   // `e.target === e.currentTarget` guard as the drag handler above, so double-clicking the search
   // box or a nav button doesn't also toggle the window.
   const onBarDoubleClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) hibiki.window.toggleMaximize();
+    if (!nativeFrame && e.target === e.currentTarget) hibiki.window.toggleMaximize();
   };
 
   return (
