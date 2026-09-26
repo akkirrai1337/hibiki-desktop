@@ -438,15 +438,15 @@
       },
       "watch_24h": {
         "title": "Занурення",
-        "description": "{{target}} годин перегляду"
+        "description": "24 години перегляду"
       },
       "watch_100h": {
         "title": "Ветеран",
-        "description": "{{target}} годин перегляду"
+        "description": "100 годин перегляду"
       },
       "watch_500h": {
         "title": "Легенда",
-        "description": "{{target}} годин перегляду"
+        "description": "500 годин перегляду"
       },
       "marathoner_50": {
         "title": "Чемпіон",
@@ -475,6 +475,58 @@
       "genre_explorer_15": {
         "title": "Енциклопедист",
         "description": "{{target}} різних жанрів у бібліотеці"
+      },
+      "streak_3": {
+        "title": "Три дні поспіль",
+        "description": "Стрік 3 дні"
+      },
+      "streak_21": {
+        "title": "Три тижні поспіль",
+        "description": "Стрік 21 день"
+      },
+      "streak_60": {
+        "title": "Два місяці поспіль",
+        "description": "Стрік 60 днів"
+      },
+      "streak_100": {
+        "title": "Сотня днів",
+        "description": "Стрік 100 днів"
+      },
+      "watch_3h": {
+        "title": "Розігрів",
+        "description": "3 години перегляду"
+      },
+      "watch_6h": {
+        "title": "Втягнувся",
+        "description": "6 годин перегляду"
+      },
+      "watch_12h": {
+        "title": "Аніме на вихідних",
+        "description": "12 годин перегляду"
+      },
+      "watch_50h": {
+        "title": "Завсідник",
+        "description": "50 годин перегляду"
+      },
+      "watch_250h": {
+        "title": "Майстер",
+        "description": "250 годин перегляду"
+      },
+      "episodes_10": {
+        "title": "Новачок",
+        "description": "{{target}} переглянутих епізодів"
+      },
+      "episodes_25": {
+        "title": "Любитель",
+        "description": "{{target}} переглянутих епізодів"
+      },
+      "episodes_200": {
+        "title": "Серіаломан",
+        "description": "{{target}} переглянутих епізодів"
+      },
+      "episodes_500": {
+        "title": "Пів тисячі",
+        "description": "{{target}} переглянутих епізодів"
       }
     },
     "achievementLevels": "Рівні",

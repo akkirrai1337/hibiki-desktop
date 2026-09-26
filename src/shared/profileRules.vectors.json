@@ -44,37 +44,37 @@
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 40,
+            "xpReward": 200,
             "xpEarned": 0
           },
           {
             "id": "streak",
             "current": 0,
-            "target": 7,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
+            "maxLevel": 7,
             "xpReward": 60,
             "xpEarned": 0
           },
           {
             "id": "watch",
             "current": 0,
-            "target": 24,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 300,
+            "maxLevel": 8,
+            "xpReward": 120,
             "xpEarned": 0
           },
           {
             "id": "episodes",
             "current": 0,
-            "target": 50,
+            "target": 10,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 200,
+            "maxLevel": 7,
+            "xpReward": 80,
             "xpEarned": 0
           },
           {
@@ -135,37 +135,37 @@
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 40,
+            "xpReward": 200,
             "xpEarned": 0
           },
           {
             "id": "streak",
             "current": 0,
-            "target": 7,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
+            "maxLevel": 7,
             "xpReward": 60,
             "xpEarned": 0
           },
           {
             "id": "watch",
             "current": 0,
-            "target": 24,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 300,
+            "maxLevel": 8,
+            "xpReward": 120,
             "xpEarned": 0
           },
           {
             "id": "episodes",
             "current": 0,
-            "target": 50,
+            "target": 10,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 200,
+            "maxLevel": 7,
+            "xpReward": 80,
             "xpEarned": 0
           },
           {
@@ -262,37 +262,37 @@
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 40,
+            "xpReward": 200,
             "xpEarned": 0
           },
           {
             "id": "streak",
             "current": 0,
-            "target": 7,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
+            "maxLevel": 7,
             "xpReward": 60,
             "xpEarned": 0
           },
           {
             "id": "watch",
             "current": 0,
-            "target": 24,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 300,
+            "maxLevel": 8,
+            "xpReward": 120,
             "xpEarned": 0
           },
           {
             "id": "episodes",
             "current": 0,
-            "target": 50,
+            "target": 10,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 200,
+            "maxLevel": 7,
+            "xpReward": 80,
             "xpEarned": 0
           },
           {
@@ -445,37 +445,37 @@
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 40,
+            "xpReward": 200,
             "xpEarned": 0
           },
           {
             "id": "streak",
             "current": 0,
-            "target": 7,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
+            "maxLevel": 7,
             "xpReward": 60,
             "xpEarned": 0
           },
           {
             "id": "watch",
             "current": 0,
-            "target": 24,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 300,
+            "maxLevel": 8,
+            "xpReward": 120,
             "xpEarned": 0
           },
           {
             "id": "episodes",
             "current": 0,
-            "target": 50,
+            "target": 10,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 200,
+            "maxLevel": 7,
+            "xpReward": 80,
             "xpEarned": 0
           },
           {
@@ -732,37 +732,37 @@
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 40,
+            "xpReward": 200,
             "xpEarned": 0
           },
           {
             "id": "streak",
             "current": 0,
-            "target": 7,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
+            "maxLevel": 7,
             "xpReward": 60,
             "xpEarned": 0
           },
           {
             "id": "watch",
             "current": 0,
-            "target": 24,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 300,
+            "maxLevel": 8,
+            "xpReward": 120,
             "xpEarned": 0
           },
           {
             "id": "episodes",
             "current": 0,
-            "target": 50,
+            "target": 10,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 200,
+            "maxLevel": 7,
+            "xpReward": 80,
             "xpEarned": 0
           },
           {
@@ -1299,37 +1299,37 @@
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 40,
+            "xpReward": 200,
             "xpEarned": 0
           },
           {
             "id": "streak",
             "current": 0,
-            "target": 7,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
+            "maxLevel": 7,
             "xpReward": 60,
             "xpEarned": 0
           },
           {
             "id": "watch",
             "current": 0,
-            "target": 24,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 300,
+            "maxLevel": 8,
+            "xpReward": 120,
             "xpEarned": 0
           },
           {
             "id": "episodes",
             "current": 0,
-            "target": 50,
+            "target": 10,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 200,
+            "maxLevel": 7,
+            "xpReward": 80,
             "xpEarned": 0
           },
           {
@@ -1390,37 +1390,37 @@
             "unlocked": false,
             "level": 1,
             "maxLevel": 3,
-            "xpReward": 250,
-            "xpEarned": 40
+            "xpReward": 800,
+            "xpEarned": 200
           },
           {
             "id": "streak",
             "current": 0,
-            "target": 7,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
+            "maxLevel": 7,
             "xpReward": 60,
             "xpEarned": 0
           },
           {
             "id": "watch",
             "current": 0,
-            "target": 24,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 300,
+            "maxLevel": 8,
+            "xpReward": 120,
             "xpEarned": 0
           },
           {
             "id": "episodes",
             "current": 0,
-            "target": 50,
+            "target": 10,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 200,
+            "maxLevel": 7,
+            "xpReward": 80,
             "xpEarned": 0
           },
           {
@@ -1434,10 +1434,10 @@
             "xpEarned": 0
           }
         ],
-        "totalXp": 45,
-        "level": 1,
-        "xpIntoLevel": 45,
-        "xpForLevel": 100
+        "totalXp": 205,
+        "level": 2,
+        "xpIntoLevel": 105,
+        "xpForLevel": 150
       }
     },
     {
@@ -1517,37 +1517,37 @@
             "unlocked": false,
             "level": 2,
             "maxLevel": 3,
-            "xpReward": 900,
-            "xpEarned": 290
+            "xpReward": 3000,
+            "xpEarned": 1000
           },
           {
             "id": "streak",
             "current": 0,
-            "target": 7,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
+            "maxLevel": 7,
             "xpReward": 60,
             "xpEarned": 0
           },
           {
             "id": "watch",
             "current": 0,
-            "target": 24,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 300,
+            "maxLevel": 8,
+            "xpReward": 120,
             "xpEarned": 0
           },
           {
             "id": "episodes",
             "current": 0,
-            "target": 50,
+            "target": 10,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 200,
+            "maxLevel": 7,
+            "xpReward": 80,
             "xpEarned": 0
           },
           {
@@ -1561,18 +1561,18 @@
             "xpEarned": 0
           }
         ],
-        "totalXp": 305,
-        "level": 3,
-        "xpIntoLevel": 55,
-        "xpForLevel": 200
+        "totalXp": 1015,
+        "level": 6,
+        "xpIntoLevel": 15,
+        "xpForLevel": 350
       }
     },
     {
-      "name": "streak 6 - one short",
+      "name": "streak 2 - one short",
       "input": {
         "entries": [],
         "lifetimeWatchedMs": 0,
-        "bestStreak": 6
+        "bestStreak": 2
       },
       "expect": {
         "achievements": [
@@ -1603,37 +1603,37 @@
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 40,
+            "xpReward": 200,
             "xpEarned": 0
           },
           {
             "id": "streak",
-            "current": 6,
-            "target": 7,
+            "current": 2,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
+            "maxLevel": 7,
             "xpReward": 60,
             "xpEarned": 0
           },
           {
             "id": "watch",
             "current": 0,
-            "target": 24,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 300,
+            "maxLevel": 8,
+            "xpReward": 120,
             "xpEarned": 0
           },
           {
             "id": "episodes",
             "current": 0,
-            "target": 50,
+            "target": 10,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 200,
+            "maxLevel": 7,
+            "xpReward": 80,
             "xpEarned": 0
           },
           {
@@ -1654,7 +1654,93 @@
       }
     },
     {
-      "name": "streak 7 exactly",
+      "name": "streak 3 exactly",
+      "input": {
+        "entries": [],
+        "lifetimeWatchedMs": 0,
+        "bestStreak": 3
+      },
+      "expect": {
+        "achievements": [
+          {
+            "id": "first_title",
+            "current": 0,
+            "target": 1,
+            "unlocked": false,
+            "level": 0,
+            "maxLevel": 1,
+            "xpReward": 5,
+            "xpEarned": 0
+          },
+          {
+            "id": "collector",
+            "current": 0,
+            "target": 10,
+            "unlocked": false,
+            "level": 0,
+            "maxLevel": 3,
+            "xpReward": 10,
+            "xpEarned": 0
+          },
+          {
+            "id": "finisher",
+            "current": 0,
+            "target": 1,
+            "unlocked": false,
+            "level": 0,
+            "maxLevel": 3,
+            "xpReward": 200,
+            "xpEarned": 0
+          },
+          {
+            "id": "streak",
+            "current": 3,
+            "target": 7,
+            "unlocked": false,
+            "level": 1,
+            "maxLevel": 7,
+            "xpReward": 160,
+            "xpEarned": 60
+          },
+          {
+            "id": "watch",
+            "current": 0,
+            "target": 3,
+            "unlocked": false,
+            "level": 0,
+            "maxLevel": 8,
+            "xpReward": 120,
+            "xpEarned": 0
+          },
+          {
+            "id": "episodes",
+            "current": 0,
+            "target": 10,
+            "unlocked": false,
+            "level": 0,
+            "maxLevel": 7,
+            "xpReward": 80,
+            "xpEarned": 0
+          },
+          {
+            "id": "genres",
+            "current": 0,
+            "target": 10,
+            "unlocked": false,
+            "level": 0,
+            "maxLevel": 3,
+            "xpReward": 25,
+            "xpEarned": 0
+          }
+        ],
+        "totalXp": 60,
+        "level": 1,
+        "xpIntoLevel": 60,
+        "xpForLevel": 100
+      }
+    },
+    {
+      "name": "streak 7",
       "input": {
         "entries": [],
         "lifetimeWatchedMs": 0,
@@ -1689,7 +1775,7 @@
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 40,
+            "xpReward": 200,
             "xpEarned": 0
           },
           {
@@ -1697,29 +1783,29 @@
             "current": 7,
             "target": 14,
             "unlocked": false,
-            "level": 1,
-            "maxLevel": 3,
-            "xpReward": 150,
-            "xpEarned": 60
+            "level": 2,
+            "maxLevel": 7,
+            "xpReward": 360,
+            "xpEarned": 220
           },
           {
             "id": "watch",
             "current": 0,
-            "target": 24,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 300,
+            "maxLevel": 8,
+            "xpReward": 120,
             "xpEarned": 0
           },
           {
             "id": "episodes",
             "current": 0,
-            "target": 50,
+            "target": 10,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 200,
+            "maxLevel": 7,
+            "xpReward": 80,
             "xpEarned": 0
           },
           {
@@ -1733,18 +1819,18 @@
             "xpEarned": 0
           }
         ],
-        "totalXp": 60,
-        "level": 1,
-        "xpIntoLevel": 60,
-        "xpForLevel": 100
+        "totalXp": 220,
+        "level": 2,
+        "xpIntoLevel": 120,
+        "xpForLevel": 150
       }
     },
     {
-      "name": "streak 30 maxed",
+      "name": "streak 100 maxed",
       "input": {
         "entries": [],
         "lifetimeWatchedMs": 0,
-        "bestStreak": 30
+        "bestStreak": 100
       },
       "expect": {
         "achievements": [
@@ -1775,37 +1861,37 @@
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 40,
+            "xpReward": 200,
             "xpEarned": 0
           },
           {
             "id": "streak",
-            "current": 30,
-            "target": 30,
+            "current": 100,
+            "target": 100,
             "unlocked": true,
-            "level": 3,
-            "maxLevel": 3,
-            "xpReward": 400,
-            "xpEarned": 610
+            "level": 7,
+            "maxLevel": 7,
+            "xpReward": 3200,
+            "xpEarned": 7180
           },
           {
             "id": "watch",
             "current": 0,
-            "target": 24,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 300,
+            "maxLevel": 8,
+            "xpReward": 120,
             "xpEarned": 0
           },
           {
             "id": "episodes",
             "current": 0,
-            "target": 50,
+            "target": 10,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 200,
+            "maxLevel": 7,
+            "xpReward": 80,
             "xpEarned": 0
           },
           {
@@ -1819,17 +1905,17 @@
             "xpEarned": 0
           }
         ],
-        "totalXp": 610,
-        "level": 4,
-        "xpIntoLevel": 160,
-        "xpForLevel": 250
+        "totalXp": 7180,
+        "level": 16,
+        "xpIntoLevel": 430,
+        "xpForLevel": 850
       }
     },
     {
-      "name": "watch 23.9h",
+      "name": "watch 2.9h",
       "input": {
         "entries": [],
-        "lifetimeWatchedMs": 86040000,
+        "lifetimeWatchedMs": 10440000,
         "bestStreak": 0
       },
       "expect": {
@@ -1861,38 +1947,38 @@
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 40,
+            "xpReward": 200,
             "xpEarned": 0
           },
           {
             "id": "streak",
             "current": 0,
-            "target": 7,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
+            "maxLevel": 7,
             "xpReward": 60,
             "xpEarned": 0
           },
           {
             "id": "watch",
-            "current": 23.9,
-            "target": 24,
+            "current": 2.9,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 300,
+            "maxLevel": 8,
+            "xpReward": 120,
             "xpEarned": 0
           },
           {
             "id": "episodes",
-            "current": 71,
-            "target": 100,
+            "current": 8,
+            "target": 10,
             "unlocked": false,
-            "level": 1,
-            "maxLevel": 3,
-            "xpReward": 450,
-            "xpEarned": 200
+            "level": 0,
+            "maxLevel": 7,
+            "xpReward": 80,
+            "xpEarned": 0
           },
           {
             "id": "genres",
@@ -1905,10 +1991,96 @@
             "xpEarned": 0
           }
         ],
-        "totalXp": 439,
+        "totalXp": 340,
         "level": 3,
-        "xpIntoLevel": 189,
+        "xpIntoLevel": 90,
         "xpForLevel": 200
+      }
+    },
+    {
+      "name": "watch exactly 3h",
+      "input": {
+        "entries": [],
+        "lifetimeWatchedMs": 10800000,
+        "bestStreak": 0
+      },
+      "expect": {
+        "achievements": [
+          {
+            "id": "first_title",
+            "current": 0,
+            "target": 1,
+            "unlocked": false,
+            "level": 0,
+            "maxLevel": 1,
+            "xpReward": 5,
+            "xpEarned": 0
+          },
+          {
+            "id": "collector",
+            "current": 0,
+            "target": 10,
+            "unlocked": false,
+            "level": 0,
+            "maxLevel": 3,
+            "xpReward": 10,
+            "xpEarned": 0
+          },
+          {
+            "id": "finisher",
+            "current": 0,
+            "target": 1,
+            "unlocked": false,
+            "level": 0,
+            "maxLevel": 3,
+            "xpReward": 200,
+            "xpEarned": 0
+          },
+          {
+            "id": "streak",
+            "current": 0,
+            "target": 3,
+            "unlocked": false,
+            "level": 0,
+            "maxLevel": 7,
+            "xpReward": 60,
+            "xpEarned": 0
+          },
+          {
+            "id": "watch",
+            "current": 3,
+            "target": 6,
+            "unlocked": false,
+            "level": 1,
+            "maxLevel": 8,
+            "xpReward": 240,
+            "xpEarned": 120
+          },
+          {
+            "id": "episodes",
+            "current": 9,
+            "target": 10,
+            "unlocked": false,
+            "level": 0,
+            "maxLevel": 7,
+            "xpReward": 80,
+            "xpEarned": 0
+          },
+          {
+            "id": "genres",
+            "current": 0,
+            "target": 10,
+            "unlocked": false,
+            "level": 0,
+            "maxLevel": 3,
+            "xpReward": 25,
+            "xpEarned": 0
+          }
+        ],
+        "totalXp": 480,
+        "level": 4,
+        "xpIntoLevel": 30,
+        "xpForLevel": 250
       }
     },
     {
@@ -1947,38 +2119,38 @@
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 40,
+            "xpReward": 200,
             "xpEarned": 0
           },
           {
             "id": "streak",
             "current": 0,
-            "target": 7,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
+            "maxLevel": 7,
             "xpReward": 60,
             "xpEarned": 0
           },
           {
             "id": "watch",
             "current": 24,
-            "target": 100,
+            "target": 50,
             "unlocked": false,
-            "level": 1,
-            "maxLevel": 3,
-            "xpReward": 900,
-            "xpEarned": 300
+            "level": 4,
+            "maxLevel": 8,
+            "xpReward": 1400,
+            "xpEarned": 1600
           },
           {
             "id": "episodes",
             "current": 72,
             "target": 100,
             "unlocked": false,
-            "level": 1,
-            "maxLevel": 3,
-            "xpReward": 450,
-            "xpEarned": 200
+            "level": 3,
+            "maxLevel": 7,
+            "xpReward": 1000,
+            "xpEarned": 780
           },
           {
             "id": "genres",
@@ -1991,10 +2163,10 @@
             "xpEarned": 0
           }
         ],
-        "totalXp": 740,
-        "level": 5,
-        "xpIntoLevel": 40,
-        "xpForLevel": 300
+        "totalXp": 5260,
+        "level": 14,
+        "xpIntoLevel": 60,
+        "xpForLevel": 750
       }
     },
     {
@@ -2033,38 +2205,38 @@
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 40,
+            "xpReward": 200,
             "xpEarned": 0
           },
           {
             "id": "streak",
             "current": 0,
-            "target": 7,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
+            "maxLevel": 7,
             "xpReward": 60,
             "xpEarned": 0
           },
           {
             "id": "watch",
             "current": 100,
-            "target": 500,
+            "target": 250,
             "unlocked": false,
-            "level": 2,
-            "maxLevel": 3,
-            "xpReward": 3000,
-            "xpEarned": 1200
+            "level": 6,
+            "maxLevel": 8,
+            "xpReward": 4000,
+            "xpEarned": 5400
           },
           {
             "id": "episodes",
             "current": 300,
-            "target": 300,
-            "unlocked": true,
-            "level": 3,
-            "maxLevel": 3,
-            "xpReward": 1200,
-            "xpEarned": 1850
+            "target": 500,
+            "unlocked": false,
+            "level": 6,
+            "maxLevel": 7,
+            "xpReward": 4400,
+            "xpEarned": 5980
           },
           {
             "id": "genres",
@@ -2077,10 +2249,10 @@
             "xpEarned": 0
           }
         ],
-        "totalXp": 4050,
-        "level": 12,
-        "xpIntoLevel": 200,
-        "xpForLevel": 650
+        "totalXp": 23380,
+        "level": 30,
+        "xpIntoLevel": 180,
+        "xpForLevel": 1550
       }
     },
     {
@@ -2119,16 +2291,16 @@
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 40,
+            "xpReward": 200,
             "xpEarned": 0
           },
           {
             "id": "streak",
             "current": 0,
-            "target": 7,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
+            "maxLevel": 7,
             "xpReward": 60,
             "xpEarned": 0
           },
@@ -2137,20 +2309,20 @@
             "current": 500,
             "target": 500,
             "unlocked": true,
-            "level": 3,
-            "maxLevel": 3,
-            "xpReward": 3000,
-            "xpEarned": 4200
+            "level": 8,
+            "maxLevel": 8,
+            "xpReward": 7000,
+            "xpEarned": 16400
           },
           {
             "id": "episodes",
-            "current": 300,
-            "target": 300,
+            "current": 500,
+            "target": 500,
             "unlocked": true,
-            "level": 3,
-            "maxLevel": 3,
-            "xpReward": 1200,
-            "xpEarned": 1850
+            "level": 7,
+            "maxLevel": 7,
+            "xpReward": 4400,
+            "xpEarned": 10380
           },
           {
             "id": "genres",
@@ -2163,17 +2335,17 @@
             "xpEarned": 0
           }
         ],
-        "totalXp": 11050,
-        "level": 20,
-        "xpIntoLevel": 600,
-        "xpForLevel": 1050
+        "totalXp": 86780,
+        "level": 58,
+        "xpIntoLevel": 1280,
+        "xpForLevel": 2950
       }
     },
     {
-      "name": "episodes just under 50",
+      "name": "episodes just under 10",
       "input": {
         "entries": [],
-        "lifetimeWatchedMs": 58859000,
+        "lifetimeWatchedMs": 10859000,
         "bestStreak": 0
       },
       "expect": {
@@ -2205,37 +2377,37 @@
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 40,
+            "xpReward": 200,
             "xpEarned": 0
           },
           {
             "id": "streak",
             "current": 0,
-            "target": 7,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
+            "maxLevel": 7,
             "xpReward": 60,
             "xpEarned": 0
           },
           {
             "id": "watch",
-            "current": 16.3,
-            "target": 24,
+            "current": 3,
+            "target": 6,
             "unlocked": false,
-            "level": 0,
-            "maxLevel": 3,
-            "xpReward": 300,
-            "xpEarned": 0
+            "level": 1,
+            "maxLevel": 8,
+            "xpReward": 240,
+            "xpEarned": 120
           },
           {
             "id": "episodes",
-            "current": 49,
-            "target": 50,
+            "current": 9,
+            "target": 10,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 200,
+            "maxLevel": 7,
+            "xpReward": 80,
             "xpEarned": 0
           },
           {
@@ -2249,10 +2421,96 @@
             "xpEarned": 0
           }
         ],
-        "totalXp": 163,
-        "level": 2,
-        "xpIntoLevel": 63,
-        "xpForLevel": 150
+        "totalXp": 480,
+        "level": 4,
+        "xpIntoLevel": 30,
+        "xpForLevel": 250
+      }
+    },
+    {
+      "name": "episodes exactly 10",
+      "input": {
+        "entries": [],
+        "lifetimeWatchedMs": 12000000,
+        "bestStreak": 0
+      },
+      "expect": {
+        "achievements": [
+          {
+            "id": "first_title",
+            "current": 0,
+            "target": 1,
+            "unlocked": false,
+            "level": 0,
+            "maxLevel": 1,
+            "xpReward": 5,
+            "xpEarned": 0
+          },
+          {
+            "id": "collector",
+            "current": 0,
+            "target": 10,
+            "unlocked": false,
+            "level": 0,
+            "maxLevel": 3,
+            "xpReward": 10,
+            "xpEarned": 0
+          },
+          {
+            "id": "finisher",
+            "current": 0,
+            "target": 1,
+            "unlocked": false,
+            "level": 0,
+            "maxLevel": 3,
+            "xpReward": 200,
+            "xpEarned": 0
+          },
+          {
+            "id": "streak",
+            "current": 0,
+            "target": 3,
+            "unlocked": false,
+            "level": 0,
+            "maxLevel": 7,
+            "xpReward": 60,
+            "xpEarned": 0
+          },
+          {
+            "id": "watch",
+            "current": 3.3,
+            "target": 6,
+            "unlocked": false,
+            "level": 1,
+            "maxLevel": 8,
+            "xpReward": 240,
+            "xpEarned": 120
+          },
+          {
+            "id": "episodes",
+            "current": 10,
+            "target": 25,
+            "unlocked": false,
+            "level": 1,
+            "maxLevel": 7,
+            "xpReward": 200,
+            "xpEarned": 80
+          },
+          {
+            "id": "genres",
+            "current": 0,
+            "target": 10,
+            "unlocked": false,
+            "level": 0,
+            "maxLevel": 3,
+            "xpReward": 25,
+            "xpEarned": 0
+          }
+        ],
+        "totalXp": 600,
+        "level": 4,
+        "xpIntoLevel": 150,
+        "xpForLevel": 250
       }
     },
     {
@@ -2291,16 +2549,16 @@
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 40,
+            "xpReward": 200,
             "xpEarned": 0
           },
           {
             "id": "streak",
             "current": 0,
-            "target": 7,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
+            "maxLevel": 7,
             "xpReward": 60,
             "xpEarned": 0
           },
@@ -2309,20 +2567,20 @@
             "current": 16.7,
             "target": 24,
             "unlocked": false,
-            "level": 0,
-            "maxLevel": 3,
-            "xpReward": 300,
-            "xpEarned": 0
+            "level": 3,
+            "maxLevel": 8,
+            "xpReward": 800,
+            "xpEarned": 800
           },
           {
             "id": "episodes",
             "current": 50,
             "target": 100,
             "unlocked": false,
-            "level": 1,
-            "maxLevel": 3,
-            "xpReward": 450,
-            "xpEarned": 200
+            "level": 3,
+            "maxLevel": 7,
+            "xpReward": 1000,
+            "xpEarned": 780
           },
           {
             "id": "genres",
@@ -2335,10 +2593,10 @@
             "xpEarned": 0
           }
         ],
-        "totalXp": 367,
-        "level": 3,
-        "xpIntoLevel": 117,
-        "xpForLevel": 200
+        "totalXp": 3580,
+        "level": 11,
+        "xpIntoLevel": 330,
+        "xpForLevel": 600
       }
     },
     {
@@ -2498,37 +2756,37 @@
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 40,
+            "xpReward": 200,
             "xpEarned": 0
           },
           {
             "id": "streak",
             "current": 0,
-            "target": 7,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
+            "maxLevel": 7,
             "xpReward": 60,
             "xpEarned": 0
           },
           {
             "id": "watch",
             "current": 0,
-            "target": 24,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 300,
+            "maxLevel": 8,
+            "xpReward": 120,
             "xpEarned": 0
           },
           {
             "id": "episodes",
             "current": 0,
-            "target": 50,
+            "target": 10,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 200,
+            "maxLevel": 7,
+            "xpReward": 80,
             "xpEarned": 0
           },
           {
@@ -2825,37 +3083,37 @@
             "unlocked": false,
             "level": 0,
             "maxLevel": 3,
-            "xpReward": 40,
+            "xpReward": 200,
             "xpEarned": 0
           },
           {
             "id": "streak",
             "current": 0,
-            "target": 7,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
+            "maxLevel": 7,
             "xpReward": 60,
             "xpEarned": 0
           },
           {
             "id": "watch",
             "current": 0,
-            "target": 24,
+            "target": 3,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 300,
+            "maxLevel": 8,
+            "xpReward": 120,
             "xpEarned": 0
           },
           {
             "id": "episodes",
             "current": 0,
-            "target": 50,
+            "target": 10,
             "unlocked": false,
             "level": 0,
-            "maxLevel": 3,
-            "xpReward": 200,
+            "maxLevel": 7,
+            "xpReward": 80,
             "xpEarned": 0
           },
           {
@@ -3361,7 +3619,7 @@
           }
         ],
         "lifetimeWatchedMs": 1800000000,
-        "bestStreak": 30
+        "bestStreak": 100
       },
       "expect": {
         "achievements": [
@@ -3392,38 +3650,38 @@
             "unlocked": true,
             "level": 3,
             "maxLevel": 3,
-            "xpReward": 900,
-            "xpEarned": 1190
+            "xpReward": 3000,
+            "xpEarned": 4000
           },
           {
             "id": "streak",
-            "current": 30,
-            "target": 30,
+            "current": 100,
+            "target": 100,
             "unlocked": true,
-            "level": 3,
-            "maxLevel": 3,
-            "xpReward": 400,
-            "xpEarned": 610
+            "level": 7,
+            "maxLevel": 7,
+            "xpReward": 3200,
+            "xpEarned": 7180
           },
           {
             "id": "watch",
             "current": 500,
             "target": 500,
             "unlocked": true,
-            "level": 3,
-            "maxLevel": 3,
-            "xpReward": 3000,
-            "xpEarned": 4200
+            "level": 8,
+            "maxLevel": 8,
+            "xpReward": 7000,
+            "xpEarned": 16400
           },
           {
             "id": "episodes",
-            "current": 300,
-            "target": 300,
+            "current": 500,
+            "target": 500,
             "unlocked": true,
-            "level": 3,
-            "maxLevel": 3,
-            "xpReward": 1200,
-            "xpEarned": 1850
+            "level": 7,
+            "maxLevel": 7,
+            "xpReward": 4400,
+            "xpEarned": 10380
           },
           {
             "id": "genres",
@@ -3436,10 +3694,10 @@
             "xpEarned": 235
           }
         ],
-        "totalXp": 13160,
-        "level": 22,
-        "xpIntoLevel": 560,
-        "xpForLevel": 1150
+        "totalXp": 98270,
+        "level": 62,
+        "xpIntoLevel": 670,
+        "xpForLevel": 3150
       }
     }
   ],

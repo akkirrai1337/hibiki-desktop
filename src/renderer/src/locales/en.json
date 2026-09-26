@@ -438,15 +438,15 @@
       },
       "watch_24h": {
         "title": "Immersed",
-        "description": "{{target}} hours watched"
+        "description": "24 hours watched"
       },
       "watch_100h": {
         "title": "Veteran",
-        "description": "{{target}} hours watched"
+        "description": "100 hours watched"
       },
       "watch_500h": {
         "title": "Legend",
-        "description": "{{target}} hours watched"
+        "description": "500 hours watched"
       },
       "marathoner_50": {
         "title": "Champion",
@@ -475,6 +475,58 @@
       "genre_explorer_15": {
         "title": "Encyclopedist",
         "description": "{{target}} different genres in your library"
+      },
+      "streak_3": {
+        "title": "3-day streak",
+        "description": "3-day streak"
+      },
+      "streak_21": {
+        "title": "Three weeks streak",
+        "description": "21-day streak"
+      },
+      "streak_60": {
+        "title": "Two months streak",
+        "description": "60-day streak"
+      },
+      "streak_100": {
+        "title": "Hundred days",
+        "description": "100-day streak"
+      },
+      "watch_3h": {
+        "title": "Warm-up",
+        "description": "3 hours watched"
+      },
+      "watch_6h": {
+        "title": "Hooked",
+        "description": "6 hours watched"
+      },
+      "watch_12h": {
+        "title": "Anime weekend",
+        "description": "12 hours watched"
+      },
+      "watch_50h": {
+        "title": "Regular",
+        "description": "50 hours watched"
+      },
+      "watch_250h": {
+        "title": "Master",
+        "description": "250 hours watched"
+      },
+      "episodes_10": {
+        "title": "Newcomer",
+        "description": "{{target}} episodes watched"
+      },
+      "episodes_25": {
+        "title": "Fan",
+        "description": "{{target}} episodes watched"
+      },
+      "episodes_200": {
+        "title": "Binge watcher",
+        "description": "{{target}} episodes watched"
+      },
+      "episodes_500": {
+        "title": "Five hundred",
+        "description": "{{target}} episodes watched"
       }
     },
     "achievementLevels": "Levels",

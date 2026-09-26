@@ -60,22 +60,25 @@ const CASES: VectorCase[] = [
   { name: "collector past max", input: { entries: entries(120, "planned"), lifetimeWatchedMs: 0, bestStreak: 0 } },
   { name: "finisher tier 1", input: { entries: entries(1, "completed"), lifetimeWatchedMs: 0, bestStreak: 0 } },
   { name: "finisher tier 2", input: { entries: entries(10, "completed"), lifetimeWatchedMs: 0, bestStreak: 0 } },
-  { name: "streak 6 - one short", input: { entries: [], lifetimeWatchedMs: 0, bestStreak: 6 } },
-  { name: "streak 7 exactly", input: { entries: [], lifetimeWatchedMs: 0, bestStreak: 7 } },
-  { name: "streak 30 maxed", input: { entries: [], lifetimeWatchedMs: 0, bestStreak: 30 } },
-  // watchedHoursFrom rounds to one decimal, so just under 24h must not clear the 24h tier.
-  { name: "watch 23.9h", input: { entries: [], lifetimeWatchedMs: Math.round(23.9 * HOUR), bestStreak: 0 } },
+  { name: "streak 2 - one short", input: { entries: [], lifetimeWatchedMs: 0, bestStreak: 2 } },
+  { name: "streak 3 exactly", input: { entries: [], lifetimeWatchedMs: 0, bestStreak: 3 } },
+  { name: "streak 7", input: { entries: [], lifetimeWatchedMs: 0, bestStreak: 7 } },
+  { name: "streak 100 maxed", input: { entries: [], lifetimeWatchedMs: 0, bestStreak: 100 } },
+  // watchedHoursFrom rounds to one decimal, so just under 3h must not clear the 3h tier.
+  { name: "watch 2.9h", input: { entries: [], lifetimeWatchedMs: Math.round(2.9 * HOUR), bestStreak: 0 } },
+  { name: "watch exactly 3h", input: { entries: [], lifetimeWatchedMs: 3 * HOUR, bestStreak: 0 } },
   { name: "watch exactly 24h", input: { entries: [], lifetimeWatchedMs: 24 * HOUR, bestStreak: 0 } },
   { name: "watch 100h", input: { entries: [], lifetimeWatchedMs: 100 * HOUR, bestStreak: 0 } },
   { name: "watch 500h maxed", input: { entries: [], lifetimeWatchedMs: 500 * HOUR, bestStreak: 0 } },
   // Episode-equivalents floor at 20 real minutes each, so this pins the flooring too.
-  { name: "episodes just under 50", input: { entries: [], lifetimeWatchedMs: 49 * 20 * 60_000 + 59_000, bestStreak: 0 } },
+  { name: "episodes just under 10", input: { entries: [], lifetimeWatchedMs: 9 * 20 * 60_000 + 59_000, bestStreak: 0 } },
+  { name: "episodes exactly 10", input: { entries: [], lifetimeWatchedMs: 10 * 20 * 60_000, bestStreak: 0 } },
   { name: "episodes exactly 50", input: { entries: [], lifetimeWatchedMs: 50 * 20 * 60_000, bestStreak: 0 } },
   { name: "genres 10 distinct", input: { entries: withGenres(20, 10), lifetimeWatchedMs: 0, bestStreak: 0 } },
   { name: "genres 30 distinct", input: { entries: withGenres(40, 30), lifetimeWatchedMs: 0, bestStreak: 0 } },
   {
     name: "everything maxed",
-    input: { entries: [...entries(50, "completed", ["a"]), ...withGenres(30, 30)], lifetimeWatchedMs: 500 * HOUR, bestStreak: 30 },
+    input: { entries: [...entries(50, "completed", ["a"]), ...withGenres(30, 30)], lifetimeWatchedMs: 500 * HOUR, bestStreak: 100 },
   },
 ];
 

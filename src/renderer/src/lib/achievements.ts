@@ -5,6 +5,19 @@ import {
   BookMarked,
   Archive,
   Trophy,
+  Coffee,
+  Popcorn,
+  Sofa,
+  AlarmClock,
+  Gauge,
+  Sprout,
+  Rocket,
+  Gem,
+  Star,
+  MonitorPlay,
+  Video,
+  Projector,
+  Theater,
   Medal,
   Crown,
   Flame,
@@ -81,24 +94,39 @@ const COLLECTOR_TIERS: AchievementTier[] = [
   { id: "collector_50", icon: Archive, target: 50, xp: 40 },
 ];
 const FINISHER_TIERS: AchievementTier[] = [
-  { id: "finisher", icon: Trophy, target: 1, xp: 40 },
-  { id: "marathoner_10", icon: Medal, target: 10, xp: 250 },
-  { id: "marathoner_50", icon: Crown, target: 50, xp: 900 },
+  { id: "finisher", icon: Trophy, target: 1, xp: 200 },
+  { id: "marathoner_10", icon: Medal, target: 10, xp: 800 },
+  { id: "marathoner_50", icon: Crown, target: 50, xp: 3000 },
 ];
+// More, closer steps than a handful of big ones: a new tier should be something you meet every few
+// sessions, not once a season. Each family's rewards climb with the effort behind the step.
 const STREAK_TIERS: AchievementTier[] = [
-  { id: "streak_7", icon: Flame, target: 7, xp: 60 },
-  { id: "streak_14", icon: Zap, target: 14, xp: 150 },
-  { id: "streak_30", icon: CalendarRange, target: 30, xp: 400 },
+  { id: "streak_3", icon: Sprout, target: 3, xp: 60 },
+  { id: "streak_7", icon: Flame, target: 7, xp: 160 },
+  { id: "streak_14", icon: Zap, target: 14, xp: 360 },
+  { id: "streak_21", icon: Rocket, target: 21, xp: 600 },
+  { id: "streak_30", icon: CalendarRange, target: 30, xp: 1000 },
+  { id: "streak_60", icon: Gem, target: 60, xp: 1800 },
+  { id: "streak_100", icon: Star, target: 100, xp: 3200 },
 ];
 const WATCH_TIERS: AchievementTier[] = [
-  { id: "watch_24h", icon: Clock, target: 24, xp: 300 },
-  { id: "watch_100h", icon: Timer, target: 100, xp: 900 },
-  { id: "watch_500h", icon: Hourglass, target: 500, xp: 3000 },
+  { id: "watch_3h", icon: Coffee, target: 3, xp: 120 },
+  { id: "watch_6h", icon: Popcorn, target: 6, xp: 240 },
+  { id: "watch_12h", icon: Sofa, target: 12, xp: 440 },
+  { id: "watch_24h", icon: Clock, target: 24, xp: 800 },
+  { id: "watch_50h", icon: AlarmClock, target: 50, xp: 1400 },
+  { id: "watch_100h", icon: Timer, target: 100, xp: 2400 },
+  { id: "watch_250h", icon: Gauge, target: 250, xp: 4000 },
+  { id: "watch_500h", icon: Hourglass, target: 500, xp: 7000 },
 ];
 const EPISODES_TIERS: AchievementTier[] = [
-  { id: "episodes_50", icon: Tv, target: 50, xp: 200 },
-  { id: "episodes_100", icon: Film, target: 100, xp: 450 },
-  { id: "episodes_300", icon: Clapperboard, target: 300, xp: 1200 },
+  { id: "episodes_10", icon: MonitorPlay, target: 10, xp: 80 },
+  { id: "episodes_25", icon: Video, target: 25, xp: 200 },
+  { id: "episodes_50", icon: Tv, target: 50, xp: 500 },
+  { id: "episodes_100", icon: Film, target: 100, xp: 1000 },
+  { id: "episodes_200", icon: Projector, target: 200, xp: 1600 },
+  { id: "episodes_300", icon: Clapperboard, target: 300, xp: 2600 },
+  { id: "episodes_500", icon: Theater, target: 500, xp: 4400 },
 ];
 const GENRES_TIERS: AchievementTier[] = [
   { id: "genre_explorer", icon: Palette, target: 10, xp: 25 },
