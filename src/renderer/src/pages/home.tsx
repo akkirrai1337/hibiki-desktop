@@ -8,11 +8,9 @@ import { useCachedTitleList } from "@/lib/cachedTitleList";
 import { AnimeCard, PosterGrid, PosterGridSkeleton, animeTitle } from "@/components/AnimeCard";
 import { ContinueWatchingFrameRow } from "@/components/ContinueWatchingRow";
 import { ErrorBanner } from "@/components/ErrorBanner";
-import { useDescribedTitles } from "@/lib/describedTitles";
 import { HERO_ACTION_CLASS, HeroCarousel, type HeroSlide } from "@/components/Hero";
 import { useContinueWatching } from "@/lib/continueWatching";
 import { useUiStore } from "@/stores/uiStore";
-import { useMetadataProviderKey } from "@/lib/aggregatorBrowsing";
 import { pickPopularSort } from "@/lib/catalogSort";
 import type { AnimeTitle } from "@shared/types";
 
@@ -47,7 +45,6 @@ export function CatalogPage() {
   const sources = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });
   const activeSourceId = useUiStore((s) => s.activeSourceId);
   const source = sources.data?.find((s) => s.id === activeSourceId) ?? sources.data?.[0];
-  const providerKey = useMetadataProviderKey(source);
   // The source's own best-known order, once we know what it offers (undefined = its default listing).
   const settings = useQuery({
     queryKey: ["filterCatalog", source?.id],
@@ -84,8 +81,8 @@ export function CatalogPage() {
   // caches per-title lookups under query keys both pages agree on so whichever loads first does
   // the actual work.
   const { hasHistory } = useContinueWatching();
-  const { titles: heroSlides } = useDescribedTitles(source?.id, hero.data, providerKey);
-  const { titles: poolTitles, loadingIds: poolLoadingIds } = useDescribedTitles(source?.id, pool.data, providerKey);
+  const heroSlides = useMemo(() => hero.data ?? [], [hero.data]);
+  const poolTitles = useMemo(() => pool.data ?? [], [pool.data]);
   const isNew = !hasHistory;
   const sourceById = useMemo(() => new Map((sources.data ?? []).map((s) => [s.id, s])), [sources.data]);
   // Re-shuffled each time a fresh pool comes in (new source, new random offset, ...) so this
@@ -117,10 +114,10 @@ export function CatalogPage() {
           <ContinueWatchingFrameRow sourceById={sourceById} />
         </Section>}
         <Section title={isNew ? t("catalog.popularNow") : t("catalog.becauseYouWatched")} action={t("catalog.openCatalog")} to="/catalog">
-          {pool.isLoading ? <PosterGridSkeleton count={15} /> : <PosterGrid>{recommended.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} metadataLoading={poolLoadingIds.has(item.id)} />)}</PosterGrid>}
+          {pool.isLoading ? <PosterGridSkeleton count={15} /> : <PosterGrid>{recommended.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</PosterGrid>}
         </Section>
         {genreSection && <Section title={t("catalog.genreSection", { genre: genreSection.genre })} action={t("catalog.openCatalog")} to="/catalog">
-          <PosterGrid>{genreSection.items.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} metadataLoading={poolLoadingIds.has(item.id)} />)}</PosterGrid>
+          <PosterGrid>{genreSection.items.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</PosterGrid>
         </Section>}
       </div>
     </>}

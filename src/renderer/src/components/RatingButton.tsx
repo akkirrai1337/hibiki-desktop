@@ -8,9 +8,8 @@ import { hibiki } from "@/lib/hibiki";
 import { useSignInPrompt } from "@/components/SignInPrompt";
 import { cn } from "@/lib/cn";
 
-// Every source here scores out of ten, and so does every aggregator once its own scale is
-// normalized (see shared/externalMetadata.ts) - so this is the app's scale too, not a per-source
-// one to be discovered at runtime.
+// Every source here scores out of ten, so this is the app's scale too, not a per-source one to be
+// discovered at runtime.
 const MAX_RATING = 10;
 
 /**

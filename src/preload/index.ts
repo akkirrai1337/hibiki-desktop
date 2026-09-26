@@ -1,6 +1,5 @@
 import { contextBridge, ipcRenderer, webFrame } from "electron";
 import { IPC } from "@shared/ipc";
-import type { ExternalCatalogRequest, ExternalMetadata, MetadataProviderId } from "@shared/externalMetadata";
 import type {
   AnimeTitle,
   AppUpdate,
@@ -28,11 +27,7 @@ import type {
   SourceReview,
   UpdateDownloadProgress,
   WatchProgress,
-  ExternalMetadataPreferences,
-  MetadataBindingState,
   RatingSyncResult,
-  MetadataSearchResult,
-  ResolvedSourceTitle,
   XpEvent,
 } from "@shared/types";
 
@@ -165,29 +160,6 @@ const api = {
     // beats a renderer-side <canvas> capture) - null if the window's gone or the rect is empty.
     captureFrame: (rect: { x: number; y: number; width: number; height: number }): Promise<string | null> =>
       ipcRenderer.invoke(IPC.playerCaptureFrame, rect),
-  },
-  metadata: {
-    // Mirrors the renderer's persisted preference into the main process, which owns the merge.
-    setPreferences: (preferences: ExternalMetadataPreferences): Promise<void> =>
-      ipcRenderer.invoke(IPC.metadataSetPreferences, preferences),
-    match: (sourceId: string, animeId: string): Promise<MetadataBindingState> =>
-      ipcRenderer.invoke(IPC.metadataMatch, sourceId, animeId),
-    describeList: (sourceId: string, titles: AnimeTitle[]): Promise<AnimeTitle[]> =>
-      ipcRenderer.invoke(IPC.metadataDescribeList, sourceId, titles),
-    search: (sourceId: string, query: string): Promise<MetadataSearchResult> =>
-      ipcRenderer.invoke(IPC.metadataSearch, sourceId, query),
-    entry: (provider: MetadataProviderId, reference: { externalId?: number; slug?: string }): Promise<ExternalMetadata | null> =>
-      ipcRenderer.invoke(IPC.metadataEntry, provider, reference),
-    setMatch: (sourceId: string, animeId: string, provider: MetadataProviderId, externalId: number): Promise<ExternalMetadata | null> =>
-      ipcRenderer.invoke(IPC.metadataSetMatch, sourceId, animeId, provider, externalId),
-    browse: (sourceId: string, request: ExternalCatalogRequest): Promise<{ results: ExternalMetadata[]; provider: MetadataProviderId | null }> =>
-      ipcRenderer.invoke(IPC.metadataBrowse, sourceId, request),
-    resolveSource: (sourceId: string, entry: ExternalMetadata): Promise<ResolvedSourceTitle | null> =>
-      ipcRenderer.invoke(IPC.metadataResolveSource, sourceId, entry),
-    setSourceTitle: (sourceId: string, animeId: string, entry: ExternalMetadata): Promise<void> =>
-      ipcRenderer.invoke(IPC.metadataSetSourceTitle, sourceId, animeId, entry),
-    clearMatch: (sourceId: string, animeId: string): Promise<void> =>
-      ipcRenderer.invoke(IPC.metadataClearMatch, sourceId, animeId),
   },
   discord: {
     setEnabled: (enabled: boolean): Promise<void> => ipcRenderer.invoke(IPC.discordSetEnabled, enabled),

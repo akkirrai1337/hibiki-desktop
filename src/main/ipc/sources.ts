@@ -1,103 +1,10 @@
 import { ipcMain } from "electron";
 import { IPC } from "@shared/ipc";
-import type { AnimeTitle, ExternalMetadataPreferences, MetadataBindingState, ResolvedSourceTitle, PlaybackGroup, PlayerLink, PlayerLinkPreference } from "@shared/types";
-import {
-  mergeExternalMetadata,
-  type ExternalCatalogRequest,
-  type ExternalMetadata,
-  type MetadataProviderId,
-} from "@shared/externalMetadata";
+import type { AnimeTitle, PlaybackGroup, PlayerLink, PlayerLinkPreference } from "@shared/types";
 import type { ExtensionRuntime } from "../extensions/runtime";
-import {
-  browseProviders,
-  clearMatch,
-  currentMatch,
-  describeMany,
-  fetchEntry,
-  getExternalMetadata,
-  resolveSourceTitle,
-  searchProviders,
-  setManualMatch,
-  setManualSourceTitle,
-} from "../metadata/externalMetadataService";
-import { providerOrderFor, setExternalMetadataPreferences } from "../metadata/metadataPreferences";
 import { cacheAnime, cachePlaybackGroups, cacheSourceQuery, getCachedAnime, getCachedAnimeMany, getCachedPlaybackGroups, getCachedPlaybackGroupsEntry, getCachedSourceQuery } from "../offlineCache";
 
 export function registerSourceHandlers(runtime: ExtensionRuntime): void {
-  // Which providers may describe this source's titles, in order - shared by every path below, so a
-  // list, a title page and the line naming the provider all agree.
-  const orderFor = (sourceId: string): MetadataProviderId[] =>
-    providerOrderFor(sourceId, runtime.list().find((info) => info.id === sourceId)?.useExternalMetadata === true);
-
-  /**
-   * Replaces a title's descriptive fields with a metadata provider's, when both the source asked
-   * for that in its manifest and the user has not turned it off.
-   *
-   * Failures are swallowed on purpose: a provider being unreachable, rate-limiting us, or simply
-   * not carrying this title must cost the better description and nothing else - the source's own
-   * page still renders exactly as it did before this existed.
-   */
-  const describe = async (sourceId: string, anime: AnimeTitle): Promise<AnimeTitle> => {
-    const order = orderFor(sourceId);
-    if (order.length === 0) return anime;
-    try {
-      return mergeExternalMetadata(anime, await getExternalMetadata(anime, order));
-    } catch {
-      return anime;
-    }
-  };
-
-  // Lists are deliberately *not* described from a provider, not even from the cache. Enriching only
-  // the titles that happen to be cached leaves a screen where some cards are named by the provider
-  // and some by the source, and the two disagree - which reads as a broken list even when every
-  // entry in it is correct. Describing all of them instead would mean a match per unseen title, at
-  // roughly one request a second, on a screen built to be scrolled. So a card shows what its source
-  // called the title, and the provider's version starts at the title page.
-  ipcMain.handle(IPC.metadataSetPreferences, (_e, preferences: ExternalMetadataPreferences) =>
-    setExternalMetadataPreferences(preferences),
-  );
-  ipcMain.handle(IPC.metadataMatch, (_e, sourceId: string, animeId: string): MetadataBindingState => {
-    const providers = orderFor(sourceId);
-    return { providers, match: currentMatch(sourceId, animeId, providers) };
-  });
-  ipcMain.handle(IPC.metadataDescribeList, async (_e, sourceId: string, titles: AnimeTitle[]): Promise<AnimeTitle[]> => {
-    const order = orderFor(sourceId);
-    if (order.length === 0 || titles.length === 0) return titles;
-    try {
-      const described = new Map((await describeMany(titles, order)).map((entry) => [entry.animeId, entry.media]));
-      return titles.map((title) => mergeExternalMetadata(title, described.get(title.id) ?? null));
-    } catch {
-      return titles;
-    }
-  });
-  ipcMain.handle(IPC.metadataSearch, (_e, sourceId: string, query: string) =>
-    searchProviders(query, orderFor(sourceId)),
-  );
-  ipcMain.handle(IPC.metadataEntry, (_e, provider: MetadataProviderId, reference: { externalId?: number; slug?: string }) =>
-    fetchEntry(provider, reference),
-  );
-  ipcMain.handle(
-    IPC.metadataSetMatch,
-    (_e, sourceId: string, animeId: string, provider: MetadataProviderId, externalId: number) =>
-      setManualMatch(sourceId, animeId, provider, externalId),
-  );
-  // The source's own search, as the resolver sees it - one query in, its titles out. Kept here
-  // rather than in the service so that layer stays free of the extension runtime.
-  // The catalog is browsed for a source, not in the abstract: which providers may answer, and in
-  // which order, is that source's own setting.
-  ipcMain.handle(IPC.metadataBrowse, (_e, sourceId: string, request: ExternalCatalogRequest) =>
-    browseProviders(request, orderFor(sourceId)),
-  );
-  ipcMain.handle(
-    IPC.metadataResolveSource,
-    (_e, sourceId: string, entry: ExternalMetadata): Promise<ResolvedSourceTitle | null> =>
-      resolveSourceTitle(sourceId, entry, (query) => runtime.search(sourceId, { query, limit: 20 })),
-  );
-  ipcMain.handle(
-    IPC.metadataSetSourceTitle,
-    (_e, sourceId: string, animeId: string, entry: ExternalMetadata) => setManualSourceTitle(sourceId, animeId, entry),
-  );
-  ipcMain.handle(IPC.metadataClearMatch, (_e, sourceId: string, animeId: string) => clearMatch(sourceId, animeId));
   ipcMain.handle(IPC.sourcesList, () => runtime.list());
   ipcMain.handle(IPC.sourceSearch, (_e, sourceId: string, request, requestId?: string) => runtime.search(sourceId, request, requestId));
   ipcMain.on(IPC.sourceSearchCancel, (_e, requestId: string) => runtime.cancelRequest(requestId));
@@ -109,9 +16,7 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   // nothing cached still fails exactly as before.
   ipcMain.handle(IPC.sourceGetById, async (_e, sourceId: string, id: string): Promise<AnimeTitle> => {
     try {
-      const anime = await describe(sourceId, await runtime.getById(sourceId, id));
-      // Cached *after* the merge, so an offline visit shows the same page the online one did
-      // rather than falling back to the source's own thinner description.
+      const anime = await runtime.getById(sourceId, id);
       cacheAnime(sourceId, id, anime);
       return anime;
     } catch (err) {

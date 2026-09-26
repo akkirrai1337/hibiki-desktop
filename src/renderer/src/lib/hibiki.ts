@@ -1,4 +1,3 @@
-import type { ExternalCatalogRequest, ExternalMetadata, MetadataProviderId } from "@shared/externalMetadata";
 import type {
   AnimeTitle,
   AppUpdate,
@@ -10,12 +9,8 @@ import type {
   DownloadedEpisode,
   DownloadProgress,
   DownloadRequest,
-  ExternalMetadataPreferences,
   InstalledVersions,
-  MetadataBindingState,
   RatingSyncResult,
-  MetadataSearchResult,
-  ResolvedSourceTitle,
   LibraryEntry,
   MarketplaceExtension,
   PlaybackGroup,
@@ -120,18 +115,6 @@ export interface HibikiApi {
     unregisterHeaders(sessionId: string): Promise<void>;
     resolveStreamUrl(url: string, headers: Record<string, string> | null | undefined): Promise<string>;
     captureFrame(rect: { x: number; y: number; width: number; height: number }): Promise<string | null>;
-  };
-  metadata: {
-    setPreferences(preferences: ExternalMetadataPreferences): Promise<void>;
-    match(sourceId: string, animeId: string): Promise<MetadataBindingState>;
-    describeList(sourceId: string, titles: AnimeTitle[]): Promise<AnimeTitle[]>;
-    search(sourceId: string, query: string): Promise<MetadataSearchResult>;
-    entry(provider: MetadataProviderId, reference: { externalId?: number; slug?: string }): Promise<ExternalMetadata | null>;
-    setMatch(sourceId: string, animeId: string, provider: MetadataProviderId, externalId: number): Promise<ExternalMetadata | null>;
-    browse(sourceId: string, request: ExternalCatalogRequest): Promise<{ results: ExternalMetadata[]; provider: MetadataProviderId | null }>;
-    resolveSource(sourceId: string, entry: ExternalMetadata): Promise<ResolvedSourceTitle | null>;
-    setSourceTitle(sourceId: string, animeId: string, entry: ExternalMetadata): Promise<void>;
-    clearMatch(sourceId: string, animeId: string): Promise<void>;
   };
   discord: {
     setEnabled(enabled: boolean): Promise<void>;

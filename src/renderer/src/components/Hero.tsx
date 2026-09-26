@@ -13,9 +13,8 @@ const HERO_INTERVAL_MS = 7000;
 /**
  * One slide, as the carousel needs it: display fields plus where the slide leads.
  *
- * Deliberately not an AnimeTitle. The home screen shows either a source's titles or an aggregator's
- * entries depending on a setting, and those are different things with different ids leading to
- * different routes - the one thing they have in common is exactly this shape.
+ * Deliberately not an AnimeTitle: a slide is display fields plus where it leads, whatever it was
+ * built from.
  */
 export interface HeroSlide {
   key: string;
@@ -26,7 +25,7 @@ export interface HeroSlide {
   year?: number | null;
   episodeCount?: number | null;
   /** The "open this" control, rendered by the caller so each keeps its own typed route and params -
-   * a source title and an aggregator entry lead to different routes. Use HERO_ACTION_CLASS on it. */
+   * so each keeps its own typed route and params. Use HERO_ACTION_CLASS on it. */
   action: React.ReactNode;
 }
 

@@ -7,10 +7,8 @@ import type { TFunction } from "i18next";
 import { AnimatePresence, motion } from "motion/react";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import { Play, Bookmark, Check, ChevronDown, Clock, Download, Eraser, ExternalLink, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
-import { metadataProviderOrder } from "@shared/externalMetadata";
 import { CommentsSection } from "@/components/CommentsSection";
 import { RatingButton, SourceRatings } from "@/components/RatingButton";
-import { MetadataBinding } from "@/components/MetadataBinding";
 import { hibiki } from "@/lib/hibiki";
 import { findListedTitle } from "@/lib/listedTitles";
 import { usePlaybackGroups } from "@/lib/playbackGroups";
@@ -29,10 +27,6 @@ import type { AnimeTitle, DownloadProgress, Episode, LibraryCategory, PlaybackGr
 // reverts back to the normal play affordance - long enough to actually read, short enough not to
 // linger as stale-looking state on a chip you've since moved on from.
 const DOWNLOAD_RESULT_DISPLAY_MS = 4000;
-
-// Same reasoning as the continue-watching row's own card metadata: a match, once found, is stable
-// enough for a day that re-describing every one of these strips on every visit would just be waste.
-const RELATED_METADATA_STALE_MS = 24 * 60 * 60_000;
 
 export const Route = createFileRoute("/anime/$sourceId/$animeId")({
   // Kept in the URL (like /catalog's `sort`) rather than component state - so the chosen
@@ -98,43 +92,6 @@ function isUpcomingDay(epochMs: number): boolean {
 function dedupeById<T extends { id: string }>(items: T[]): T[] {
   const seen = new Set<string>();
   return items.filter((item) => (seen.has(item.id) ? false : (seen.add(item.id), true)));
-}
-
-/** A related/similar card as a minimal stub of the source's own title shape, for `describeList` -
- * it only ever needs an id and a name to search with. */
-function toRelatedStub(sourceId: string, item: RelatedAnimeTitle): AnimeTitle {
-  return {
-    id: item.id,
-    sourceId,
-    englishName: item.title,
-    originalName: item.title,
-    posterUrl: item.posterUrl,
-    year: item.year,
-    type: item.type,
-    availableEpisodeCount: item.episodeCount,
-    status: item.status,
-  };
-}
-
-/** Related/similar cards straight off the source carry that source's own name and poster, which can
- * disagree with the aggregator's cover shown everywhere else on this page (and on the catalog this
- * title was opened from) - the same inconsistency described() already fixes for the title itself.
- * `describeList` already merges an aggregator entry over a title when one is found and leaves it
- * untouched otherwise, so this just needs to feed it stubs and read the merged fields back. */
-function withDescribed(items: RelatedAnimeTitle[], described: Map<string, AnimeTitle>): RelatedAnimeTitle[] {
-  return items.map((item) => {
-    const match = described.get(item.id);
-    if (!match) return item;
-    return {
-      ...item,
-      title: match.englishName || match.originalName || item.title,
-      posterUrl: match.posterUrl ?? item.posterUrl,
-      year: match.year ?? item.year,
-      type: match.type ?? item.type,
-      episodeCount: match.availableEpisodeCount ?? item.episodeCount,
-      status: match.status ?? item.status,
-    };
-  });
 }
 
 // Same "6 full + a peek of the 7th" ratio the old hand-rolled version used (60px = 6 gaps of
@@ -228,26 +185,10 @@ function AnimeDetailPage() {
         animeId,
       ),
   });
-  // Whether this page's title is going to be described by a metadata provider - which decides
-  // whether the placeholder above is worth showing at all. When it is, the placeholder is the
-  // source's own poster and name, and the real fetch replaces both a moment later; a skeleton until
-  // then is steadier than watching the page rewrite itself. The same three inputs the main process
-  // uses, so the two never disagree about it.
   const sourcesQuery = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });
-  // This page's own source, for the two things that are about the site rather than the title:
-  // whether a provider describes it, and whether it has comments.
+  // This page's own source, for the things that are about the site rather than the title: its
+  // comments and its rating.
   const source = sourcesQuery.data?.find((candidate) => candidate.id === sourceId);
-  const externalMetadataEnabled = useUiStore((s) => s.externalMetadataEnabled);
-  const externalMetadataOverrides = useUiStore((s) => s.externalMetadataOverrides);
-  const externalMetadataProvider = useUiStore((s) => s.externalMetadataProvider);
-  const externalMetadataFallback = useUiStore((s) => s.externalMetadataFallback);
-  const describesTitles = metadataProviderOrder(
-    { enabled: externalMetadataEnabled, overrides: externalMetadataOverrides, provider: externalMetadataProvider, fallbackEnabled: externalMetadataFallback },
-    sourceId,
-    source?.useExternalMetadata === true,
-  ).length > 0;
-  // dataUpdatedAt stays 0 for placeholder data, so this is "the real fetch has not landed yet".
-  const describing = describesTitles && animeQuery.dataUpdatedAt === 0 && !animeQuery.isError;
 
   const groupsQuery = usePlaybackGroups(sourceId, animeId);
   const libraryQuery = useQuery({ queryKey: ["library"], queryFn: () => hibiki.library.list() });
@@ -322,23 +263,6 @@ function AnimeDetailPage() {
   const relatedIds = new Set(related.map((r) => r.id));
   const similar = anime ? dedupeById(anime.similarAnime ?? []).filter((r) => r.id !== animeId && !relatedIds.has(r.id)) : [];
 
-  // Same aggregator-description this source already opted into for its own title page, extended to
-  // the strips of other titles below it - otherwise those keep the source's own name/poster even
-  // when the page around them is describing everything from the aggregator.
-  const relatedAndSimilarIds = useMemo(() => [...related, ...similar].map((r) => r.id).join(","), [related, similar]);
-  const describedRelatedQuery = useQuery({
-    queryKey: ["describeRelated", sourceId, relatedAndSimilarIds],
-    queryFn: () => hibiki.metadata.describeList(sourceId, [...related, ...similar].map((item) => toRelatedStub(sourceId, item))),
-    enabled: describesTitles && relatedAndSimilarIds.length > 0,
-    staleTime: RELATED_METADATA_STALE_MS,
-  });
-  const describedById = useMemo(
-    () => new Map((describedRelatedQuery.data ?? []).map((title) => [title.id, title])),
-    [describedRelatedQuery.data],
-  );
-  const describedRelated = withDescribed(related, describedById);
-  const describedSimilar = withDescribed(similar, describedById);
-
   const libraryEntry = libraryQuery.data?.find((e) => e.sourceId === sourceId && e.animeId === animeId);
   const setLibraryCategory = async (category: LibraryCategory) => {
     if (!anime) return;
@@ -387,7 +311,7 @@ function AnimeDetailPage() {
         {/* Held back with the rest of the page: this backdrop is the poster, blurred, so painting
             the source's while a skeleton stands in front of it would change the whole page's tint
             the moment the real one arrives. */}
-        {anime?.posterUrl && !describing && <>
+        {anime?.posterUrl && <>
           <img src={anime.posterUrl} alt="" className="h-full w-full scale-110 object-cover opacity-20 blur-2xl dark:opacity-40" />
           {/* Reads --color-bg straight off the root element (see globals.css) rather than a
               hardcoded hex, same trick as ContinueWatchingRow's own PAGE_BG - so this scrim keeps
@@ -401,10 +325,10 @@ function AnimeDetailPage() {
         </>}
       </div>
     )}
-    {(animeQuery.isLoading || describing) && <DetailSkeleton />}
+    {animeQuery.isLoading && <DetailSkeleton />}
     {animeQuery.isError && <div className="p-8"><ErrorBanner message={(animeQuery.error as Error).message} /></div>}
-    {anime && !describing && <>
-      <Overview anime={anime} libraryCategory={libraryEntry?.category ?? null} onSetLibraryCategory={setLibraryCategory} onRemoveFromLibrary={removeFromLibrary} onPosterClick={() => setPosterPreviewOpen(true)} continueTarget={continueTarget ? { groupId: activeGroup!.id, episodeId: continueTarget.episode.id, label: continueTarget.label } : undefined} sourceId={sourceId} animeId={animeId} source={source} related={describedRelated} titleLoadedAt={animeQuery.dataUpdatedAt} />
+    {anime && <>
+      <Overview anime={anime} libraryCategory={libraryEntry?.category ?? null} onSetLibraryCategory={setLibraryCategory} onRemoveFromLibrary={removeFromLibrary} onPosterClick={() => setPosterPreviewOpen(true)} continueTarget={continueTarget ? { groupId: activeGroup!.id, episodeId: continueTarget.episode.id, label: continueTarget.label } : undefined} sourceId={sourceId} animeId={animeId} source={source} related={related} />
       <div className="px-8 pt-6">
         <h2 className="mb-4 text-xl font-bold tracking-[-.02em] text-text">{t("detail.episodes")}</h2>
         {groupsQuery.isLoading && <div className="text-sm text-muted">{t("detail.loadingEpisodes")}</div>}
@@ -458,7 +382,7 @@ function AnimeDetailPage() {
       </div>
       <div className="px-8 pt-10">
         <TitleStrip
-          items={describedSimilar}
+          items={similar}
           sourceId={sourceId}
           heading={<h2 className="mb-4 text-xl font-bold tracking-[-.02em] text-text">{t("detail.similarTitles")}</h2>}
         />
@@ -684,7 +608,7 @@ function EpisodeChip({
   );
 }
 
-function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLibrary, onPosterClick, continueTarget, sourceId, animeId, source, related, titleLoadedAt }: { anime: AnimeTitle; libraryCategory: LibraryCategory | null; onSetLibraryCategory: (category: LibraryCategory) => void; onRemoveFromLibrary: () => void; onPosterClick: () => void; continueTarget?: { groupId: string; episodeId: string; label: string }; sourceId: string; animeId: string; source: SourceInfo | undefined; related: RelatedAnimeTitle[]; titleLoadedAt: number }) {
+function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLibrary, onPosterClick, continueTarget, sourceId, animeId, source, related }: { anime: AnimeTitle; libraryCategory: LibraryCategory | null; onSetLibraryCategory: (category: LibraryCategory) => void; onRemoveFromLibrary: () => void; onPosterClick: () => void; continueTarget?: { groupId: string; episodeId: string; label: string }; sourceId: string; animeId: string; source: SourceInfo | undefined; related: RelatedAnimeTitle[] }) {
   const { t, i18n } = useTranslation();
   const title = animeTitle(anime);
   const [descriptionOpen, setDescriptionOpen] = useState(false);
@@ -746,10 +670,6 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
           <p ref={descriptionRef} className="select-text text-sm leading-6 text-muted">{anime.description}</p>
         </div>}
         {anime.description && <button onClick={() => setDescriptionOpen((v) => !v)} className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-muted transition hover:text-text">{descriptionOpen ? t("common.hideDescription") : t("common.readDescription")}<ChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-300", descriptionOpen && "rotate-180")} strokeWidth={2.5} /></button>}
-        {/* Where the description came from, and the way to correct a wrong match - below the
-            description it explains, above the actions, since it is a note about this page rather
-            than something to do on it. */}
-        <MetadataBinding sourceId={sourceId} animeId={animeId} titleLoadedAt={titleLoadedAt} />
         <div className="mt-6 flex items-center gap-3">
           {continueTarget ? <Link to="/watch/$sourceId/$animeId/$groupId/$episodeId" params={{ sourceId, animeId, groupId: continueTarget.groupId, episodeId: continueTarget.episodeId }} className="inline-flex items-center gap-2 rounded-xl bg-text px-5 py-3 text-sm font-bold text-bg transition-transform hover:scale-[1.02] active:scale-[0.98]"><Play className="h-4 w-4 fill-current" strokeWidth={0} />{continueTarget.label}</Link>
             : <span className="inline-flex items-center gap-2 rounded-xl bg-text/10 px-5 py-3 text-sm font-bold text-muted">{t("detail.noEpisodes")}</span>}

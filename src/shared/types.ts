@@ -256,79 +256,8 @@ export interface SourceInfo {
   isNsfw: boolean;
   capabilities: SourceCapability[];
   runtime?: "NODE" | "BROWSER";
-  /**
-   * The source admits its own metadata is the weaker half of what it returns, and asks the app to
-   * describe its titles from AniList instead (see shared/anilistMetadata.ts for exactly which
-   * fields that covers - never the episode list, which only the source knows).
-   *
-   * A plain top-level manifest key rather than a new SourceCapability on purpose: unknown *keys*
-   * have always been ignored by both clients, while an unknown capability *value* is only skipped
-   * by Android builds carrying LenientEnumSerializers - which most users do not have installed
-   * yet. Publishing this as a capability today would make the manifest invalid for them.
-   */
-  useExternalMetadata?: boolean;
   /** Empty for every source that does not declare any - which is all of them until one does. */
   settings: SourceSetting[];
-}
-
-/**
- * The user's half of the external-metadata decision (the source's half is its manifest's
- * `useExternalMetadata`). Lives in the renderer's persisted UI store and is mirrored into main,
- * which is where the merge happens.
- */
-export interface ExternalMetadataPreferences {
-  /** The global switch, on by default. */
-  enabled: boolean;
-  /** Per-source answers that win over `enabled` in both directions, keyed by source id. */
-  overrides: Record<string, boolean>;
-  /** Which aggregator to describe titles from (see shared/externalMetadata.ts, which is where this
-   * is interpreted). */
-  provider: import("./externalMetadata").MetadataProviderId;
-  /** Whether the other provider is tried when the preferred one has nothing or cannot be reached.
-   * Both APIs have outages, and a page that quietly falls back still looks right. */
-  fallbackEnabled: boolean;
-}
-
-/** What the title page needs in order to draw its metadata line at all: which providers may
- * describe this title (empty when the source does not use external metadata, or the user turned it
- * off) and what it is currently bound to, if anything.
- *
- * The two are separate because "no match yet" is a state the page must still show a way out of -
- * that is exactly when someone needs the manual picker, since a missing match usually means the
- * provider's search could not answer. */
-export interface MetadataBindingState {
-  providers: Array<import("./externalMetadata").MetadataProviderId>;
-  match: MetadataMatchInfo | null;
-}
-
-/** Which provider entry is describing this title, and whether the user picked it by hand (in which
- * case the matcher will never change it). */
-export interface MetadataMatchInfo {
-  provider: import("./externalMetadata").MetadataProviderId;
-  externalId: number;
-  manual: boolean;
-  /** 0..100 for an automatic match, null for a manual one, which is certain by definition. */
-  confidence: number | null;
-}
-
-/**
- * Which title of a source a provider entry resolved to, for a catalog browsed from the aggregator
- * (see docs/aggregator-first-catalog.md). `via` says how it was found, so a screen can be honest
- * about a match that was decided by name alone.
- */
-export interface ResolvedSourceTitle {
-  animeId: string;
-  /** 0..100 for a match the app made, null for one the user set by hand. */
-  confidence: number | null;
-  manual: boolean;
-  via: "recorded" | "cross-provider" | "search";
-}
-
-/** A manual-picker search, plus which provider actually answered it - null means none did, and the
- * picker says so instead of showing an empty list as if nothing matched. */
-export interface MetadataSearchResult {
-  results: import("./externalMetadata").ExternalMetadata[];
-  searchedProvider: import("./externalMetadata").MetadataProviderId | null;
 }
 
 // A source-declared (id, display title) pair - options come from the source itself (e.g. its own

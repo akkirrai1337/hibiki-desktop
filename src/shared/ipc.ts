@@ -85,24 +85,6 @@ export const IPC = {
   playerResolveStreamUrl: "player:resolveStreamUrl",
   playerCaptureFrame: "player:captureFrame",
 
-  // AniList metadata: the renderer mirrors its persisted preference into main, which owns the
-  // merge (see metadata/metadataPreferences.ts).
-  metadataSetPreferences: "metadata:setPreferences",
-  // The title page's own metadata line: what describes this title, and the manual rebind behind it.
-  metadataMatch: "metadata:match",
-  // Describes a whole list screen in the background, so its cards and the title pages they lead to
-  // agree - see describeMany.
-  metadataDescribeList: "metadata:describeList",
-  metadataSearch: "metadata:search",
-  metadataEntry: "metadata:entry",
-  metadataSetMatch: "metadata:setMatch",
-  // The reverse direction: which title of a source is this provider entry (see
-  // docs/aggregator-first-catalog.md).
-  metadataBrowse: "metadata:browse",
-  metadataResolveSource: "metadata:resolveSource",
-  metadataSetSourceTitle: "metadata:setSourceTitle",
-  metadataClearMatch: "metadata:clearMatch",
-
   discordSetEnabled: "discord:setEnabled",
   discordUpdatePresence: "discord:updatePresence",
   discordSetIdlePresence: "discord:setIdlePresence",

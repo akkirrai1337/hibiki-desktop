@@ -8,9 +8,7 @@ import { hibiki } from "@/lib/hibiki";
 import { AnimeCard, PosterGrid, PosterGridSkeleton } from "@/components/AnimeCard";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { useUiStore } from "@/stores/uiStore";
-import { useDescribedTitles } from "@/lib/describedTitles";
 import { CatalogModeMenu } from "@/components/CatalogModeMenu";
-import { useMetadataProviderKey } from "@/lib/aggregatorBrowsing";
 import { sortLabel } from "@/lib/catalogSort";
 import { CatalogFilters } from "@/components/CatalogFilters";
 import { activeFilterCount, toSearchRequestFilters, type SearchFilters } from "@/lib/searchFilters";
@@ -37,7 +35,6 @@ export function CatalogBrowsePage() {
   const sources = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });
   const activeSourceId = useUiStore((s) => s.activeSourceId);
   const source = sources.data?.find((s) => s.id === activeSourceId) ?? sources.data?.[0];
-  const providerKey = useMetadataProviderKey(source);
   const setRequestedMode = (next: string) => navigate({ to: "/catalog", search: { sort: next }, replace: true });
 
   // Same key as the filter panel's query, so the source is asked once for both.
@@ -72,12 +69,7 @@ export function CatalogBrowsePage() {
       lastPage.length < PAGE_SIZE ? undefined : allPages.reduce((offset, page) => offset + page.length, 0)
     ),
   });
-  const sourceItems = browse.data?.pages.flat() ?? [];
-  const { titles: items, loadingIds } = useDescribedTitles(
-    source?.id,
-    sourceItems,
-    providerKey,
-  );
+  const items = useMemo(() => browse.data?.pages.flat() ?? [], [browse.data]);
   const isLoading = settings.isLoading || browse.isLoading;
   const isError = browse.isError;
   const error = browse.error;
@@ -123,7 +115,7 @@ export function CatalogBrowsePage() {
             <EmptyState text={t(filterCount > 0 ? "catalogPage.emptyFiltered" : "catalogPage.empty")} />
           ) : (
             <>
-              <VirtualGrid items={items} loadingIds={loadingIds} />
+              <VirtualGrid items={items} />
               {hasNextPage && (
                 <div ref={loadMoreRef} className="mt-8 flex justify-center">
                   {catalogAutoLoad ? (
@@ -182,7 +174,7 @@ function useGridColumnCount(): number {
 // each) are all still there regardless of whether any given one is currently painted. Rendering
 // only the rows actually near the viewport (plus a small overscan) keeps the real DOM node count
 // bounded no matter how many pages have been paged through.
-function VirtualGrid({ items, loadingIds }: { items: AnimeTitle[]; loadingIds: Set<string> }) {
+function VirtualGrid({ items }: { items: AnimeTitle[] }) {
   const columns = useGridColumnCount();
   const rows = useMemo(() => {
     const out: AnimeTitle[][] = [];
@@ -219,7 +211,7 @@ function VirtualGrid({ items, loadingIds }: { items: AnimeTitle[]; loadingIds: S
         // first render) - the real grid, unvirtualized, so there's an actual mounted node for that
         // callback to fire against; the resulting state update switches to the virtualized branch
         // immediately after, and this one never shows again.
-        <PosterGrid>{items.map((item) => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} metadataLoading={loadingIds.has(item.id)} />)}</PosterGrid>
+        <PosterGrid>{items.map((item) => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</PosterGrid>
       ) : (
         rowVirtualizer.getVirtualItems().map((virtualRow) => (
           <div
@@ -229,7 +221,7 @@ function VirtualGrid({ items, loadingIds }: { items: AnimeTitle[]; loadingIds: S
             style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${virtualRow.start}px)` }}
           >
             <div className="grid gap-x-4" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
-              {rows[virtualRow.index].map((item) => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} metadataLoading={loadingIds.has(item.id)} />)}
+              {rows[virtualRow.index].map((item) => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}
             </div>
           </div>
         ))

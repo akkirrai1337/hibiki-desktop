@@ -8,7 +8,7 @@ export interface CatalogModeOption<T extends string> {
   label: string;
 }
 
-/** One mode picker shared by source-backed and aggregator-backed catalogs. */
+/** A small dropdown for picking one of several modes (the catalog's sort orders). */
 export function CatalogModeMenu<T extends string>({
   value,
   options,

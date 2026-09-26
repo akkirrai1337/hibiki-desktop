@@ -127,12 +127,10 @@ export function SourcesPage() {
   // Which installed sources have anything to configure. The cards below are built from marketplace
   // entries, which carry no settings - only the installed manifest does.
   const sourcesWithSettings = useMemo(
-    // A source that asks for AniList metadata has something to configure even with no settings of
-    // its own: the dialog carries the app's per-source switch for it.
     () =>
       new Set(
         (installedSources.data ?? [])
-          .filter((source) => (source.settings?.length ?? 0) > 0 || source.useExternalMetadata)
+          .filter((source) => (source.settings?.length ?? 0) > 0)
           .map((source) => source.id),
       ),
     [installedSources.data],

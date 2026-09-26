@@ -65,7 +65,6 @@ interface Manifest {
   lang?: string;
   isNsfw?: boolean;
   capabilities?: string[];
-  useExternalMetadata?: boolean;
   resolverDependencies?: string[];
   settings?: SourceInfo["settings"];
 }
@@ -243,7 +242,6 @@ export class ExtensionRuntime {
       lang: manifest.lang ?? null,
       isNsfw: manifest.isNsfw === true,
       capabilities: (manifest.capabilities ?? []) as SourceInfo["capabilities"],
-      useExternalMetadata: manifest.useExternalMetadata === true,
       runtime: "NODE",
       settings: manifest.settings ?? [],
     }));

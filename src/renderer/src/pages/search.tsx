@@ -5,10 +5,8 @@ import { hibiki, searchSource } from "@/lib/hibiki";
 import { AnimeCard, PosterGrid, PosterGridSkeleton } from "@/components/AnimeCard";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { useUiStore } from "@/stores/uiStore";
-import { useDescribedTitles } from "@/lib/describedTitles";
 import { useSearchFiltersStore } from "@/stores/searchFiltersStore";
 import { activeFilterCount, toSearchRequestFilters } from "@/lib/searchFilters";
-import { useMetadataProviderKey } from "@/lib/aggregatorBrowsing";
 
 function parseSearchSearch(search: Record<string, unknown>): { q: string } {
   return {
@@ -45,7 +43,6 @@ export function SearchPage() {
   const sources = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });
   const activeSourceId = useUiStore((s) => s.activeSourceId);
   const source = sources.data?.find((s) => s.id === activeSourceId) ?? sources.data?.[0];
-  const providerKey = useMetadataProviderKey(source);
 
   const filters = useSearchFiltersStore((s) => s.filters);
   const hasFilters = activeFilterCount(filters) > 0;
@@ -61,7 +58,7 @@ export function SearchPage() {
     queryFn: ({ signal }) => searchSource(source!.id, { query: queryIsLongEnough ? trimmedQuery : undefined, limit: 30, ...toSearchRequestFilters(filters) }, signal),
   });
 
-  const { titles: items, loadingIds } = useDescribedTitles(source?.id, results.data, providerKey);
+  const items = results.data ?? [];
 
   return <div className="min-h-full bg-app-bg px-8 py-8 pb-12">
     {!trimmedQuery && !hasFilters && <EmptyState text={t("search.prompt")} />}
@@ -75,7 +72,7 @@ export function SearchPage() {
           {results.isError && <ErrorBanner message={searchErrorMessage(results.error, source?.name ?? t("search.source"), t)} />}
           {results.data && results.data.length === 0 && <EmptyState text={queryIsLongEnough ? t("search.empty", { query: trimmedQuery }) : t("search.filteredEmpty")} />}
           {items.length > 0 && <PosterGrid>
-            {items.map((item) => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} metadataLoading={loadingIds.has(item.id)} />)}
+            {items.map((item) => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}
           </PosterGrid>}
       </>
     </>}

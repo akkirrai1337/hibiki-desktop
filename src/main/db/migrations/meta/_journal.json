@@ -99,6 +99,13 @@
       "when": 1789047951247,
       "tag": "0013_daily_nightcrawler",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1790435759062,
+      "tag": "0014_drop_external_metadata",
+      "breakpoints": true
     }
   ]
 }
