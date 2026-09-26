@@ -33,6 +33,16 @@ export function RatingButton({ source, animeId }: { source: SourceInfo; animeId:
   const [open, setOpen] = useState(false);
   const [hovered, setHovered] = useState<number | null>(null);
 
+  // A score exists to be synced with the source's account, so without one there is nothing to rate
+  // for: the press asks for the account instead (same rule as comments, see CommentsSection). A
+  // source with no account of its own has nobody to sign in as, and is never blocked.
+  const account = useQuery({
+    queryKey: ["sourceAccount", sourceId],
+    queryFn: () => hibiki.sources.account.get(sourceId),
+    enabled: source.capabilities.includes("ACCOUNT"),
+  });
+  const signedIn = !!account.data || !source.capabilities.includes("ACCOUNT");
+
   const rating = useQuery({
     queryKey: ["rating", sourceId, animeId],
     queryFn: () => hibiki.ratings.get(sourceId, animeId),
@@ -66,7 +76,7 @@ export function RatingButton({ source, animeId }: { source: SourceInfo; animeId:
   return (
     <div className="relative">
       <button
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => (signedIn ? setOpen((value) => !value) : promptSignIn(source))}
         className={cn(
           "inline-flex h-[46px] items-center gap-2 rounded-xl border px-4 text-sm font-bold transition-colors",
           current != null
