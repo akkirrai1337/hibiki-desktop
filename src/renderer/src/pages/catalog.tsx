@@ -11,12 +11,11 @@ import { useUiStore } from "@/stores/uiStore";
 import { useDescribedTitles } from "@/lib/describedTitles";
 import { CatalogModeMenu } from "@/components/CatalogModeMenu";
 import { useMetadataProviderKey } from "@/lib/aggregatorBrowsing";
-import { RECENT_MODE, sortLabel } from "@/lib/catalogSort";
+import { sortLabel } from "@/lib/catalogSort";
 import type { AnimeTitle } from "@shared/types";
 
 // What "browse" can be sorted by is the source's business: it declares its own orders in
-// getSettings().sortOptions and gets the chosen id back as `sort`. The only entry that is not one of
-// them is "recent" - the source's latest-releases feed, a different endpoint rather than a sort.
+// getSettings().sortOptions and gets the chosen id back as `sort` - the menu is exactly that list.
 function parseCatalogSearch(search: Record<string, unknown>): { sort: string | undefined } {
   return { sort: typeof search.sort === "string" ? search.sort : undefined };
 }
@@ -24,7 +23,6 @@ function parseCatalogSearch(search: Record<string, unknown>): { sort: string | u
 // Three rows at the widest six-column layout. Smaller batches spread image decoding and DOM work
 // over time instead of producing a visible frame spike whenever 30 posters arrive together.
 const PAGE_SIZE = 18;
-const RECENT_LIMIT = 30;
 
 // A plain `Route.useSearch()` throws once this stays mounted while some other route is active (it
 // requires an active match for this exact route) - reading straight off the location instead keeps
@@ -46,19 +44,18 @@ export function CatalogBrowsePage() {
     enabled: !!source,
     queryFn: () => hibiki.sources.filterCatalog(source!.id),
   });
-  const modes = useMemo(() => {
-    const options = (settings.data?.sortOptions ?? []).map((option) => ({ value: option.id, label: sortLabel(option) }));
-    if (source?.capabilities.includes("LATEST_RELEASES")) options.push({ value: RECENT_MODE, label: t("catalogPage.sort.recent") });
-    return options;
-  }, [settings.data, source, t]);
+  const modes = useMemo(
+    () => (settings.data?.sortOptions ?? []).map((option) => ({ value: option.id, label: sortLabel(option) })),
+    [settings.data],
+  );
   // The first order is the source's own default when nothing (or something no longer offered) was asked for.
   const mode = modes.find((m) => m.value === requestedMode)?.value ?? modes[0]?.value;
-  const sort = mode === RECENT_MODE ? undefined : mode;
+  const sort = mode;
 
   const browse = useInfiniteQuery({
     queryKey: ["catalog", source?.id, sort ?? ""],
     // Wait for the source's orders: asking before them would browse by an order nobody chose.
-    enabled: !!source && settings.isFetched && mode !== RECENT_MODE,
+    enabled: !!source && settings.isFetched,
     initialPageParam: 0,
     queryFn: ({ pageParam }) =>
       hibiki.sources.search(source!.id, { offset: pageParam, limit: PAGE_SIZE, sort }),
@@ -66,23 +63,15 @@ export function CatalogBrowsePage() {
       lastPage.length < PAGE_SIZE ? undefined : allPages.reduce((offset, page) => offset + page.length, 0)
     ),
   });
-  // The "recent" feed is a completely different endpoint (latest releases), not a search sort —
-  // it has no offset param, so there's no "load more" for it.
-  const recent = useQuery({
-    queryKey: ["catalog-recent", source?.id],
-    enabled: !!source && mode === RECENT_MODE,
-    queryFn: () => hibiki.sources.latest(source!.id, RECENT_LIMIT),
-  });
-
-  const sourceItems = mode === RECENT_MODE ? (recent.data ?? []) : (browse.data?.pages.flat() ?? []);
+  const sourceItems = browse.data?.pages.flat() ?? [];
   const { titles: items, loadingIds } = useDescribedTitles(
     source?.id,
     sourceItems,
     providerKey,
   );
-  const isLoading = settings.isLoading || (mode === RECENT_MODE ? recent.isLoading : browse.isLoading);
-  const isError = mode === RECENT_MODE ? recent.isError : browse.isError;
-  const error = mode === RECENT_MODE ? recent.error : browse.error;
+  const isLoading = settings.isLoading || browse.isLoading;
+  const isError = browse.isError;
+  const error = browse.error;
 
   const catalogAutoLoad = useUiStore((s) => s.catalogAutoLoad);
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = browse;
@@ -92,7 +81,7 @@ export function CatalogBrowsePage() {
   // rootMargin gives it a head start (starts loading a bit before the sentinel is actually on
   // screen) so the next page is usually already there by the time scrolling reaches the bottom.
   useEffect(() => {
-    if (!catalogAutoLoad || mode === RECENT_MODE) return;
+    if (!catalogAutoLoad) return;
     const el = loadMoreRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(
@@ -101,7 +90,7 @@ export function CatalogBrowsePage() {
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [catalogAutoLoad, mode, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [catalogAutoLoad, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return (
     <div className="min-h-full bg-app-bg px-8 py-8 pb-16">
@@ -123,7 +112,7 @@ export function CatalogBrowsePage() {
           ) : (
             <>
               <VirtualGrid items={items} loadingIds={loadingIds} />
-              {mode !== RECENT_MODE && hasNextPage && (
+              {hasNextPage && (
                 <div ref={loadMoreRef} className="mt-8 flex justify-center">
                   {catalogAutoLoad ? (
                     isFetchingNextPage && <div className="h-7 w-7 animate-spin rounded-full border-2 border-border border-t-accent" />

@@ -167,6 +167,7 @@ export function TitleBar() {
           />
           {showFilterButton && (
             <button
+              data-filters-toggle
               onClick={() => setFiltersPanelOpen((v) => !v)}
               aria-label={t("search.filters.button")}
               title={t("search.filters.button")}

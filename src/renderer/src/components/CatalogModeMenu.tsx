@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowUpDown, Check } from "lucide-react";
 import { usePopoverTheme } from "@/lib/usePopoverTheme";
@@ -20,12 +20,31 @@ export function CatalogModeMenu<T extends string>({
 }) {
   const popoverTheme = usePopoverTheme();
   const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+
+  // Closes on a press outside or Escape. There is deliberately no full-screen backdrop for this: it
+  // would swallow the mouse wheel, and with the menu open the page behind it could not be scrolled.
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
   const selected = options.find((option) => option.value === value) ?? options[0];
 
   if (!selected) return null;
 
   return (
-    <div className="relative">
+    <div ref={root} className="relative">
       <button
         onClick={() => setOpen((current) => !current)}
         className="flex items-center gap-2 rounded-lg bg-text/[.06] px-3.5 py-2 text-sm font-semibold text-text/80 transition-colors hover:bg-text/[.1]"
@@ -36,7 +55,6 @@ export function CatalogModeMenu<T extends string>({
       <AnimatePresence>
         {open && (
           <>
-            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
             <motion.div
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}

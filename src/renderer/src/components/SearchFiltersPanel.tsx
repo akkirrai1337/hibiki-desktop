@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
@@ -61,10 +61,30 @@ export function SearchFiltersPanel({
   const [draft, setDraft] = useState(filters);
   const popoverTheme = usePopoverTheme();
   useEffect(() => setDraft(filters), [filters]);
+  const root = useRef<HTMLDivElement>(null);
+
+  // Closes on a press outside the panel, or Escape. There is deliberately no full-screen backdrop for
+  // this: it would swallow the mouse wheel, and with the panel open the page behind it could not be
+  // scrolled. The button that opens the panel (data-filters-toggle) is not "outside" - it toggles.
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      if (root.current?.contains(target) || target?.closest("[data-filters-toggle]")) return;
+      onClose();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [onClose]);
 
   return createPortal(
     <>
-      <div className="fixed inset-0 z-40" onClick={onClose} />
       {/* Framer-motion writes the whole `transform` property inline for its own animation (scale/y),
           which would clobber a translate-based centering transform on the same element - so the
           static horizontal centering lives on this plain wrapper instead, one level up. Portaled
@@ -72,7 +92,7 @@ export function SearchFiltersPanel({
           in the titlebar - a blurred poster background elsewhere in the app can otherwise paint
           over this panel despite a lower z-index, a GPU-compositing quirk with filter: blur()
           that ordinary z-index/isolation can't reliably override. */}
-      <div className="fixed z-50 mt-2 w-96 max-w-[calc(100vw-24px)] -translate-x-1/2" style={{ left: anchor.left, top: anchor.bottom }}>
+      <div ref={root} className="fixed z-50 mt-2 w-96 max-w-[calc(100vw-24px)] -translate-x-1/2" style={{ left: anchor.left, top: anchor.bottom }}>
       {/* No `scale` - animating transform:scale() on a panel full of text makes Chromium
           re-rasterize the glyphs at a slightly different subpixel size every frame, reading as
           the text shimmering/shifting while the panel settles in. */}

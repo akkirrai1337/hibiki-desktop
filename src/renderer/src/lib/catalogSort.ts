@@ -1,8 +1,5 @@
 import type { SearchFilterOption } from "@shared/types";
 
-/** The catalog's extra entry: the source's "latest releases" feed, which is not a sort order. */
-export const RECENT_MODE = "recent";
-
 /** A sort order's label: whatever the source called it. */
 export const sortLabel = (option: SearchFilterOption): string => option.title;
 

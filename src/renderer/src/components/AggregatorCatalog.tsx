@@ -143,6 +143,7 @@ export function AggregatorCatalog({ source }: { source: SourceInfo }) {
         {filterable && (
           <button
             ref={filterButtonRef}
+            data-filters-toggle
             onClick={togglePanel}
             aria-label={t("search.filters.button")}
             title={t("search.filters.button")}
