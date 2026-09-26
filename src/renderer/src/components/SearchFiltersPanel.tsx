@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Search } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { usePopoverTheme } from "@/lib/usePopoverTheme";
 import {
@@ -21,6 +21,16 @@ import {
 import { ageRatingRank, chipIconFor, inDisplayOrder, isSortFilter, withoutUnknown, isAgeRatingFilter, isConnectedToggle, optionIcon, yearOptions } from "@/lib/filterVisuals";
 import type { LucideIcon } from "lucide-react";
 import type { FilterValue, SearchFilterCatalog, SearchFilterDef, SearchFilterOption } from "@shared/types";
+
+// A list this long is a shelf to search in (genres, studios); shorter ones sit with the compact controls.
+const LONG_LIST_MINIMUM = 20;
+
+export const isLongList = (def: SearchFilterDef) =>
+  (def.type === "multi" || def.type === "tristate") &&
+  (def.options?.length ?? 0) >= LONG_LIST_MINIMUM &&
+  !yearOptions(def) &&
+  !isAgeRatingFilter(def) &&
+  !isConnectedToggle(def);
 
 // From this many options a list is sorted alphabetically and split by first letter, so one can be
 // found in it (the Android window's threshold). Shorter lists keep the order the source gave them,
@@ -92,7 +102,7 @@ export function SearchFiltersPanel({
           in the titlebar - a blurred poster background elsewhere in the app can otherwise paint
           over this panel despite a lower z-index, a GPU-compositing quirk with filter: blur()
           that ordinary z-index/isolation can't reliably override. */}
-      <div ref={root} className="fixed z-50 mt-2 w-96 max-w-[calc(100vw-24px)] -translate-x-1/2" style={{ left: anchor.left, top: anchor.bottom }}>
+      <div ref={root} className="fixed z-50 mt-2 w-[30rem] max-w-[calc(100vw-24px)] -translate-x-1/2" style={{ left: anchor.left, top: anchor.bottom }}>
       {/* No `scale` - animating transform:scale() on a panel full of text makes Chromium
           re-rasterize the glyphs at a slightly different subpixel size every frame, reading as
           the text shimmering/shifting while the panel settles in. */}
@@ -110,14 +120,14 @@ export function SearchFiltersPanel({
             <p className="py-6 text-center text-sm text-muted">…</p>
           ) : (
             <div className="flex flex-col gap-5">
-              {inDisplayOrder(withoutUnknown(catalog?.filters ?? [])).map((def) => (
-                <FilterSection key={def.id} title={t(`search.filters.${def.id}`, { defaultValue: def.title })}>
-                  <FilterControl
-                    def={def}
-                    value={draft[def.id]}
-                    onChange={(value) => setDraft((f) => withFilterValue(f, def.id, value))}
-                  />
-                </FilterSection>
+              {inWindowOrder(withoutUnknown(catalog?.filters ?? [])).map((def) => (
+                isLongList(def) ? (
+                  <LongList key={def.id} def={def} value={draft[def.id]} onChange={(value) => setDraft((f) => withFilterValue(f, def.id, value))} />
+                ) : (
+                  <FilterSection key={def.id} title={t(`search.filters.${def.id}`, { defaultValue: def.title })}>
+                    <FilterControl def={def} value={draft[def.id]} onChange={(value) => setDraft((f) => withFilterValue(f, def.id, value))} />
+                  </FilterSection>
+                )
               ))}
             </div>
           )}
@@ -139,7 +149,7 @@ export function SearchFiltersPanel({
 
 // Type and status labels come from a short fixed vocabulary many sources report as raw ids
 // ("short_movie"), so those two get a translated label; everything else shows what the source said.
-function optionLabel(def: SearchFilterDef, option: SearchFilterOption, t: ReturnType<typeof useTranslation>["t"]): string {
+export function optionLabel(def: SearchFilterDef, option: SearchFilterOption, t: ReturnType<typeof useTranslation>["t"]): string {
   const label = def.id === "type" ? prettifyTypeLabel(option.id, option.title, t) : def.id === "status" ? prettifyStatusLabel(option.id, option.title, t) : option.title;
   return tidyLabel(label);
 }
@@ -155,7 +165,7 @@ function tidyLabel(label: string): string {
     .join(" ");
 }
 
-function FilterControl({ def, value, onChange }: { def: SearchFilterDef; value: FilterValue | undefined; onChange: (value: FilterValue) => void }) {
+export function FilterControl({ def, value, onChange }: { def: SearchFilterDef; value: FilterValue | undefined; onChange: (value: FilterValue) => void }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
@@ -285,7 +295,7 @@ function FilterControl({ def, value, onChange }: { def: SearchFilterDef; value: 
 
 // A section can be folded away, like the Android window's - a source with a dozen filters would
 // otherwise be one long scroll.
-function FilterSection({ title, children }: { title: string; children: React.ReactNode }) {
+export function FilterSection({ title, children }: { title: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(true);
   return (
     <div>
@@ -494,3 +504,34 @@ function RangeNumberInput({ min, max, value, base, onChange }: { min: number; ma
     </div>
   );
 }
+
+// A long list (genres...) with a box to find an option in it; it scrolls on its own so the panel stays
+// about the height of the compact controls next to it.
+export function LongList({ def, value, onChange }: { def: SearchFilterDef; value: FilterValue | undefined; onChange: (value: FilterValue) => void }) {
+  const { t } = useTranslation();
+  const [query, setQuery] = useState("");
+  const needle = query.trim().toLowerCase();
+  const shown = needle ? { ...def, options: (def.options ?? []).filter((o) => o.title.toLowerCase().includes(needle)) } : def;
+  return (
+    <FilterSection title={t(`search.filters.${def.id}`, { defaultValue: def.title })}>
+      <div className="relative mb-3">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" strokeWidth={2} />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={t("search.filters.findOption")}
+          className="h-8 w-full rounded-lg border border-border bg-text/[.04] pl-8 pr-2.5 text-xs text-text outline-none focus:border-accent/70"
+        />
+      </div>
+      <div className="no-scrollbar max-h-[40vh] overflow-y-auto">
+        <FilterControl def={shown} value={value} onChange={onChange} />
+      </div>
+    </FilterSection>
+  );
+}
+
+/** The order both filter windows show: the short controls first, the long lists (genres...) after them. */
+export const inWindowOrder = (defs: SearchFilterDef[]): SearchFilterDef[] => {
+  const ordered = inDisplayOrder(defs);
+  return [...ordered.filter((d) => !isLongList(d)), ...ordered.filter(isLongList)];
+};

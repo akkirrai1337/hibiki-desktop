@@ -12,6 +12,8 @@ import { useDescribedTitles } from "@/lib/describedTitles";
 import { CatalogModeMenu } from "@/components/CatalogModeMenu";
 import { useMetadataProviderKey } from "@/lib/aggregatorBrowsing";
 import { sortLabel } from "@/lib/catalogSort";
+import { CatalogFilters } from "@/components/CatalogFilters";
+import { activeFilterCount, toSearchRequestFilters, type SearchFilters } from "@/lib/searchFilters";
 import type { AnimeTitle } from "@shared/types";
 
 // What "browse" can be sorted by is the source's business: it declares its own orders in
@@ -45,20 +47,27 @@ export function CatalogBrowsePage() {
     queryFn: () => hibiki.sources.filterCatalog(source!.id),
   });
   const modes = useMemo(
-    () => (settings.data?.sortOptions ?? []).map((option) => ({ value: option.id, label: sortLabel(option) })),
-    [settings.data],
+    () => (settings.data?.sortOptions ?? []).map((option) => ({ value: option.id, label: sortLabel(option, t) })),
+    [settings.data, t],
   );
   // The first order is the source's own default when nothing (or something no longer offered) was asked for.
+  // The catalog's own filters, apart from the search box's: picking one here must not narrow a search.
+  const [filters, setFilters] = useState<SearchFilters>({});
+  // A different source has its own filter ids and options.
+  useEffect(() => setFilters({}), [source?.id]);
+  const filterDefs = settings.data?.filters ?? [];
+  const filterCount = activeFilterCount(filters);
+
   const mode = modes.find((m) => m.value === requestedMode)?.value ?? modes[0]?.value;
   const sort = mode;
 
   const browse = useInfiniteQuery({
-    queryKey: ["catalog", source?.id, sort ?? ""],
+    queryKey: ["catalog", source?.id, sort ?? "", filters],
     // Wait for the source's orders: asking before them would browse by an order nobody chose.
     enabled: !!source && settings.isFetched,
     initialPageParam: 0,
     queryFn: ({ pageParam }) =>
-      hibiki.sources.search(source!.id, { offset: pageParam, limit: PAGE_SIZE, sort }),
+      hibiki.sources.search(source!.id, { offset: pageParam, limit: PAGE_SIZE, sort, ...toSearchRequestFilters(filters) }),
     getNextPageParam: (lastPage, allPages) => (
       lastPage.length < PAGE_SIZE ? undefined : allPages.reduce((offset, page) => offset + page.length, 0)
     ),
@@ -99,16 +108,20 @@ export function CatalogBrowsePage() {
       {sources.data?.length === 0 && <EmptySources />}
       {source && (
         <>
-          {modes.length > 1 && (
-            <div className="mb-6 flex justify-end">
-              <SortMenu mode={mode} modes={modes} onChange={setRequestedMode} />
-            </div>
-          )}
+          <CatalogFilters
+            defs={filterDefs}
+            filters={filters}
+            onChange={setFilters}
+            loading={settings.isLoading}
+            lead={<p className="truncate text-base font-bold text-text/85">{isLoading ? " " : t("catalogPage.shown", { count: items.length })}</p>}
+          >
+            {modes.length > 1 && <SortMenu mode={mode} modes={modes} onChange={setRequestedMode} />}
+          </CatalogFilters>
 
           {isLoading ? (
             <PosterGridSkeleton count={15} />
           ) : items.length === 0 ? (
-            <EmptyState text={t("catalogPage.empty")} />
+            <EmptyState text={t(filterCount > 0 ? "catalogPage.emptyFiltered" : "catalogPage.empty")} />
           ) : (
             <>
               <VirtualGrid items={items} loadingIds={loadingIds} />

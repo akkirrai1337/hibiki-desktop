@@ -236,7 +236,9 @@
         "announced": "Announced",
         "cancelled": "Cancelled",
         "hiatus": "Hiatus"
-      }
+      },
+      "findOption": "Find…",
+      "done": "Done"
     }
   },
   "library": {
@@ -267,7 +269,44 @@
     "sort": {
       "popularity": "Popularity",
       "alphabetical": "Alphabetical",
-      "recent": "Recently updated"
+      "recent": "Recently updated",
+      "names": {
+        "relevance": "Relevance",
+        "top": "Top",
+        "title": "Title",
+        "name": "Name",
+        "year": "Year",
+        "rating": "Rating",
+        "rating_counters": "Number of ratings",
+        "rating_score": "Rating",
+        "score": "Score",
+        "grade": "Rating",
+        "views": "Views",
+        "random": "Random",
+        "id": "Date added",
+        "date": "Date",
+        "added": "Recently added",
+        "updated": "Recently updated",
+        "update": "Recently updated",
+        "latest": "Latest",
+        "recent": "Latest",
+        "fresh": "Newest",
+        "new": "Newest",
+        "popular": "Popularity",
+        "popularity": "Popularity",
+        "trending": "Trending",
+        "default": "Default",
+        "comments": "Comments",
+        "alphabet": "Alphabetical",
+        "alphabetical": "Alphabetical",
+        "az": "A–Z",
+        "release_date": "Release date",
+        "releasedate": "Release date",
+        "weekly": "This week",
+        "monthly": "This month",
+        "alltime": "All time",
+        "all_time": "All time"
+      }
     },
     "aggregator": {
       "trending": "Trending",
@@ -282,7 +321,9 @@
         "fall": "Fall"
       },
       "noMatches": "Nothing matches these filters"
-    }
+    },
+    "emptyFiltered": "Nothing matches these filters",
+    "shown": "Showing {{count}}"
   },
   "history": {
     "title": "Watch history",

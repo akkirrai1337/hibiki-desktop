@@ -47,10 +47,10 @@ describe("year lists", () => {
 import { inDisplayOrder } from "./filterVisuals";
 
 describe("display order", () => {
-  it("puts sort first, then season, genres, year, status, language, type, and the rest as given", () => {
+  it("puts sort first, then season, genres, status, language, type, year, and the rest as given", () => {
     const d = (id: string, title = id): SearchFilterDef => ({ id, title, type: "multi", options: [] });
     const ordered = inDisplayOrder([d("source", "Source"), d("type", "Type"), d("rating", "Rating"), d("status", "Status"), d("year", "Year"), d("genres", "Genres"), d("season", "Season"), d("sort", "Sort")]);
-    expect(ordered.map((x) => x.id)).toEqual(["sort", "season", "genres", "year", "status", "type", "source", "rating"]);
+    expect(ordered.map((x) => x.id)).toEqual(["sort", "season", "genres", "status", "type", "year", "source", "rating"]);
   });
 });
 

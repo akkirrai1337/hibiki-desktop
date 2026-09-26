@@ -198,18 +198,19 @@ export function yearOptions(def: SearchFilterDef): Array<{ year: number; id: str
 }
 
 // Where each kind of filter sits in the window (the Android window's order): sort first, then
-// season, genres, year, status, language, type; anything else follows in the order the source gave.
+// season, genres, status, language, type, year; anything else follows in the order the source gave.
 function filterRank(def: SearchFilterDef): number {
   const t = `${def.id} ${def.title}`.toLowerCase();
   const has = (...words: string[]) => words.some((w) => t.includes(w));
   if (isSortFilter(def)) return 0;
   if (has("season", "сезон")) return 1;
   if (has("genre", "tag", "categor", "жанр", "теги")) return 2;
-  if (YEAR_FILTER_TITLE.test(def.title.trim()) || YEAR_FILTER_TITLE.test(def.id.trim())) return 3;
   if (has("status", "статус")) return 4;
   if (has("language", "lang", "audio", "sub", "язык", "мова")) return 5;
   if (isTypeFilter(def)) return 6;
-  return 7;
+  // The year slider sits under the short chip rows, not above them.
+  if (YEAR_FILTER_TITLE.test(def.title.trim()) || YEAR_FILTER_TITLE.test(def.id.trim())) return 7;
+  return 8;
 }
 
 export function inDisplayOrder(defs: SearchFilterDef[]): SearchFilterDef[] {
