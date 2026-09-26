@@ -2,13 +2,16 @@
 // actually works, with timings - so writing or fixing a source starts from facts, not guesses.
 //
 //   npx tsx scripts/probe-source.ts <id|all> [--dir <extensions dir>] [--json] [--skip-playback]
-//   npx tsx scripts/probe-source.ts discover <url>
+//   npx tsx scripts/probe-source.ts discover <url>     (give it a title page to see which sections it has)
 //
 // What it checks per source:
 //   manifest   declared filters/sorts vs. what getSettings() really offers (drift = a control that
 //              is hidden or a filter that silently does nothing)
 //   filters    each option is sent as a real search and the result ids are compared with an
 //              unfiltered baseline: APPLIED / NO-EFFECT / EMPTY / ERROR
+//   details    getById over a mix of new, older and later-season titles: poster, genres, stills, related
+//              and similar counts - plus a read of the site's own title page for those three sections,
+//              so a block the site has and the source does not return is reported as MISSING
 //   playback   first title -> groups -> first episode -> player links, then every EMBED link is
 //              matched to a resolver by host and resolved (NODE resolvers only; BROWSER ones need
 //              the app), each timed, and the first stream is fetched to prove it is reachable
@@ -64,6 +67,7 @@ const needsApp = (message: string) => /challenge|browserFetch|not implemented|br
 
 interface Manifest {
   id: string;
+  website?: string;
   supportedFilters?: string[];
   resolverDependencies?: string[];
   capabilities?: string[];
@@ -204,33 +208,154 @@ async function reachable(url: string, headers: Record<string, string> | null | u
   }
 }
 
-type Details = { id: string; posterUrl?: string | null; description?: string | null; genres?: string[]; screenshots?: string[]; relatedAnime?: unknown[]; franchiseAnime?: unknown[]; similarAnime?: unknown[]; studios?: unknown[] };
+type Details = { id: string; posterUrl?: string | null; description?: string | null; genres?: string[]; screenshots?: string[]; relatedAnime?: unknown[]; franchiseAnime?: unknown[]; similarAnime?: unknown[]; studios?: unknown[]; russianName?: string; englishName?: string; originalName?: string };
 
-// What a title's own page gives: the fields the detail screen draws. Reports each title's counts and
-// one summary line for the gallery, so "which sources have stills" is a run away, not a guess.
-async function probeDetails(ctx: Ctx, sourceId: string) {
-  // Fresh titles have the least on them (no stills yet, no related ones), so the newest few are mixed
-  // with what the catalog lists by default, which is older and fuller.
-  const latest = invoke<Title[]>(ctx.dir, sourceId, "latest", 8).value ?? [];
-  const listed = invoke<Title[]>(ctx.dir, sourceId, "search", { limit: 8 }).value ?? [];
+// ---------------------------------------------------------------------------------------------
+// Blocks on a title page: does the SITE have a related / similar / stills section, whatever the source
+// returns? Read off the page itself - headings, tabs and containers by name - so a block a source does
+// not implement yet still shows up here, and "the site has none" is a finding rather than a guess.
+
+const BLOCK_WORDS = {
+  // Labels, not titles: a title that ends in "Season 2" is not a related-titles heading, so the season words only count as the whole label.
+  related: /связан|пов.?язан|related|relations?|watch.?order|franchise|франшиз|sequels?|prequels?|порядок просмотра|^(?:other )?seasons$|^(?:інші )?сезони$|^сезоны$/i,
+  similar: /похож|схож|similar|recommend|рекоменд|you might like|вам (?:также )?(?:понравится|может)|more like|дивіться також|смотрите также/i,
+  stills: /кадры|кадри|скриншот|скріншот|screenshots?|screens\b|gallery|галере/i,
+} as const;
+type BlockKind = keyof typeof BLOCK_WORDS;
+
+interface BlockScan { related: string[]; similar: string[]; stills: string[]; endpoints: string[] }
+
+function scanBlocks(html: string): BlockScan {
+  const $ = cheerio.load(html);
+  const found: BlockScan = { related: [], similar: [], stills: [], endpoints: [] };
+  const add = (kind: BlockKind, evidence: string) => { if (!found[kind].includes(evidence) && found[kind].length < 6) found[kind].push(evidence); };
+
+  // 1. Headings, tabs and section titles, by their words.
+  $("h1,h2,h3,h4,h5,.title,.head,.section-head,.heading,[data-tab],.tabs a,.tab a,.tab-title,.ep-sim-head").each((_, el) => {
+    const text = $(el).clone().children("svg,script,style").remove().end().text().replace(/\s+/g, " ").trim();
+    if (!text || text.length > 60) return;
+    (Object.keys(BLOCK_WORDS) as BlockKind[]).forEach((kind) => { if (BLOCK_WORDS[kind].test(text)) add(kind, `heading "${text}"`); });
+  });
+  // 2. Containers named for them (id / class), with how many links they hold - a real list, not a label.
+  $("[id],[class]").each((_, el) => {
+    const name = `${$(el).attr("id") ?? ""} ${$(el).attr("class") ?? ""}`;
+    if (name.length > 160) return;
+    (Object.keys(BLOCK_WORDS) as BlockKind[]).forEach((kind) => {
+      const named = kind === "related" ? /related(?!-news)|watch-?order|franchise|seasons?-?(?:grid|list)|\bfran\b/i : kind === "similar" ? /similar|recommend|reco\b|series-reco|ep-sim|related-news/i : /screen|gallery/i;
+      if (!named.test(name)) return;
+      if (/^(?:html|body)$/i.test(el.tagName)) return;
+      // A card list is either full of links or, on some engines, each card sits inside its own link.
+      const links = $(el).find("a[href]").length + ($(el).closest("a[href]").length ? 1 : 0);
+      if (links >= 1) add(kind, `${el.tagName}${$(el).attr("id") ? "#" + $(el).attr("id") : ""}${($(el).attr("class") ?? "").split(/\s+/)[0] ? "." + ($(el).attr("class") ?? "").split(/\s+/)[0] : ""} (${links} links)`);
+    });
+  });
+  // 3. Endpoints the page's own scripts call for them (lists that are filled in after load).
+  for (const m of html.matchAll(/["'`]([^"'`\s]*(?:watch-?order|related|recommend|similar|franchise)[^"'`\s]*)["'`]/gi)) {
+    if (/\.(?:css|js|png|jpe?g|svg|webp)(?:\?|$)/i.test(m[1]) || m[1].length > 90 || !/[/?]/.test(m[1])) continue;
+    if (!found.endpoints.includes(m[1]) && found.endpoints.length < 5) found.endpoints.push(m[1]);
+  }
+  return found;
+}
+
+const DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36";
+
+async function fetchText(url: string): Promise<{ status: number; html: string } | null> {
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": DESKTOP_UA, "Accept-Language": "en-US,en;q=0.9" }, redirect: "follow", signal: AbortSignal.timeout(20_000) });
+    return { status: res.status, html: await res.text() };
+  } catch {
+    return null;
+  }
+}
+
+/** The title's own page on its site, found by trying the usual shapes of an id and checking the title's name is on it. */
+async function findTitlePage(website: string, id: string, names: string[]): Promise<{ url: string; html: string } | null> {
+  if (/^\d+$/.test(id)) return null; // numeric ids are API records; their sites are apps with no page to read
+  const clean = id.replace(/^\/+|\/+$/g, "");
+  const base = website.replace(/\/+$/, "");
+  const shapes = clean.endsWith(".html") || clean.includes("/") ? [`${base}/${clean}`, `${base}/${clean}/`] : [`${base}/anime/${clean}`, `${base}/watch/${clean}`, `${base}/${clean}`, `${base}/anime/${clean}/`, `${base}/${clean}/`];
+  const wanted = names.map((n) => n.toLowerCase().slice(0, 14)).filter((n) => n.length >= 3);
+  for (const url of shapes) {
+    const page = await fetchText(url);
+    // Cloudflare's script tag (challenge-platform) is on every proxied page; only an interstitial is a block.
+    if (!page || page.status !== 200 || /<title>\s*Just a moment/i.test(page.html)) continue;
+    const text = page.html.toLowerCase();
+    if (wanted.length === 0 || wanted.some((n) => text.includes(n))) return { url, html: page.html };
+  }
+  return null;
+}
+
+// What the source returns, over enough titles to tell "the source has none" from "these titles have none":
+// the newest (least filled in), the catalog's default listing (older), and titles that look like a later
+// season, which are the ones a franchise block is for.
+async function probeDetails(ctx: Ctx, sourceId: string, manifest: Manifest) {
   const seenIds = new Set<string>();
-  const pool = [...latest.slice(0, 2), ...listed.slice(0, 4), ...latest.slice(2)].filter((t) => (seenIds.has(t.id) ? false : (seenIds.add(t.id), true)));
+  const pool: Title[] = [];
+  const take = (list: Title[], n: number) => { for (const t of list) { if (pool.length >= 14 || n <= 0) break; if (seenIds.has(t.id)) continue; seenIds.add(t.id); pool.push(t); n--; } };
+  take(invoke<Title[]>(ctx.dir, sourceId, "latest", 8).value ?? [], 3);
+  take(invoke<Title[]>(ctx.dir, sourceId, "search", { limit: 8 }).value ?? [], 4);
+  for (const query of ["season 2", "2nd season", "2 сезон", "часть 2", "II"]) take(invoke<Title[]>(ctx.dir, sourceId, "search", { query, limit: 6 }).value ?? [], 2);
   if (pool.length === 0) return;
-  let withScreens = 0;
-  let maxScreens = 0;
+
+  const tally = { related: 0, similar: 0, stills: 0 };
+  const most = { related: 0, similar: 0, stills: 0 };
   let checked = 0;
-  for (const title of pool.slice(0, 5)) {
+  // The title that best shows each section, so the site page read for it is one where the section can exist.
+  const best: Partial<Record<BlockKind, { title: Title; details: Details; count: number }>> = {};
+  let first: { title: Title; details: Details } | null = null;
+  for (const title of pool.slice(0, 12)) {
     const r = invoke<Details>(ctx.dir, sourceId, "getById", title.id);
     if (r.error) { push(ctx, "details", `getById(${title.id})`, needsApp(r.error) ? "skip" : "fail", r.ms, r.error); continue; }
     const d = r.value!;
     checked++;
-    const shots = (d.screenshots ?? []).filter((u) => typeof u === "string" && u).length;
-    if (shots > 0) withScreens++;
-    maxScreens = Math.max(maxScreens, shots);
+    const counts = {
+      related: new Set([...(d.relatedAnime ?? []), ...(d.franchiseAnime ?? [])].map((x) => (x as { id?: string }).id ?? "")).size,
+      similar: (d.similarAnime ?? []).length,
+      stills: (d.screenshots ?? []).filter((u) => typeof u === "string" && u).length,
+    };
+    (Object.keys(counts) as BlockKind[]).forEach((k) => { if (counts[k] > 0) tally[k]++; most[k] = Math.max(most[k], counts[k]); });
+    first = first ?? { title, details: d };
+    (Object.keys(counts) as BlockKind[]).forEach((k) => { if (counts[k] > (best[k]?.count ?? 0)) best[k] = { title, details: d, count: counts[k] }; });
     push(ctx, "details", `getById(${title.id})`, d.posterUrl ? "ok" : "warn", r.ms,
-      `poster ${d.posterUrl ? "yes" : "NO"}, description ${d.description ? "yes" : "no"}, genres ${d.genres?.length ?? 0}, screenshots ${shots}, related ${(d.relatedAnime?.length ?? 0) + (d.franchiseAnime?.length ?? 0)}, similar ${d.similarAnime?.length ?? 0}`);
+      `poster ${d.posterUrl ? "yes" : "NO"}, description ${d.description ? "yes" : "no"}, genres ${d.genres?.length ?? 0}, stills ${counts.stills}, related ${counts.related}, similar ${counts.similar}`);
   }
-  if (checked > 0) push(ctx, "details", "screenshots", withScreens > 0 ? "ok" : "warn", undefined, withScreens > 0 ? `${withScreens}/${checked} titles have stills (up to ${maxScreens})` : "no stills on any checked title");
+  if (checked === 0) return;
+
+  // The site's own pages for those titles: which of the three sections they have at all, read from the
+  // markup, headings and scripts - whatever the source does or does not return.
+  let site: BlockScan | null = null;
+  const siteUrls: string[] = [];
+  let siteNote = "";
+  const website = (manifest as { website?: string }).website;
+  const targets = new Map<string, { title: Title; details: Details }>();
+  for (const k of ["related", "similar", "stills"] as BlockKind[]) { const b = best[k]; if (b) targets.set(b.title.id, b); }
+  if (targets.size === 0 && first) targets.set(first.title.id, first);
+  if (website) {
+    for (const { title, details } of [...targets.values()].slice(0, 3)) {
+      const names = [details.russianName, details.englishName, details.originalName, title.englishName, title.russianName, title.originalName].filter((n): n is string => !!n);
+      const page = await findTitlePage(website, title.id, names);
+      if (!page) { siteNote = /^\d+$/.test(title.id) ? "numeric ids: the site is an app, nothing to read" : "the title's page was not reachable (challenge, or an id shape not tried)"; continue; }
+      const scanned = scanBlocks(page.html);
+      siteUrls.push(page.url);
+      site = site ?? { related: [], similar: [], stills: [], endpoints: [] };
+      for (const k of ["related", "similar", "stills", "endpoints"] as const) for (const e of scanned[k]) if (!site[k].includes(e) && site[k].length < 6) site[k].push(e);
+    }
+  }
+  if (siteUrls.length) siteNote = siteUrls.join(", ");
+
+  const labels: Record<BlockKind, string> = { related: "related", similar: "similar", stills: "stills" };
+  (Object.keys(labels) as BlockKind[]).forEach((kind) => {
+    const has = tally[kind] > 0;
+    const evidence = site ? site[kind] : [];
+    const endpoints = kind === "stills" || !site ? [] : site.endpoints.filter((e) => (kind === "related" ? /related|watch-?order|franchise/i : /recommend|similar/i).test(e));
+    const siteHas = evidence.length > 0 || endpoints.length > 0;
+    const siteText = site ? (siteHas ? `site page has: ${[...evidence, ...endpoints.map((e) => `script -> ${e}`)].join("; ")}` : "no such block found on the site page") : `site not scanned (${siteNote})`;
+    const detail = `${tally[kind]}/${checked} titles (up to ${most[kind]}) - ${siteText}`;
+    if (has) push(ctx, "details", labels[kind], "ok", undefined, detail);
+    else if (siteHas) push(ctx, "details", labels[kind], "warn", undefined, `MISSING: ${detail}`);
+    else push(ctx, "details", labels[kind], "skip", undefined, `none returned; ${detail}`);
+  });
+  if (site && siteNote) push(ctx, "details", "site page", "ok", undefined, siteNote);
 }
 
 type Link = { url: string; type: string; playerName?: string | null; translation?: string | null; headers?: Record<string, string> | null; quality?: string | null };
@@ -324,7 +449,7 @@ async function probeSource(dir: string, sourceId: string, skipPlayback: boolean)
     probeManifest(ctx, manifest, settings);
     probeFilters(ctx, sourceId, settings);
   }
-  await probeDetails(ctx, sourceId);
+  await probeDetails(ctx, sourceId, manifest);
   if (!skipPlayback) await probePlayback(ctx, sourceId, manifest);
   return ctx.checks;
 }
@@ -365,6 +490,11 @@ async function discover(rawUrl: string) {
   if (/window\.__NUXT__|__NUXT_DATA__/.test(html)) engine.push("Nuxt (inline state payload)");
   if (/<script[^>]+type="application\/json"/i.test(html)) engine.push("inline application/json blocks present");
   console.log(`Engine: ${engine.join("; ") || "unknown"}`);
+
+  // On a title page: which of the related / similar / stills sections it has.
+  const blocks = scanBlocks(html);
+  for (const kind of ["related", "similar", "stills"] as const) console.log(`${kind.padEnd(8)} ${blocks[kind].length ? blocks[kind].join("; ") : "-"}`);
+  if (blocks.endpoints.length) console.log(`         endpoints in scripts: ${blocks.endpoints.join(", ")}`);
 
   const apis = new Set<string>();
   for (const m of html.matchAll(/["'`](\/(?:api|ajax|engine\/ajax|wp-json)\/[A-Za-z0-9_\-./{}$?=&]*)["'`]/g)) apis.add(m[1]);
