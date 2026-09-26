@@ -257,6 +257,9 @@ function scanBlocks(html: string): BlockScan {
   return found;
 }
 
+// How many title pages of one site are read for its sections.
+const SITE_PAGES = 8;
+
 const DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36";
 
 async function fetchText(url: string): Promise<{ status: number; html: string } | null> {
@@ -303,6 +306,7 @@ async function probeDetails(ctx: Ctx, sourceId: string, manifest: Manifest) {
   // The title that best shows each section, so the site page read for it is one where the section can exist.
   const best: Partial<Record<BlockKind, { title: Title; details: Details; count: number }>> = {};
   let first: { title: Title; details: Details } | null = null;
+  const visited: { title: Title; details: Details }[] = [];
   for (const title of pool.slice(0, 12)) {
     const r = invoke<Details>(ctx.dir, sourceId, "getById", title.id);
     if (r.error) { push(ctx, "details", `getById(${title.id})`, needsApp(r.error) ? "skip" : "fail", r.ms, r.error); continue; }
@@ -315,6 +319,7 @@ async function probeDetails(ctx: Ctx, sourceId: string, manifest: Manifest) {
     };
     (Object.keys(counts) as BlockKind[]).forEach((k) => { if (counts[k] > 0) tally[k]++; most[k] = Math.max(most[k], counts[k]); });
     first = first ?? { title, details: d };
+    visited.push({ title, details: d });
     (Object.keys(counts) as BlockKind[]).forEach((k) => { if (counts[k] > (best[k]?.count ?? 0)) best[k] = { title, details: d, count: counts[k] }; });
     push(ctx, "details", `getById(${title.id})`, d.posterUrl ? "ok" : "warn", r.ms,
       `poster ${d.posterUrl ? "yes" : "NO"}, description ${d.description ? "yes" : "no"}, genres ${d.genres?.length ?? 0}, stills ${counts.stills}, related ${counts.related}, similar ${counts.similar}`);
@@ -330,8 +335,11 @@ async function probeDetails(ctx: Ctx, sourceId: string, manifest: Manifest) {
   const targets = new Map<string, { title: Title; details: Details }>();
   for (const k of ["related", "similar", "stills"] as BlockKind[]) { const b = best[k]; if (b) targets.set(b.title.id, b); }
   if (targets.size === 0 && first) targets.set(first.title.id, first);
+  // A page is cheap to read and a section can be on some titles only, so the rest of the sample is read too:
+  // "none on the site" then means none across all of them, not on the one page that happened to be opened.
+  for (const v of visited) if (targets.size < SITE_PAGES) targets.set(v.title.id, v);
   if (website) {
-    for (const { title, details } of [...targets.values()].slice(0, 3)) {
+    for (const { title, details } of [...targets.values()].slice(0, SITE_PAGES)) {
       const names = [details.russianName, details.englishName, details.originalName, title.englishName, title.russianName, title.originalName].filter((n): n is string => !!n);
       const page = await findTitlePage(website, title.id, names);
       if (!page) { siteNote = /^\d+$/.test(title.id) ? "numeric ids: the site is an app, nothing to read" : "the title's page was not reachable (challenge, or an id shape not tried)"; continue; }
@@ -341,7 +349,7 @@ async function probeDetails(ctx: Ctx, sourceId: string, manifest: Manifest) {
       for (const k of ["related", "similar", "stills", "endpoints"] as const) for (const e of scanned[k]) if (!site[k].includes(e) && site[k].length < 6) site[k].push(e);
     }
   }
-  if (siteUrls.length) siteNote = siteUrls.join(", ");
+  if (siteUrls.length) siteNote = `${siteUrls.length} pages read, e.g. ${siteUrls[0]}`;
 
   const labels: Record<BlockKind, string> = { related: "related", similar: "similar", stills: "stills" };
   (Object.keys(labels) as BlockKind[]).forEach((kind) => {
