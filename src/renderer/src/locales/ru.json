@@ -6,7 +6,8 @@
     "sources": "Источники",
     "yourSpace": "Ваше пространство",
     "profile": "Профиль",
-    "settings": "Настройки"
+    "settings": "Настройки",
+    "customize": "Показывать в боковом меню"
   },
   "onboarding": {
     "getStarted": "Начать",

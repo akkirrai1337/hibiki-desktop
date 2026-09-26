@@ -6,7 +6,8 @@
     "sources": "Sources",
     "yourSpace": "Your space",
     "profile": "Profile",
-    "settings": "Settings"
+    "settings": "Settings",
+    "customize": "Show in the sidebar"
   },
   "onboarding": {
     "getStarted": "Get started",

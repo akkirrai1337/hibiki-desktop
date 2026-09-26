@@ -11,6 +11,7 @@ import { useUiStore } from "@/stores/uiStore";
 import { CatalogModeMenu } from "@/components/CatalogModeMenu";
 import { sortLabel } from "@/lib/catalogSort";
 import { CatalogFilters } from "@/components/CatalogFilters";
+import { useCatalogIntentStore } from "@/stores/catalogIntentStore";
 import { activeFilterCount, toSearchRequestFilters, type SearchFilters } from "@/lib/searchFilters";
 import type { AnimeTitle } from "@shared/types";
 
@@ -52,6 +53,15 @@ export function CatalogBrowsePage() {
   const [filters, setFilters] = useState<SearchFilters>({});
   // A different source has its own filter ids and options.
   useEffect(() => setFilters({}), [source?.id]);
+  // "More of this genre" from a title page: taken once the catalog is showing that source, after the
+  // reset above so it is not wiped by it.
+  const intent = useCatalogIntentStore((s) => s.intent);
+  const clearIntent = useCatalogIntentStore((s) => s.clear);
+  useEffect(() => {
+    if (!intent || source?.id !== intent.sourceId) return;
+    setFilters(intent.filters);
+    clearIntent();
+  }, [intent, source?.id, clearIntent]);
   const filterDefs = settings.data?.filters ?? [];
   const filterCount = activeFilterCount(filters);
 
