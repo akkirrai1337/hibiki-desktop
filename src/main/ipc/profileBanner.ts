@@ -11,11 +11,13 @@ import { IPC } from "@shared/ipc";
 // is never more than one banner.
 export const PROFILE_DIR = path.join(app.getPath("userData"), "profile");
 
-// Just the two formats the picker offers (see AvatarPicker's sibling, BannerPicker, in
-// pages/profile.tsx) - a still image already has the avatar for that, and a banner is meant to
-// move.
+// Whatever the picker offers (see AvatarPicker's sibling, BannerPicker, in pages/profile.tsx): a
+// still image, an animated GIF, or a short video.
 const EXTENSION_BY_MIME: Record<string, string> = {
   "image/gif": "gif",
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
   "video/mp4": "mp4",
 };
 

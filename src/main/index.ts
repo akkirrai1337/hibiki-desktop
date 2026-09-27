@@ -233,7 +233,7 @@ app.whenReady().then(() => {
   // `request.url` is `hibiki-profile://local/<filename>` - just a bare filename (see
   // profileBannerUrl in the renderer's lib/hibiki.ts), never a path, so there is no `..` to guard
   // against the way the download scheme above has to.
-  const PROFILE_CONTENT_TYPE: Record<string, string> = { gif: "image/gif", mp4: "video/mp4" };
+  const PROFILE_CONTENT_TYPE: Record<string, string> = { gif: "image/gif", png: "image/png", jpg: "image/jpeg", webp: "image/webp", mp4: "video/mp4" };
   protocol.handle(PROFILE_FILE_SCHEME, async (request) => {
     const url = new URL(request.url);
     const filename = decodeURIComponent(url.pathname.startsWith("/") ? url.pathname.slice(1) : url.pathname);

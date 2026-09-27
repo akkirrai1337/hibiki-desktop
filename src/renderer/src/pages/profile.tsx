@@ -357,9 +357,14 @@ function ProfileHeader({
   );
 }
 
-// A GIF or a short muted/looping video behind the whole header - name, level bar and all - the
-// way a streaming profile's cover art sits behind everything rather than as its own separate
-// strip. Darkened so the text on top of it stays readable regardless of what's playing under it.
+// Kept in sync with EXTENSION_BY_MIME in main/ipc/profileBanner.ts, which is what actually
+// enforces this - this is just what keeps the OS picker (and the guard right below it) from
+// offering something the main process would only reject anyway.
+const ACCEPTED_BANNER_TYPES = new Set(["image/gif", "image/png", "image/jpeg", "image/webp", "video/mp4"]);
+
+// A still image, a GIF, or a short muted/looping video behind the whole header - name, level bar
+// and all - the way a streaming profile's cover art sits behind everything rather than as its own
+// separate strip. Darkened so the text on top of it stays readable regardless of what's under it.
 function BannerMedia({ filename }: { filename: string | null }) {
   if (!filename) return null;
   const isVideo = filename.toLowerCase().endsWith(".mp4");
@@ -389,9 +394,9 @@ function BannerActions({ filename, onChange }: { filename: string | null; onChan
   const onPick = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
-    // The accept attribute already narrows the OS picker to these two; this just guards a file
+    // The accept attribute already narrows the OS picker to these; this just guards a file
     // dragged in some other way, or renamed to slip past that filter.
-    if (!file || (file.type !== "image/gif" && file.type !== "video/mp4")) return;
+    if (!file || !ACCEPTED_BANNER_TYPES.has(file.type)) return;
     setBusy(true);
     try {
       const bytes = await file.arrayBuffer();
@@ -430,7 +435,7 @@ function BannerActions({ filename, onChange }: { filename: string | null; onChan
           <X className="h-4 w-4" strokeWidth={2.25} />
         </button>
       )}
-      <input ref={inputRef} type="file" accept="image/gif,video/mp4" onChange={onPick} className="pointer-events-auto hidden" />
+      <input ref={inputRef} type="file" accept={[...ACCEPTED_BANNER_TYPES].join(",")} onChange={onPick} className="pointer-events-auto hidden" />
     </div>
   );
 }
