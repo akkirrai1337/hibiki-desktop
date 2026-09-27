@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { normalizeZoom } from "@/lib/zoom";
+import { clearSectionTitle } from "@/lib/sectionTitleMemory";
 
 interface UiState {
   theme: "light" | "dark";
@@ -97,7 +98,17 @@ export const useUiStore = create<UiState>()(
       autoUpdate: false,
       homeSortBySource: {},
       setTheme: (theme) => set({ theme }),
-      setActiveSourceId: (activeSourceId) => set({ activeSourceId }),
+      setActiveSourceId: (activeSourceId) =>
+        set((state) => {
+          if (state.activeSourceId === activeSourceId) return state;
+          // A remembered "last title opened from Home/Catalog" (see sectionTitleMemory.ts) belongs
+          // to whichever source's Home/Catalog it was actually opened from - switching sources
+          // makes it stale, and the sidebar's own toggle-back behavior would otherwise send you
+          // straight into a title that isn't even from the source you're now browsing.
+          clearSectionTitle("home");
+          clearSectionTitle("catalog");
+          return { activeSourceId };
+        }),
       setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
       setEpisodesNewestFirst: (episodesNewestFirst) => set({ episodesNewestFirst }),
       setEpisodesView: (episodesView) => set({ episodesView }),
