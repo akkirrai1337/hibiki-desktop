@@ -39,26 +39,36 @@ export interface HeroSlide {
 export function HeroCarousel({ slides, label }: { slides: HeroSlide[]; label: string }) {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
-  // Bumped every time a pause actually ends, so the progress bar below can key off it and restart
-  // its fill from zero in step with the interval effect below doing the same (a plain
-  // animation-play-state toggle would resume the bar from wherever it was paused, but the timer
-  // it's meant to represent restarts from scratch on unpause too - resuming the bar would just be
-  // a different, more confident-looking lie about how long is actually left).
-  const [resumeTick, setResumeTick] = useState(0);
+  // How much of this slide's dwell time is actually left - a plain setInterval restarted a fresh
+  // HERO_INTERVAL_MS on every single pause/resume, which is exactly what glancing at the hero (or
+  // just moving the mouse across it on the way to something else - it covers most of the page's
+  // top) does on a real page: the countdown kept getting thrown back to the start before it ever
+  // got anywhere close to firing, and the progress bar below (which mirrors it 1:1 via CSS's own
+  // pause/resume-in-place, not a restart) read as broken because of it, not because it was.
+  const remainingRef = useRef(HERO_INTERVAL_MS);
   const slideKey = slides.map((slide) => slide.key).join(",");
-  useEffect(() => { setIndex(0); }, [slideKey]);
+  useEffect(() => { setIndex(0); remainingRef.current = HERO_INTERVAL_MS; }, [slideKey]);
   useEffect(() => {
     if (paused || slides.length <= 1) return;
-    const id = setInterval(() => setIndex((i) => (i + 1) % slides.length), HERO_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, [paused, slides.length, slideKey]);
+    const startedAt = Date.now();
+    let fired = false;
+    const id = setTimeout(() => {
+      fired = true;
+      remainingRef.current = HERO_INTERVAL_MS;
+      setIndex((i) => (i + 1) % slides.length);
+    }, remainingRef.current);
+    return () => {
+      clearTimeout(id);
+      // Only an interruption (pausing, unmounting, the slide list changing) spends any of the
+      // remaining time - the timeout firing on its own already set a fresh amount above, and
+      // re-subtracting a whole interval's worth from that here would send it straight to zero.
+      if (!fired) remainingRef.current = Math.max(0, remainingRef.current - (Date.now() - startedAt));
+    };
+  }, [paused, index, slides.length, slideKey]);
   const current = slides[Math.min(index, slides.length - 1)];
   if (!current) return null;
-  return <div
-    className="relative"
-    onMouseEnter={() => setPaused(true)}
-    onMouseLeave={() => { setPaused(false); setResumeTick((n) => n + 1); }}
-  >
+  const goTo = (i: number) => { remainingRef.current = HERO_INTERVAL_MS; setIndex(i); };
+  return <div className="relative" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
     <AnimatePresence mode="wait">
       <motion.div key={current.key} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4, ease: "easeOut" }}>
         <Hero slide={current} label={label} />
@@ -68,13 +78,17 @@ export function HeroCarousel({ slides, label }: { slides: HeroSlide[]; label: st
       {slides.map((slide, i) => (
         <button
           key={slide.key}
-          onClick={() => setIndex(i)}
+          onClick={() => goTo(i)}
           aria-label={`${i + 1}`}
           className="h-1.5 w-6 overflow-hidden rounded-full bg-white/25 transition-colors hover:bg-white/40"
         >
           {i === index && (
+            // Keyed on the slide index alone: a pause/resume just toggles animation-play-state on
+            // this same element (freezes and continues from exactly where it was, in step with
+            // the timer above doing the same), rather than remounting and restarting it. Only an
+            // actual slide change is a fresh bar.
             <span
-              key={`${index}-${resumeTick}`}
+              key={index}
               style={{ animationDuration: `${HERO_INTERVAL_MS}ms`, animationPlayState: paused ? "paused" : "running" }}
               className="block h-full w-full origin-left animate-[hero-progress_linear_forwards] rounded-full bg-accent"
             />
