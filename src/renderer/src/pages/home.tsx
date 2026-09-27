@@ -103,7 +103,7 @@ export function CatalogPage() {
     {sources.isLoading && <HeroSkeleton />}{sources.data?.length === 0 && <EmptySources />}{sources.isError && <ErrorBanner message={(sources.error as Error).message} className="m-8" />}
     {source && <>
       {heroSlides.length > 0
-        ? <HeroCarousel slides={heroSlides.map((slide) => toHeroSlide(slide, t("catalog.openTitle"), source.iconUrl))} label={t("catalog.trendingOn", { source: source.name })} />
+        ? <HeroCarousel slides={heroSlides.map((slide) => toHeroSlide(slide, t("catalog.openTitle"), source.iconUrl))} label={t("catalog.trendingOnPrefix")} sourceName={source.name} />
         : hero.isLoading && <HeroSkeleton />}
       <div className="space-y-12 px-8 pt-10">
         {pool.isError && <ErrorBanner message={(pool.error as Error).message} />}

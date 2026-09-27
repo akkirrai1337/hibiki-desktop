@@ -42,7 +42,7 @@
   },
   "catalog": {
     "searchPlaceholder": "Пошук аніме",
-    "trendingOn": "У тренді на {{source}}",
+    "trendingOnPrefix": "У тренді на",
     "heroFallbackDescription": "Один із тайтлів, які зараз дивляться найчастіше.",
     "openTitle": "Відкрити",
     "continueWatching": "Продовжити перегляд",

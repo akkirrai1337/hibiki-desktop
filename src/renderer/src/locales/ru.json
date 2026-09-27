@@ -42,7 +42,7 @@
   },
   "catalog": {
     "searchPlaceholder": "Поиск аниме",
-    "trendingOn": "В тренде на {{source}}",
+    "trendingOnPrefix": "В тренде на",
     "heroFallbackDescription": "Одно из тайтлов, которые сейчас смотрят чаще всего.",
     "openTitle": "Открыть",
     "continueWatching": "Продолжить просмотр",

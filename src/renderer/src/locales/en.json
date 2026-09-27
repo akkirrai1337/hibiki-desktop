@@ -42,7 +42,7 @@
   },
   "catalog": {
     "searchPlaceholder": "Search anime",
-    "trendingOn": "Trending on {{source}}",
+    "trendingOnPrefix": "Trending on",
     "heroFallbackDescription": "One of the titles people are watching right now.",
     "openTitle": "Open",
     "continueWatching": "Continue watching",

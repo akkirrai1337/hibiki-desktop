@@ -42,7 +42,7 @@ export interface HeroSlide {
   action: React.ReactNode;
 }
 
-export function HeroCarousel({ slides, label }: { slides: HeroSlide[]; label: string }) {
+export function HeroCarousel({ slides, label, sourceName }: { slides: HeroSlide[]; label: string; sourceName: string }) {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const slideKey = slides.map((slide) => slide.key).join(",");
@@ -91,7 +91,7 @@ export function HeroCarousel({ slides, label }: { slides: HeroSlide[]; label: st
   return <div className="relative" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
     <AnimatePresence mode="wait">
       <motion.div key={current.key} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4, ease: "easeOut" }}>
-        <Hero slide={current} label={label} paused={paused} />
+        <Hero slide={current} label={label} sourceName={sourceName} paused={paused} />
       </motion.div>
     </AnimatePresence>
     {slides.length > 1 && <div className="absolute bottom-8 right-8 z-10 flex items-center gap-1.5">
@@ -118,7 +118,7 @@ export function HeroCarousel({ slides, label }: { slides: HeroSlide[]; label: st
     </div>}
   </div>;
 }
-function Hero({ slide, label, paused }: { slide: HeroSlide; label: string; paused: boolean }) {
+function Hero({ slide, label, sourceName, paused }: { slide: HeroSlide; label: string; sourceName: string; paused: boolean }) {
   const { t } = useTranslation();
   // The background poster's slow zoom used to be a plain Motion `animate` prop, which - unlike
   // the timer above and the progress pill below - had no way to actually pause: it just kept
@@ -165,11 +165,12 @@ function Hero({ slide, label, paused }: { slide: HeroSlide; label: string; pause
       ].join(", ") }} />
     </div>
     <div className="max-w-2xl">
-      <span className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-white/10 py-1 pl-1 pr-3 text-[11px] font-bold uppercase tracking-[.14em] text-accent-text">
+      <span className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-white/10 py-1 pl-3 pr-3 text-[11px] font-bold uppercase tracking-[.14em] text-accent-text">
+        {label}
         <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/15">
           {slide.sourceIconUrl ? <img src={slide.sourceIconUrl} alt="" className="h-full w-full object-cover" /> : <Radio className="h-2.5 w-2.5 text-zinc-300" strokeWidth={2} />}
         </span>
-        {label}
+        {sourceName}
       </span>
       {/* The min-h wrapper reserves space for a full 2-line title regardless of how long this
           slide's title actually is - without it, switching from a 2-line to a 1-line title (or
