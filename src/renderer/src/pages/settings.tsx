@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDownToLine, ArrowUpDown, Ban, Check, CheckCircle2, ChevronDown, ChevronUp, DatabaseBackup, FileText, FolderOpen, Info, Languages, MessageCircle, Moon, Palette, RefreshCw, RotateCcw, ScrollText, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
+import { ArrowDownToLine, ArrowUpDown, Ban, Blend, Check, CheckCircle2, ChevronDown, ChevronUp, DatabaseBackup, FileText, FolderOpen, Info, Languages, MessageCircle, Moon, Palette, RefreshCw, RotateCcw, ScrollText, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Switch } from "@/components/Switch";
 import { SUPPORTED_LOCALES, setLocale } from "@/lib/i18n";
@@ -571,6 +571,8 @@ export function SettingsPage() {
   const setAccentColor = useUiStore((s) => s.setAccentColor);
   const backgroundTheme = useUiStore((s) => s.backgroundTheme);
   const setBackgroundTheme = useUiStore((s) => s.setBackgroundTheme);
+  const chromeBlurEnabled = useUiStore((s) => s.chromeBlurEnabled);
+  const setChromeBlurEnabled = useUiStore((s) => s.setChromeBlurEnabled);
   const catalogAutoLoad = useUiStore((s) => s.catalogAutoLoad);
   const setCatalogAutoLoad = useUiStore((s) => s.setCatalogAutoLoad);
   return <div className="min-h-full bg-app-bg p-8">
@@ -617,6 +619,16 @@ export function SettingsPage() {
             {BACKGROUND_THEME_PRESETS.map((preset) => (
               <BackgroundThemeSwatch key={preset.id} gradient={preset.gradient} active={backgroundTheme === preset.id} onClick={() => setBackgroundTheme(preset.id)} />
             ))}
+          </div>
+        </SettingsRow>
+
+        <SettingsRow icon={<Blend className="h-[18px] w-[18px]" strokeWidth={2} />}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-text">{t("settings.appearance.chromeBlur")}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.appearance.chromeBlurHint")}</p>
+            </div>
+            <Switch checked={chromeBlurEnabled} onChange={setChromeBlurEnabled} />
           </div>
         </SettingsRow>
 

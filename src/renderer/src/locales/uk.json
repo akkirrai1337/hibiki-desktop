@@ -566,6 +566,8 @@
       "backgroundTheme": "Фон застосунку",
       "backgroundThemeHint": "Градієнт за панеллю — як у Discord",
       "backgroundThemeNone": "Звичайний",
+      "chromeBlur": "Розмиття інтерфейсу",
+      "chromeBlurHint": "Напівпрозорі бічна панель і шапка з розмиттям того, що під ними",
       "customColor": "Свій колір"
     },
     "general": "Загальні",

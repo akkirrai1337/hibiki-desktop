@@ -39,9 +39,14 @@ interface UiState {
   // that pink literally, so a future default change isn't silently masked by everyone's persisted
   // "custom" value happening to match today's default.
   accentColor: string | null;
-  // A picked preset id from lib/theme.ts's BACKGROUND_THEME_PRESETS, or null for the plain
-  // (opaque, no gradient) look the app always had before this existed - see applyBackgroundTheme.
+  // A picked preset id from lib/theme.ts's BACKGROUND_THEME_PRESETS, or null for no decorative
+  // gradient - see applyBackgroundTheme. Purely which color shows through the chrome once
+  // `chromeBlurEnabled` below actually makes it translucent; picking one does nothing on its own.
   backgroundTheme: string | null;
+  // Makes the Sidebar/TitleBar (and each page's own background) translucent + blurred - see
+  // applyChromeBlur. Off by default, same as backgroundTheme being unset used to also mean before
+  // the two were split apart: nobody who never touched either setting should see a visual change.
+  chromeBlurEnabled: boolean;
   // Whether the catalog page fetches its next page itself once the "load more" sentinel scrolls
   // into view (see catalog.tsx), instead of waiting for an explicit button click. Defaults to on -
   // Settings just gives a way back to the manual button for anyone who'd rather not have pages
@@ -72,6 +77,7 @@ interface UiState {
   setProfileCelebratedStreak: (streak: number) => void;
   setAccentColor: (color: string | null) => void;
   setBackgroundTheme: (id: string | null) => void;
+  setChromeBlurEnabled: (enabled: boolean) => void;
   setCatalogAutoLoad: (enabled: boolean) => void;
   setZoomFactor: (factor: number) => void;
   setAutoUpdate: (enabled: boolean) => void;
@@ -97,6 +103,7 @@ export const useUiStore = create<UiState>()(
       profileCelebratedStreak: -1,
       accentColor: null,
       backgroundTheme: null,
+      chromeBlurEnabled: false,
       catalogAutoLoad: true,
       zoomFactor: 1,
       autoUpdate: false,
@@ -124,6 +131,7 @@ export const useUiStore = create<UiState>()(
       setProfileCelebratedStreak: (profileCelebratedStreak) => set({ profileCelebratedStreak }),
       setAccentColor: (accentColor) => set({ accentColor }),
       setBackgroundTheme: (backgroundTheme) => set({ backgroundTheme }),
+      setChromeBlurEnabled: (chromeBlurEnabled) => set({ chromeBlurEnabled }),
       setCatalogAutoLoad: (catalogAutoLoad) => set({ catalogAutoLoad }),
       setZoomFactor: (zoomFactor) => set({ zoomFactor: normalizeZoom(zoomFactor) }),
       setAutoUpdate: (autoUpdate) => set({ autoUpdate }),
