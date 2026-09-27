@@ -565,7 +565,6 @@ function EpisodeChip({
               </span>
             </span>
           )}
-          {view === "tiles" && subtitle && <span className="mt-1.5 line-clamp-1 w-full select-text text-[11px] text-muted">{subtitle}</span>}
           {view === "list" && (
             <span className="flex min-w-0 flex-1 flex-col text-left">
               <span className="line-clamp-1 select-text text-sm font-semibold text-text/90">{subtitle ?? t("detail.episodeFallback", { number: episode.number })}</span>
