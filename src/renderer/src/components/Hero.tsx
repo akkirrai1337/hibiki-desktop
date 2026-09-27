@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, animate, motion, useMotionValue } from "motion/react";
 import { ChevronDown, Star } from "lucide-react";
+import { GenreChip } from "@/components/GenreChip";
 
 /** The look of a hero's own call to action, so every caller's Link matches without the carousel
  * having to own the route it points at. The accent glow on hover is the one place this otherwise
@@ -10,6 +11,8 @@ export const HERO_ACTION_CLASS =
   "inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-zinc-900 shadow-[0_0_0_0_rgb(var(--color-accent)/0)] transition-[transform,box-shadow] hover:scale-[1.02] hover:shadow-[0_10px_30px_-6px_rgb(var(--color-accent)/0.55)] active:scale-[0.98]";
 
 const HERO_INTERVAL_MS = 7000;
+// A hero genre chip's own look - see GenreChip for the shared open-the-catalog logic.
+const HERO_GENRE_CHIP_CLASS = "rounded-full border border-accent/30 bg-accent/[.08] px-2.5 py-1 text-accent-text hover:border-accent/60 hover:bg-accent/[.16]";
 
 /**
  * One slide, as the carousel needs it: display fields plus where the slide leads.
@@ -19,15 +22,16 @@ const HERO_INTERVAL_MS = 7000;
  */
 export interface HeroSlide {
   key: string;
+  /** Which source this slide's own genre chips should open the catalog against. */
+  sourceId: string;
   title: string;
   description?: string | null;
   posterUrl?: string | null;
   type?: string | null;
   year?: number | null;
   episodeCount?: number | null;
-  /** Up to a handful, shown as plain (non-interactive) chips - a hero is glanced at, not filtered
-   * from, so these are context, not a shortcut to the catalog the way the detail page's own genre
-   * chips are. */
+  /** Up to a handful - opens the catalog pre-filtered by the genre, same as the detail page's own
+   * genre chips (see GenreChip), wherever the source actually has a matching filter option. */
   genres?: string[] | null;
   /** Whichever one rating the caller considers this slide's "main" one, if it has any at all. */
   rating?: { value: number; source: string } | null;
@@ -159,7 +163,7 @@ function Hero({ slide, label, paused }: { slide: HeroSlide; label: string; pause
       ].join(", ") }} />
     </div>
     <div className="max-w-2xl">
-      <p className="mb-4 text-xs font-bold uppercase tracking-[.18em] text-accent-text">{label}</p>
+      <span className="mb-4 inline-block rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[.14em] text-accent-text">{label}</span>
       {/* The min-h wrapper reserves space for a full 2-line title regardless of how long this
           slide's title actually is - without it, switching from a 2-line to a 1-line title (or
           back) between carousel slides abruptly resizes this block and everything below it.
@@ -181,10 +185,10 @@ function Hero({ slide, label, paused }: { slide: HeroSlide; label: string; pause
           </span>
         )}
         <span className="rounded-md bg-white/15 px-2 py-1">{slide.type?.toUpperCase() || t("common.typeFallback")}</span>
-        {slide.year ? <span>{slide.year}</span> : null}
-        {slide.episodeCount ? <span>{t("common.episodesShort", { count: slide.episodeCount })}</span> : null}
+        {slide.year ? <span className="rounded-md bg-white/15 px-2 py-1">{slide.year}</span> : null}
+        {slide.episodeCount ? <span className="rounded-md bg-white/15 px-2 py-1">{t("common.episodesShort", { count: slide.episodeCount })}</span> : null}
         {genres.map((genre) => (
-          <span key={genre} className="rounded-full border border-accent/30 bg-accent/[.08] px-2.5 py-1 text-accent-text">{genre}</span>
+          <GenreChip key={genre} genre={genre} sourceId={slide.sourceId} className={HERO_GENRE_CHIP_CLASS} />
         ))}
       </div>
       <div className="mt-8">{slide.action}</div>

@@ -13,6 +13,7 @@ import { hibiki } from "@/lib/hibiki";
 import { findListedTitle } from "@/lib/listedTitles";
 import { usePlaybackGroups } from "@/lib/playbackGroups";
 import { animeTitle } from "@/components/AnimeCard";
+import { GenreChip } from "@/components/GenreChip";
 import { GroupDropdown } from "@/components/GroupDropdown";
 import { HorizontalScrollRow } from "@/components/HorizontalScrollRow";
 import { SmoothImage } from "@/components/SmoothImage";
@@ -21,8 +22,6 @@ import { ASSIGNABLE_LIBRARY_CATEGORIES, LIBRARY_CATEGORY_ICONS, LIBRARY_CATEGORY
 import { STATUS_ID_ALIASES } from "@/lib/searchFilters";
 import { episodeFavoriteKey, useEpisodeFavoritesStore } from "@/stores/episodeFavoritesStore";
 import { useUiStore } from "@/stores/uiStore";
-import { useCatalogIntentStore } from "@/stores/catalogIntentStore";
-import { genreFilterFor } from "@/lib/genreLink";
 import type { AnimeTitle, DownloadProgress, Episode, LibraryCategory, PlaybackGroup, PlayerLink, RelatedAnimeTitle, SourceInfo, WatchProgress } from "@shared/types";
 
 // How long a terminal download state (done/error/unsupported) stays shown on the chip before it
@@ -771,7 +770,7 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
               one place they were missing. */}
           {(anime.ratings?.length ?? 0) > 0 && <><Dot /><SourceRatings ratings={anime.ratings ?? []} /></>}
         </div>
-        {anime.genres && anime.genres.length > 0 && <div className="mt-3 flex flex-wrap gap-1.5">{anime.genres.map((g) => <GenreChip key={g} genre={g} sourceId={sourceId} />)}</div>}
+        {anime.genres && anime.genres.length > 0 && <div className="mt-3 flex flex-wrap gap-1.5">{anime.genres.map((g) => <GenreChip key={g} genre={g} sourceId={sourceId} className={GENRE_CHIP_CLASS} />)}</div>}
         {anime.description && <div className="mt-4 max-w-2xl overflow-hidden transition-[max-height] duration-300 ease-in-out" style={{ maxHeight }}>
           <p ref={descriptionRef} className="select-text text-sm leading-6 text-muted">{anime.description}</p>
         </div>}
@@ -1045,30 +1044,8 @@ function Dot() { return <span className="h-0.5 w-0.5 rounded-full bg-muted" />; 
 function ErrorBanner({ message }: { message: string }) { const { t } = useTranslation(); return <div className="flex items-start gap-3 rounded-2xl border border-rose-400/30 bg-rose-400/10 p-4 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/5 dark:text-rose-200"><TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} /><span>{t("common.loadFailed", { message })}</span></div>; }
 function DetailSkeleton() { return <div className="animate-pulse px-8 pb-12 pt-8"><div className="flex gap-7"><div className="aspect-[2/3] w-44 shrink-0 rounded-2xl bg-text/[.06] sm:w-52" /><div className="flex-1 pt-1"><div className="h-9 w-2/3 max-w-md rounded bg-text/[.08]" /><div className="mt-4 h-3 w-40 rounded bg-text/[.06]" /><div className="mt-5 h-3 w-full max-w-xl rounded bg-text/[.06]" /><div className="mt-2 h-3 w-4/5 max-w-xl rounded bg-text/[.06]" /><div className="mt-6 h-12 w-40 rounded-xl bg-text/[.08]" /></div></div></div>; }
 
-// A genre on the title page. Where the source has that genre among its own catalog filters it opens the
-// catalog filtered by it; otherwise it is only a label, since there is nothing honest to open.
-function GenreChip({ genre, sourceId }: { genre: string; sourceId: string }) {
-  const navigate = useNavigate();
-  const setActiveSourceId = useUiStore((s) => s.setActiveSourceId);
-  const requestCatalog = useCatalogIntentStore((s) => s.request);
-  // The same key the catalog and the filter panel read, so this costs no extra request.
-  const catalog = useQuery({ queryKey: ["filterCatalog", sourceId], queryFn: () => hibiki.sources.filterCatalog(sourceId) });
-  const target = genreFilterFor(catalog.data, genre);
-  const base = "rounded-full border border-border bg-text/[.03] px-3 py-1 text-xs font-medium text-text/75";
-  if (!target) return <span className={base}>{genre}</span>;
-  return (
-    <button
-      onClick={() => {
-        setActiveSourceId(sourceId);
-        requestCatalog({ sourceId, filters: { [target.filterId]: target.value } });
-        void navigate({ to: "/catalog" });
-      }}
-      className={cn(base, "cursor-pointer transition-colors hover:border-accent/50 hover:bg-accent/[.06] hover:text-text")}
-    >
-      {genre}
-    </button>
-  );
-}
+// The title page's own look for a genre chip - see GenreChip for the shared open-the-catalog logic.
+const GENRE_CHIP_CLASS = "rounded-full border border-border bg-text/[.03] px-3 py-1 text-xs font-medium text-text/75 hover:border-accent/50 hover:bg-accent/[.06] hover:text-text";
 
 // Six fill two rows of the widest layout (three columns) and three of the usual two.
 const RELATED_COLLAPSED_COUNT = 6;

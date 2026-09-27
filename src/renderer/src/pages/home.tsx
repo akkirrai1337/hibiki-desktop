@@ -128,6 +128,7 @@ export function CatalogPage() {
 function toHeroSlide(anime: AnimeTitle, openLabel: string): HeroSlide {
   return {
     key: `${anime.sourceId}:${anime.id}`,
+    sourceId: anime.sourceId,
     title: animeTitle(anime),
     description: anime.description,
     posterUrl: anime.posterUrl,
