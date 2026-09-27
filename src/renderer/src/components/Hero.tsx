@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, animate, motion, useMotionValue } from "motion/react";
 import { ChevronDown, Radio, Star } from "lucide-react";
 import { GenreChip } from "@/components/GenreChip";
+import { cn } from "@/lib/cn";
 
 /** The look of a hero's own call to action, so every caller's Link matches without the carousel
  * having to own the route it points at. The accent glow on hover is the one place this otherwise
@@ -86,12 +87,49 @@ export function HeroCarousel({ slides, label, sourceName }: { slides: HeroSlide[
     return () => clearTimeout(id);
   }, [paused, index, slides.length, slideKey]);
   const current = slides[Math.min(index, slides.length - 1)];
+  // A title with a one-line title/description needs less room than one with two - real, wanted
+  // variation, not a bug. Left alone, that also meant the whole page below the hero visibly jumped
+  // on every single slide change, whether or not anyone was even looking at the hero right then.
+  // The section reports its own natural height up through `onHeightChange`, applied here as an
+  // explicit, CSS-transitioned `height` on this wrapper (which - unlike the slide's own content -
+  // never remounts, so it actually has something to transition *from*): a real slide-to-slide
+  // difference now animates smoothly instead of jumping. `isVisibleRef`/`pendingHeightRef` below
+  // additionally hold that update back while this carousel is scrolled out of view - a change still
+  // happens on schedule underneath, but nothing below it moves until it can actually be seen
+  // happening, which is the one part a smooth animation alone wouldn't have fixed.
+  const [sectionHeight, setSectionHeight] = useState<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isVisibleRef = useRef(true);
+  const pendingHeightRef = useRef<number | null>(null);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      isVisibleRef.current = entry.isIntersecting;
+      if (entry.isIntersecting && pendingHeightRef.current !== null) {
+        setSectionHeight(pendingHeightRef.current);
+        pendingHeightRef.current = null;
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const handleHeightChange = useCallback((height: number) => {
+    if (isVisibleRef.current) setSectionHeight(height);
+    else pendingHeightRef.current = height;
+  }, []);
   if (!current) return null;
   const goTo = (i: number) => { deadlineRef.current = Date.now() + HERO_INTERVAL_MS; setIndex(i); };
-  return <div className="relative" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+  return <div
+    ref={containerRef}
+    className="relative overflow-hidden transition-[height] duration-300 ease-in-out"
+    style={sectionHeight ? { height: sectionHeight } : undefined}
+    onMouseEnter={() => setPaused(true)}
+    onMouseLeave={() => setPaused(false)}
+  >
     <AnimatePresence mode="wait">
       <motion.div key={current.key} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4, ease: "easeOut" }}>
-        <Hero slide={current} label={label} sourceName={sourceName} paused={paused} />
+        <Hero slide={current} label={label} sourceName={sourceName} paused={paused} onHeightChange={handleHeightChange} />
       </motion.div>
     </AnimatePresence>
     {slides.length > 1 && <div className="absolute bottom-8 right-8 z-10 flex items-center gap-1.5">
@@ -118,8 +156,20 @@ export function HeroCarousel({ slides, label, sourceName }: { slides: HeroSlide[
     </div>}
   </div>;
 }
-function Hero({ slide, label, sourceName, paused }: { slide: HeroSlide; label: string; sourceName: string; paused: boolean }) {
+function Hero({ slide, label, sourceName, paused, onHeightChange }: { slide: HeroSlide; label: string; sourceName: string; paused: boolean; onHeightChange: (height: number) => void }) {
   const { t } = useTranslation();
+  // Reports this slide's own natural height up to HeroCarousel (see its own comment on
+  // `sectionHeight`) - one observer here catches every reason this section's height can change
+  // (a one vs. two-line title, a longer description, the read-more toggle, ...) instead of each
+  // needing its own separate measurement plumbed up separately.
+  const sectionRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => onHeightChange(el.scrollHeight));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [onHeightChange]);
   // The background poster's slow zoom used to be a plain Motion `animate` prop, which - unlike
   // the timer above and the progress pill below - had no way to actually pause: it just kept
   // running the whole time the carousel itself sat paused on hover, so the image visibly kept
@@ -140,34 +190,8 @@ function Hero({ slide, label, sourceName, paused }: { slide: HeroSlide; label: s
   const title = slide.title;
   const [descriptionOpen, setDescriptionOpen] = useState(false);
   const description = slide.description || t("catalog.heroFallbackDescription");
-  const descriptionRef = useRef<HTMLParagraphElement>(null);
-  const collapsedHeight = 72; // ~3 lines at text-sm/leading-6
-  // The paragraph's own full height, kept in sync by a ResizeObserver rather than measured once in
-  // a plain effect right after mount - a one-shot read there occasionally landed on 0 (this
-  // component remounts into an AnimatePresence enter transition, and DOM writes and the browser's
-  // own layout pass don't happen in perfect lockstep with when a *effect* callback happens to run),
-  // collapsing the description down to nothing until the next unrelated re-render corrected it - in
-  // practice, that meant it stuck fully collapsed until the "read more" toggle was clicked, since
-  // nothing else was re-running this measurement in between. A ResizeObserver's callback instead
-  // fires from the browser's own layout engine once a size actually exists, and keeps firing again
-  // on every later change (a slow-loading font swapping in, ...), so a bad early read always gets
-  // corrected instead of becoming permanent.
-  const [fullHeight, setFullHeight] = useState(collapsedHeight);
-  useEffect(() => {
-    const el = descriptionRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver(() => setFullHeight(el.scrollHeight));
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [description]);
-  // Collapsed is always exactly `collapsedHeight`, never shrunk to a shorter description's actual
-  // (smaller) height - a short description otherwise made this whole section a few lines shorter
-  // than a long one, jarringly resizing everything below it on every slide switch. Same trade-off
-  // the title wrapper above already makes: a little unused space under a short description reads
-  // far better than the rest of the page visibly jumping around it.
-  const maxHeight = descriptionOpen ? fullHeight : collapsedHeight;
   const genres = (slide.genres ?? []).slice(0, 3);
-  return <section className="relative isolate min-h-[520px] overflow-hidden border-b border-white/[.04] px-8 py-20">
+  return <section ref={sectionRef} className="relative isolate min-h-[520px] overflow-hidden border-b border-white/[.04] px-8 py-20">
     <div className="absolute inset-0 -z-10 overflow-hidden opacity-75">
       {slide.posterUrl && (
         <motion.img
@@ -191,23 +215,12 @@ function Hero({ slide, label, sourceName, paused }: { slide: HeroSlide; label: s
         </span>
         {sourceName}
       </span>
-      {/* The min-h wrapper reserves space for a full 2-line title regardless of how long this
-          slide's title actually is - without it, switching from a 2-line to a 1-line title (or
-          back) between carousel slides abruptly resizes this block and everything below it.
-          min-height has to live on a wrapper, not the line-clamped element itself - combining
-          -webkit-line-clamp with a min-height on the same element makes Chromium clip the text
-          to nothing instead of just capping it at 2 lines. It also needs the h1's own font-size and
-          line-height repeated here, not just its own defaults - `em` resolves against the element's
-          *own* computed font-size, so without them `2.1em` was 2.1 lines of this div's inherited
-          (much smaller) body text, not of the much larger heading it's meant to reserve room for -
-          silently reserving far too little to actually stop the jump between a one-line and a
-          two-line title, which is the whole reason this wrapper exists. */}
-      <div className="min-h-[2.1em] text-4xl leading-[1.05] md:text-6xl">
-        <h1 className="line-clamp-2 max-w-xl select-text text-4xl font-bold leading-[1.05] tracking-[-.04em] text-white md:text-6xl">{title}</h1>
-      </div>
-      <div className="mt-5 max-w-lg overflow-hidden transition-[max-height] duration-300 ease-in-out" style={{ maxHeight }}>
-        <p ref={descriptionRef} className="select-text text-sm leading-6 text-zinc-200">{description}</p>
-      </div>
+      {/* Plain line-clamp, no measured/reserved height - a one-line title costs less room than a
+          two-line one, same as a short description costs less than a long one, and that's fine:
+          HeroCarousel's own wrapper (see its `sectionHeight`) is what smooths the resulting height
+          difference into a transition instead of a jump, not this. */}
+      <h1 className="line-clamp-2 max-w-xl select-text text-4xl font-bold leading-[1.05] tracking-[-.04em] text-white md:text-6xl">{title}</h1>
+      <p className={cn("mt-5 max-w-lg select-text text-sm leading-6 text-zinc-200", !descriptionOpen && "line-clamp-3")}>{description}</p>
       {slide.description && <button onClick={() => setDescriptionOpen((value) => !value)} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-zinc-300 transition hover:text-white">{descriptionOpen ? t("common.hideDescription") : t("common.readDescription")}<ChevronDown className={`h-3.5 w-3.5 transition-transform duration-300 ${descriptionOpen ? "rotate-180" : ""}`} strokeWidth={2.5} /></button>}
       <div className="mt-5 flex flex-wrap items-center gap-2 text-xs font-medium text-zinc-200">
         {slide.rating && (
