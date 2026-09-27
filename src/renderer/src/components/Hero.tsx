@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, animate, motion, useMotionValue } from "motion/react";
 import { ChevronDown, Star } from "lucide-react";
 
 /** The look of a hero's own call to action, so every caller's Link matches without the carousel
@@ -85,7 +85,7 @@ export function HeroCarousel({ slides, label }: { slides: HeroSlide[]; label: st
   return <div className="relative" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
     <AnimatePresence mode="wait">
       <motion.div key={current.key} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4, ease: "easeOut" }}>
-        <Hero slide={current} label={label} />
+        <Hero slide={current} label={label} paused={paused} />
       </motion.div>
     </AnimatePresence>
     {slides.length > 1 && <div className="absolute bottom-8 right-8 z-10 flex items-center gap-1.5">
@@ -112,8 +112,25 @@ export function HeroCarousel({ slides, label }: { slides: HeroSlide[]; label: st
     </div>}
   </div>;
 }
-function Hero({ slide, label }: { slide: HeroSlide; label: string }) {
+function Hero({ slide, label, paused }: { slide: HeroSlide; label: string; paused: boolean }) {
   const { t } = useTranslation();
+  // The background poster's slow zoom used to be a plain Motion `animate` prop, which - unlike
+  // the timer above and the progress pill below - had no way to actually pause: it just kept
+  // running the whole time the carousel itself sat paused on hover, so the image visibly kept
+  // creeping in while everything else on the slide looked frozen. Driving it through an imperative
+  // `animate()` call gives back a real AnimationPlaybackControls with .pause()/.play(), which
+  // freezes and resumes the zoom in place exactly like the CSS progress pill already does.
+  const zoom = useMotionValue(1);
+  const zoomControlsRef = useRef<ReturnType<typeof animate> | null>(null);
+  useEffect(() => {
+    zoomControlsRef.current = animate(zoom, 1.1, { duration: HERO_INTERVAL_MS / 1000 + 1, ease: "easeOut" });
+    return () => zoomControlsRef.current?.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one animation per Hero instance; this remounts per slide (see the `key` on its parent motion.div)
+  }, []);
+  useEffect(() => {
+    if (paused) zoomControlsRef.current?.pause();
+    else zoomControlsRef.current?.play();
+  }, [paused]);
   const title = slide.title;
   const [descriptionOpen, setDescriptionOpen] = useState(false);
   const description = slide.description || t("catalog.heroFallbackDescription");
@@ -131,9 +148,7 @@ function Hero({ slide, label }: { slide: HeroSlide; label: string }) {
         <motion.img
           src={slide.posterUrl}
           alt=""
-          initial={{ scale: 1 }}
-          animate={{ scale: 1.1 }}
-          transition={{ duration: HERO_INTERVAL_MS / 1000 + 1, ease: "easeOut" }}
+          style={{ scale: zoom }}
           className="h-full w-full object-cover object-[center_25%] blur-[2px]"
         />
       )}
