@@ -260,7 +260,20 @@ function SpotlightPanel() {
         </AnimatePresence>
 
         {hasList && (
-          <div ref={listRef} style={popoverTheme} onMouseLeave={() => { if (viaPointer.current) setSelected(-1); }} className={cn("no-scrollbar mt-2 overflow-y-auto rounded-2xl border border-border bg-app-popover p-1.5 shadow-2xl", filtersOpen ? "max-h-[28vh]" : "max-h-[56vh]")}>
+          <div
+            ref={listRef}
+            style={popoverTheme}
+            onMouseLeave={() => {
+              // The pointer leaving doesn't just clear the highlight visually - the row it had
+              // put there stops being what Enter would act on too, same as if the list had never
+              // been touched (back to "all results", not a stale index 0).
+              if (!viaPointer.current) return;
+              viaPointer.current = false;
+              setDefaultSelection(true);
+              setSelected(0);
+            }}
+            className={cn("no-scrollbar mt-2 overflow-y-auto rounded-2xl border border-border bg-app-popover p-1.5 shadow-2xl", filtersOpen ? "max-h-[28vh]" : "max-h-[56vh]")}
+          >
             {showingRecent && (
               <>
                 <div className="flex items-center justify-between px-3 pb-1 pt-2">
