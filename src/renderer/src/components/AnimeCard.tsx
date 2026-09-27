@@ -119,6 +119,12 @@ export function PosterCard({ title, posterUrl, type, year, episodeCount, rating,
         )}
         {description ? (
           <p className="line-clamp-4 select-text text-xs leading-relaxed text-zinc-300">{description}</p>
+        ) : meta ? (
+          // A source that doesn't hand back a description (or genres) left this reveal showing
+          // nothing but a darkened poster and, at most, a lone genre chip - hovering promised more
+          // than it delivered. The type/year/rating line already sits below every card regardless
+          // of what the source provides, so it's always there to fall back on here too.
+          <p className="line-clamp-2 select-text text-xs font-medium leading-relaxed text-zinc-300">{meta}</p>
         ) : !genres?.length ? (
           <p className="line-clamp-2 select-text text-base font-semibold leading-snug text-white">{title}</p>
         ) : null}
