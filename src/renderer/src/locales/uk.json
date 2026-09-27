@@ -353,6 +353,8 @@
     "settingsTitle": "Налаштування джерела",
     "settingsEmpty": "У цього джерела нічого налаштовувати.",
     "accountSignIn": "Увійти",
+    "accountSignInOnSite": "Увійти через сайт",
+    "accountSigningIn": "Виконується вхід…",
     "accountSignOut": "Вийти",
     "accountLogin": "Логін або пошта",
     "accountPassword": "Пароль",

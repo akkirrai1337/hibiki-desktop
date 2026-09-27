@@ -20,6 +20,7 @@ export const IPC = {
   // Account, and what an account unlocks. Each is answered only by sources that declare the
   // matching capability - see SourceCapability.
   sourceLogin: "source:account:login",
+  sourceLoginWeb: "source:account:loginWeb",
   sourceLogout: "source:account:logout",
   sourceAccount: "source:account:get",
   sourceComments: "source:comments:list",

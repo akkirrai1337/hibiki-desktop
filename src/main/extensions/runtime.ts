@@ -27,6 +27,7 @@ import type { ExtensionCall, ExtensionMethod } from "./execute";
 import type { WorkerCallMessage, WorkerReadyMessage, WorkerResultMessage } from "./worker";
 import { performBrowserFetch, performChallenge } from "./browserFetchHost";
 import { performNetFetch, performNetFetchAll } from "./netFetchHost";
+import { loginViaWebview } from "./webLogin";
 import { logger } from "../logger";
 import { performBrowserResolve } from "./browserResolveHost";
 import type { BridgeRequestMessage } from "./syncHostBridge";
@@ -500,6 +501,18 @@ export class ExtensionRuntime {
    */
   login(sourceId: string, credentials: { login: string; password: string }): Promise<SourceAccount> {
     return this.run("login", sourceId, [credentials]);
+  }
+
+  /** The ACCOUNT row's own `webLoginUrl`/`webLoginSuccessCookie` - a real sign-in window instead
+   * of a login+password pair (see main/extensions/webLogin.ts for what that actually opens). */
+  async loginWeb(sourceId: string): Promise<SourceAccount> {
+    const manifest = this.extensions.get(sourceId)?.manifest;
+    const row = (manifest?.settings ?? []).find((setting) => setting.type === "ACCOUNT");
+    if (!row?.webLoginUrl || !row.webLoginSuccessCookie) {
+      throw new Error(`Source "${sourceId}" does not declare a web login`);
+    }
+    const cookies = await loginViaWebview(sourceId, row.webLoginUrl, row.webLoginSuccessCookie);
+    return this.run("loginWeb", sourceId, [cookies]);
   }
 
   logout(sourceId: string): Promise<void> {

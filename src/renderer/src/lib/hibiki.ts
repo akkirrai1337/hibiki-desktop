@@ -56,6 +56,7 @@ export interface HibikiApi {
     account: {
       get(sourceId: string): Promise<SourceAccount | null>;
       login(sourceId: string, credentials: { login: string; password: string }): Promise<SourceAccount>;
+      loginWeb(sourceId: string): Promise<SourceAccount>;
       logout(sourceId: string): Promise<void>;
     };
     comments: {

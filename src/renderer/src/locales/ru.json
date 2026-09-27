@@ -353,6 +353,8 @@
     "settingsTitle": "Настройки источника",
     "settingsEmpty": "У этого источника нечего настраивать.",
     "accountSignIn": "Войти",
+    "accountSignInOnSite": "Войти через сайт",
+    "accountSigningIn": "Выполняется вход…",
     "accountSignOut": "Выйти",
     "accountLogin": "Логин или почта",
     "accountPassword": "Пароль",

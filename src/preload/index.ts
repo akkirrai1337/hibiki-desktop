@@ -61,6 +61,7 @@ const api = {
       get: (sourceId: string): Promise<SourceAccount | null> => ipcRenderer.invoke(IPC.sourceAccount, sourceId),
       login: (sourceId: string, credentials: { login: string; password: string }): Promise<SourceAccount> =>
         ipcRenderer.invoke(IPC.sourceLogin, sourceId, credentials),
+      loginWeb: (sourceId: string): Promise<SourceAccount> => ipcRenderer.invoke(IPC.sourceLoginWeb, sourceId),
       logout: (sourceId: string): Promise<void> => ipcRenderer.invoke(IPC.sourceLogout, sourceId),
     },
     comments: {

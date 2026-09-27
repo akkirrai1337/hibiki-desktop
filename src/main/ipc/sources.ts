@@ -68,6 +68,7 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   ipcMain.handle(IPC.sourceLogin, (_e, sourceId: string, credentials: { login: string; password: string }) =>
     runtime.login(sourceId, credentials),
   );
+  ipcMain.handle(IPC.sourceLoginWeb, (_e, sourceId: string) => runtime.loginWeb(sourceId));
   ipcMain.handle(IPC.sourceLogout, (_e, sourceId: string) => runtime.logout(sourceId));
   ipcMain.handle(IPC.sourceAccount, (_e, sourceId: string) => runtime.getAccount(sourceId));
   ipcMain.handle(IPC.sourceComments, (_e, sourceId: string, request: Parameters<typeof runtime.listComments>[1]) =>

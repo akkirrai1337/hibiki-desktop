@@ -224,13 +224,25 @@ function AccountRow({ sourceId, row }: { sourceId: string; row: SourceSetting })
     onError: (failure: unknown) => setError(messageOf(failure)),
   });
 
+  // The site's own login page, in a real window, instead of a login+password pair this app never
+  // collects - see webLoginUrl on SourceSetting. Mutually exclusive with the form above: a source
+  // declares one path or the other, never both at once.
+  const signInWeb = useMutation({
+    mutationFn: () => hibiki.sources.account.loginWeb(sourceId),
+    onSuccess: (signedIn) => {
+      setError(null);
+      queryClient.setQueryData(["sourceAccount", sourceId], signedIn);
+    },
+    onError: (failure: unknown) => setError(messageOf(failure)),
+  });
+
   const signOut = useMutation({
     mutationFn: () => hibiki.sources.account.logout(sourceId),
     onSuccess: () => queryClient.setQueryData(["sourceAccount", sourceId], null),
     onError: (failure: unknown) => setError(messageOf(failure)),
   });
 
-  const busy = signIn.isPending || signOut.isPending;
+  const busy = signIn.isPending || signInWeb.isPending || signOut.isPending;
   const signedIn = account.data ?? null;
 
   return (
@@ -263,6 +275,16 @@ function AccountRow({ sourceId, row }: { sourceId: string; row: SourceSetting })
             >
               <LogOut className="h-3.5 w-3.5" strokeWidth={2} />
               {t("sources.accountSignOut")}
+            </button>
+          </motion.div>
+        ) : row.webLoginUrl ? (
+          <motion.div key="out-web" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <button
+              onClick={() => signInWeb.mutate()}
+              disabled={busy}
+              className="w-full rounded-lg bg-text px-3 py-2 text-sm font-bold text-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {signInWeb.isPending ? t("sources.accountSigningIn") : t("sources.accountSignInOnSite")}
             </button>
           </motion.div>
         ) : (

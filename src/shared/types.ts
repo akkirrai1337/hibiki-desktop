@@ -216,6 +216,17 @@ export interface SourceSetting {
    * host used to assume for all of them regardless of what RatingButton actually sent back.
    */
   ratingScale?: number;
+  /**
+   * ACCOUNT only, and both optional together - a source whose site has no simple login+password
+   * API of its own (VK/Discord/Telegram buttons, a passkey, a CAPTCHA on the login form, whatever
+   * that page actually asks for) points these at it instead. The host opens `webLoginUrl` in a
+   * real window and, once a cookie named `webLoginSuccessCookie` shows up for it, hands that
+   * domain's cookies to the source's own `loginWeb(cookiesJson)` - what they mean is entirely its
+   * business. A source with these set gets a single "sign in on the site" button in place of the
+   * login/password fields, not alongside them.
+   */
+  webLoginUrl?: string;
+  webLoginSuccessCookie?: string;
 }
 
 /** Who is signed in to a source, as far as the source is concerned. */

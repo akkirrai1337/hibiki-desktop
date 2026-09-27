@@ -353,6 +353,8 @@
     "settingsTitle": "Source settings",
     "settingsEmpty": "This source has nothing to configure.",
     "accountSignIn": "Sign in",
+    "accountSignInOnSite": "Sign in on the site",
+    "accountSigningIn": "Signing in…",
     "accountSignOut": "Sign out",
     "accountLogin": "Login or email",
     "accountPassword": "Password",

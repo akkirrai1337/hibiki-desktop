@@ -32,6 +32,10 @@ export type ExtensionMethod =
   // a source that declares none of the matching capabilities never gets asked, and one that
   // declares them but lacks the function fails loudly rather than silently doing nothing.
   | "login"
+  // A source whose ACCOUNT setting declares `webLoginUrl` gets this instead of/alongside "login" -
+  // the cookies harvested from a real sign-in window (see main/extensions/webLogin.ts) rather than
+  // a login+password pair, since the host never collected or even saw either of those here.
+  | "loginWeb"
   | "logout"
   | "getAccount"
   | "listComments"
@@ -166,6 +170,7 @@ export function executeExtensionCall(
     // payload - the same convention search/resolve already use, and the one Rhino needs, since it
     // cannot hand a real object across the boundary either.
     case "login":
+    case "loginWeb":
     case "logout":
     case "getAccount":
     case "listComments":
