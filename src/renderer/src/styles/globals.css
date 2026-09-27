@@ -214,3 +214,14 @@ textarea {
 .legendary-glow {
   animation: legendary-glow 3s linear infinite;
 }
+
+/* The home hero carousel's dot-turned-progress-bar (Hero.tsx) - how long is left until the next
+   slide, not just which one is showing. Duration is set inline per instance, not here. */
+@keyframes hero-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}

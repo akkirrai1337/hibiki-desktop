@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Star } from "lucide-react";
 
 /** The look of a hero's own call to action, so every caller's Link matches without the carousel
- * having to own the route it points at. */
+ * having to own the route it points at. The accent glow on hover is the one place this otherwise
+ * black-and-white block borrows the app's own colour, instead of staying entirely neutral. */
 export const HERO_ACTION_CLASS =
-  "inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-zinc-900 transition-transform hover:scale-[1.02] active:scale-[0.98]";
+  "inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-zinc-900 shadow-[0_0_0_0_rgb(var(--color-accent)/0)] transition-[transform,box-shadow] hover:scale-[1.02] hover:shadow-[0_10px_30px_-6px_rgb(var(--color-accent)/0.55)] active:scale-[0.98]";
 
 const HERO_INTERVAL_MS = 7000;
 
@@ -24,6 +25,12 @@ export interface HeroSlide {
   type?: string | null;
   year?: number | null;
   episodeCount?: number | null;
+  /** Up to a handful, shown as plain (non-interactive) chips - a hero is glanced at, not filtered
+   * from, so these are context, not a shortcut to the catalog the way the detail page's own genre
+   * chips are. */
+  genres?: string[] | null;
+  /** Whichever one rating the caller considers this slide's "main" one, if it has any at all. */
+  rating?: { value: number; source: string } | null;
   /** The "open this" control, rendered by the caller so each keeps its own typed route and params -
    * so each keeps its own typed route and params. Use HERO_ACTION_CLASS on it. */
   action: React.ReactNode;
@@ -32,6 +39,12 @@ export interface HeroSlide {
 export function HeroCarousel({ slides, label }: { slides: HeroSlide[]; label: string }) {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  // Bumped every time a pause actually ends, so the progress bar below can key off it and restart
+  // its fill from zero in step with the interval effect below doing the same (a plain
+  // animation-play-state toggle would resume the bar from wherever it was paused, but the timer
+  // it's meant to represent restarts from scratch on unpause too - resuming the bar would just be
+  // a different, more confident-looking lie about how long is actually left).
+  const [resumeTick, setResumeTick] = useState(0);
   const slideKey = slides.map((slide) => slide.key).join(",");
   useEffect(() => { setIndex(0); }, [slideKey]);
   useEffect(() => {
@@ -41,20 +54,32 @@ export function HeroCarousel({ slides, label }: { slides: HeroSlide[]; label: st
   }, [paused, slides.length, slideKey]);
   const current = slides[Math.min(index, slides.length - 1)];
   if (!current) return null;
-  return <div className="relative" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+  return <div
+    className="relative"
+    onMouseEnter={() => setPaused(true)}
+    onMouseLeave={() => { setPaused(false); setResumeTick((n) => n + 1); }}
+  >
     <AnimatePresence mode="wait">
       <motion.div key={current.key} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4, ease: "easeOut" }}>
         <Hero slide={current} label={label} />
       </motion.div>
     </AnimatePresence>
-    {slides.length > 1 && <div className="absolute bottom-8 right-8 z-10 flex items-center gap-2">
+    {slides.length > 1 && <div className="absolute bottom-8 right-8 z-10 flex items-center gap-1.5">
       {slides.map((slide, i) => (
         <button
           key={slide.key}
           onClick={() => setIndex(i)}
           aria-label={`${i + 1}`}
-          className={`h-1.5 rounded-full transition-[width,background-color] duration-300 ${i === index ? "w-6 bg-white" : "w-1.5 bg-white/30 hover:bg-white/50"}`}
-        />
+          className="h-1.5 w-6 overflow-hidden rounded-full bg-white/25 transition-colors hover:bg-white/40"
+        >
+          {i === index && (
+            <span
+              key={`${index}-${resumeTick}`}
+              style={{ animationDuration: `${HERO_INTERVAL_MS}ms`, animationPlayState: paused ? "paused" : "running" }}
+              className="block h-full w-full origin-left animate-[hero-progress_linear_forwards] rounded-full bg-accent"
+            />
+          )}
+        </button>
       ))}
     </div>}
   </div>;
@@ -71,7 +96,8 @@ function Hero({ slide, label }: { slide: HeroSlide; label: string }) {
     const full = descriptionRef.current?.scrollHeight ?? collapsedHeight;
     setMaxHeight(descriptionOpen ? full : Math.min(collapsedHeight, full));
   }, [descriptionOpen, description, collapsedHeight]);
-  return <section className="relative isolate min-h-[420px] overflow-hidden border-b border-white/[.04] px-8 py-16">
+  const genres = (slide.genres ?? []).slice(0, 3);
+  return <section className="relative isolate min-h-[520px] overflow-hidden border-b border-white/[.04] px-8 py-20">
     <div className="absolute inset-0 -z-10 overflow-hidden opacity-75">
       {slide.posterUrl && (
         <motion.img
@@ -79,7 +105,7 @@ function Hero({ slide, label }: { slide: HeroSlide; label: string }) {
           alt=""
           initial={{ scale: 1 }}
           animate={{ scale: 1.1 }}
-          transition={{ duration: HERO_INTERVAL_MS / 1000 + 1, ease: "linear" }}
+          transition={{ duration: HERO_INTERVAL_MS / 1000 + 1, ease: "easeOut" }}
           className="h-full w-full object-cover object-[center_25%] blur-[2px]"
         />
       )}
@@ -104,8 +130,25 @@ function Hero({ slide, label }: { slide: HeroSlide; label: string }) {
         <p ref={descriptionRef} className="select-text text-sm leading-6 text-zinc-200">{description}</p>
       </div>
       {slide.description && <button onClick={() => setDescriptionOpen((value) => !value)} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-zinc-300 transition hover:text-white">{descriptionOpen ? t("common.hideDescription") : t("common.readDescription")}<ChevronDown className={`h-3.5 w-3.5 transition-transform duration-300 ${descriptionOpen ? "rotate-180" : ""}`} strokeWidth={2.5} /></button>}
-      <div className="mt-5 flex items-center gap-3 text-xs font-medium text-zinc-200"><span className="rounded-md bg-white/15 px-2 py-1">{slide.type?.toUpperCase() || t("common.typeFallback")}</span>{slide.year ? <span>{slide.year}</span> : null}{slide.episodeCount ? <span>{t("common.episodesShort", { count: slide.episodeCount })}</span> : null}</div>
+      <div className="mt-5 flex flex-wrap items-center gap-2 text-xs font-medium text-zinc-200">
+        {slide.rating && (
+          <span className="flex items-center gap-1 rounded-md bg-accent/20 px-2 py-1 font-bold text-accent-text">
+            <Star className="h-3 w-3 fill-current" strokeWidth={0} />
+            {formatHeroRating(slide.rating.value)}
+          </span>
+        )}
+        <span className="rounded-md bg-white/15 px-2 py-1">{slide.type?.toUpperCase() || t("common.typeFallback")}</span>
+        {slide.year ? <span>{slide.year}</span> : null}
+        {slide.episodeCount ? <span>{t("common.episodesShort", { count: slide.episodeCount })}</span> : null}
+        {genres.map((genre) => (
+          <span key={genre} className="rounded-full border border-accent/30 bg-accent/[.08] px-2.5 py-1 text-accent-text">{genre}</span>
+        ))}
+      </div>
       <div className="mt-8">{slide.action}</div>
     </div>
   </section>;
+}
+
+function formatHeroRating(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0$/, "");
 }
