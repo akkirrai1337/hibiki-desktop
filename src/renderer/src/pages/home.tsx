@@ -147,7 +147,7 @@ function toHeroSlide(anime: AnimeTitle, openLabel: string, sourceIconUrl?: strin
     rating: anime.ratings?.[0] ? { value: anime.ratings[0].value, source: anime.ratings[0].source } : null,
     action: (
       <Link to="/anime/$sourceId/$animeId" params={{ sourceId: anime.sourceId, animeId: anime.id }} className={HERO_ACTION_CLASS}>
-        <Play className="h-4 w-4 fill-current" strokeWidth={0} />
+        <Play className="ml-0.5 h-4 w-4 fill-current" strokeWidth={0} />
         {openLabel}
       </Link>
     ),
