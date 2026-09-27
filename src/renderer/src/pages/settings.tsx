@@ -7,7 +7,7 @@ import { Switch } from "@/components/Switch";
 import { SUPPORTED_LOCALES, setLocale } from "@/lib/i18n";
 import { SKIP_TIMER_MAX_SECONDS, SKIP_TIMER_MIN_SECONDS, WATCHED_THRESHOLD_MAX_PERCENT, WATCHED_THRESHOLD_MIN_PERCENT, usePlayerPrefsStore } from "@/stores/playerPrefsStore";
 import { useUiStore } from "@/stores/uiStore";
-import { ACCENT_PRESETS, applyAccentColor, BACKGROUND_THEME_PRESETS, DEFAULT_ACCENT } from "@/lib/theme";
+import { ACCENT_PRESETS, applyAccentColor, BACKGROUND_THEME_PRESETS, CUSTOM_BACKGROUND_THEME_ID, customBackgroundGradientCss, DEFAULT_ACCENT } from "@/lib/theme";
 import { sortLabel } from "@/lib/catalogSort";
 import { SelectDropdown } from "@/components/SelectDropdown";
 import { hibiki, type LogEntry } from "@/lib/hibiki";
@@ -192,7 +192,7 @@ function accentForegroundColor(hex: string): string {
 // picks a whole background theme" visually distinct from "that row above picks one accent color".
 // The `null` (no theme) option renders as a plain checkerboard-free empty square with a label
 // instead of a swatch of its own, since there's no single color/gradient standing in for "off".
-function BackgroundThemeSwatch({ gradient, active, onClick, label }: { gradient?: string; active: boolean; onClick: () => void; label?: string }) {
+function BackgroundThemeSwatch({ gradient, active, onClick, label, icon: Icon = Ban }: { gradient?: string; active: boolean; onClick: () => void; label?: string; icon?: typeof Ban }) {
   return (
     <button
       type="button"
@@ -205,9 +205,39 @@ function BackgroundThemeSwatch({ gradient, active, onClick, label }: { gradient?
         active && "ring-2 ring-accent ring-offset-2 ring-offset-bg",
       )}
     >
-      {!gradient && <Ban className="h-3.5 w-3.5" strokeWidth={2} />}
+      {!gradient && <Icon className="h-3.5 w-3.5" strokeWidth={2} />}
       {active && gradient && <Check className="h-4 w-4 text-white drop-shadow" strokeWidth={3} />}
     </button>
+  );
+}
+
+// Same overlay-input trick as CustomAccentInput (a real native color <input>, invisible and on top
+// of the swatch it visually stands in for) but kept as its own component rather than generalizing
+// that one - CustomAccentInput's drag handling exists specifically to feed --color-accent live
+// previews through applyAccentColor, documented fragile enough already ("two bugs already got fixed
+// here") that reusing it for an unrelated gradient-stop color risked dragging that same fragility
+// into a second, differently-shaped caller for no real benefit: this one has nothing to live-preview
+// through (a gradient stop only matters once actually committed), so it only needs the plain
+// `change` event, not `input`'s drag-time stream.
+function GradientStopSwatch({ value, onCommit, label }: { value: string; onCommit: (color: string) => void; label: string }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (inputRef.current) inputRef.current.value = value;
+  }, [value]);
+  return (
+    <label
+      className="relative flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full border border-border transition-transform hover:scale-110"
+      style={{ backgroundColor: value }}
+      title={label}
+    >
+      <input
+        ref={inputRef}
+        type="color"
+        defaultValue={value}
+        onChange={(e) => onCommit(e.target.value)}
+        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+      />
+    </label>
   );
 }
 
@@ -571,6 +601,8 @@ export function SettingsPage() {
   const setAccentColor = useUiStore((s) => s.setAccentColor);
   const backgroundTheme = useUiStore((s) => s.backgroundTheme);
   const setBackgroundTheme = useUiStore((s) => s.setBackgroundTheme);
+  const customBackgroundGradient = useUiStore((s) => s.customBackgroundGradient);
+  const setCustomBackgroundGradient = useUiStore((s) => s.setCustomBackgroundGradient);
   const chromeBlurEnabled = useUiStore((s) => s.chromeBlurEnabled);
   const setChromeBlurEnabled = useUiStore((s) => s.setChromeBlurEnabled);
   const catalogAutoLoad = useUiStore((s) => s.catalogAutoLoad);
@@ -619,6 +651,27 @@ export function SettingsPage() {
             {BACKGROUND_THEME_PRESETS.map((preset) => (
               <BackgroundThemeSwatch key={preset.id} gradient={preset.gradient} active={backgroundTheme === preset.id} onClick={() => setBackgroundTheme(preset.id)} />
             ))}
+            <BackgroundThemeSwatch
+              icon={Palette}
+              gradient={customBackgroundGradient ? customBackgroundGradientCss(customBackgroundGradient) : undefined}
+              active={backgroundTheme === CUSTOM_BACKGROUND_THEME_ID}
+              onClick={() => setBackgroundTheme(CUSTOM_BACKGROUND_THEME_ID)}
+              label={t("settings.appearance.backgroundThemeCustom")}
+            />
+            {backgroundTheme === CUSTOM_BACKGROUND_THEME_ID && (
+              <div className="flex items-center gap-1.5 pl-1">
+                <GradientStopSwatch
+                  value={customBackgroundGradient?.from ?? DEFAULT_ACCENT}
+                  onCommit={(from) => setCustomBackgroundGradient({ from, to: customBackgroundGradient?.to ?? DEFAULT_ACCENT })}
+                  label={t("settings.appearance.backgroundThemeCustomFrom")}
+                />
+                <GradientStopSwatch
+                  value={customBackgroundGradient?.to ?? DEFAULT_ACCENT}
+                  onCommit={(to) => setCustomBackgroundGradient({ from: customBackgroundGradient?.from ?? DEFAULT_ACCENT, to })}
+                  label={t("settings.appearance.backgroundThemeCustomTo")}
+                />
+              </div>
+            )}
           </div>
         </SettingsRow>
 

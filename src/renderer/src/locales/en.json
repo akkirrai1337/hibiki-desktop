@@ -566,6 +566,9 @@
       "backgroundTheme": "App background",
       "backgroundThemeHint": "A gradient behind the sidebar - like Discord",
       "backgroundThemeNone": "Default",
+      "backgroundThemeCustom": "Custom",
+      "backgroundThemeCustomFrom": "Start color",
+      "backgroundThemeCustomTo": "End color",
       "chromeBlur": "Interface blur",
       "chromeBlurHint": "Translucent sidebar and title bar, blurring whatever's behind them",
       "customColor": "Custom color"

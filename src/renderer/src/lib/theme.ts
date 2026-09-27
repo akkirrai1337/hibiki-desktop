@@ -78,6 +78,14 @@ export const BACKGROUND_THEME_PRESETS: BackgroundThemePreset[] = [
   { id: "midnight", gradient: "linear-gradient(135deg, #334155, #0f172a)" },
 ];
 
+// The id a user-picked pair of stops (see uiStore's customBackgroundGradient) is stored under,
+// rather than one of BACKGROUND_THEME_PRESETS' own fixed ids - same angle as every preset above, so
+// a custom pick reads as "one more swatch in the row", not a visually distinct kind of theme.
+export const CUSTOM_BACKGROUND_THEME_ID = "custom";
+export function customBackgroundGradientCss(stops: { from: string; to: string }): string {
+  return `linear-gradient(135deg, ${stops.from}, ${stops.to})`;
+}
+
 // Purely the decorative gradient id now - see applyChromeBlur below for the translucency/blur this
 // used to always turn on together with picking one, which is now Settings' own separate toggle.
 // The gradient itself is still painted directly by __root.tsx (from BACKGROUND_THEME_PRESETS), not

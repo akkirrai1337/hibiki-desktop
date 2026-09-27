@@ -3,7 +3,7 @@ import { createRootRoute, Outlet, useRouterState } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query";
 import { useUiStore } from "@/stores/uiStore";
 import { useKnownSourcesStore } from "@/stores/knownSourcesStore";
-import { applyAccentColor, applyBackgroundTheme, applyChromeBlur, BACKGROUND_THEME_PRESETS } from "@/lib/theme";
+import { applyAccentColor, applyBackgroundTheme, applyChromeBlur, BACKGROUND_THEME_PRESETS, CUSTOM_BACKGROUND_THEME_ID, customBackgroundGradientCss } from "@/lib/theme";
 import { TitleBar } from "@/components/TitleBar";
 import { Sidebar } from "@/components/Sidebar";
 import { SearchSpotlight } from "@/components/SearchSpotlight";
@@ -104,7 +104,10 @@ function RootLayoutContent() {
   // are translucent (which applyChromeBlur's CSS variables make them, only while that's actually
   // turned on), the gradient painted here already shows through them exactly where it should,
   // `backdrop-filter: blur` and all, with no z-index/stacking of its own to manage.
-  const backgroundGradient = BACKGROUND_THEME_PRESETS.find((p) => p.id === backgroundTheme)?.gradient;
+  const customBackgroundGradient = useUiStore((s) => s.customBackgroundGradient);
+  const backgroundGradient = backgroundTheme === CUSTOM_BACKGROUND_THEME_ID
+    ? (customBackgroundGradient ? customBackgroundGradientCss(customBackgroundGradient) : undefined)
+    : BACKGROUND_THEME_PRESETS.find((p) => p.id === backgroundTheme)?.gradient;
   const onboardingCompleted = useUiStore((s) => s.onboardingCompleted);
   const setOnboardingCompleted = useUiStore((s) => s.setOnboardingCompleted);
   // The main process owns the actual RPC connection - this just keeps it in sync with the
