@@ -583,7 +583,15 @@ function EpisodeChip({
               real sections (number, title, icon group), not one icon on its own, which is what
               was leaving it looking oddly far from the rest. */}
           {isFavorite && view === "tiles" && <Heart className="absolute left-1.5 top-1.5 h-3 w-3 shrink-0 fill-rose-400 text-rose-400" strokeWidth={0} />}
-          <span className={cn("flex items-center gap-1.5", view === "tiles" ? "absolute right-1.5 top-1.5 gap-1" : "shrink-0")}>
+          <span
+            className={cn(
+              "flex items-center gap-1.5 transition-[opacity,transform] duration-200",
+              view === "tiles" ? "absolute right-1.5 top-1.5 gap-1" : "shrink-0",
+              // Pinned to the row's right edge same as always; on hover they just slide out from
+              // under that same spot rather than the play button stacking on next to them.
+              view === "list" && !downloading && !paused && "group-hover:translate-x-2 group-hover:opacity-0",
+            )}
+          >
             {isFavorite && view === "list" && <Heart className="h-3 w-3 shrink-0 fill-rose-400 text-rose-400" strokeWidth={0} />}
             {queued && <Clock className="h-3 w-3 text-muted" strokeWidth={2.25} />}
             {(download?.status === "error" || download?.status === "unsupported") && <TriangleAlert className="h-3 w-3 text-rose-400" strokeWidth={2.5} />}
@@ -603,16 +611,15 @@ function EpisodeChip({
             )}
             {!downloading && !paused && (isDownloaded || download?.status === "done") && <Download className="h-3 w-3 text-emerald-400" strokeWidth={2.5} />}
             {watched && <Check className="h-3 w-3 text-muted" strokeWidth={2.5} />}
-            {/* The list's own affordance: a play button under the pointer. Always taking up its
-                spot (not just appearing there) - it shifts into place on `transform`, which
-                animates on its own layer instead of nudging the icons before it around, and
-                fades in alongside rather than just popping into existence at full size. */}
-            {view === "list" && !downloading && !paused && (
-              <span className="flex h-7 w-7 -translate-x-1 items-center justify-center rounded-full bg-accent text-accent-fg opacity-0 transition-[opacity,transform] duration-200 group-hover:translate-x-0 group-hover:opacity-100">
-                <Play className="h-3 w-3 fill-current" strokeWidth={0} />
-              </span>
-            )}
           </span>
+          {/* The list's own affordance: sits over the same right-pinned spot the icons above just
+              vacated, rather than a spot of its own - a straight swap in place, not one thing
+              landing next to another. */}
+          {view === "list" && !downloading && !paused && (
+            <span className="absolute right-3.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-accent text-accent-fg opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+              <Play className="h-3 w-3 fill-current" strokeWidth={0} />
+            </span>
+          )}
           {(downloading || paused) ? (
             <div className="absolute inset-x-0 bottom-0 h-[3px] bg-text/10"><div className={cn("h-full bg-accent transition-[width]", paused && "opacity-50")} style={{ width: `${downloadPercent}%` }} /></div>
           ) : percent > 0 ? (
