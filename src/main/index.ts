@@ -18,6 +18,7 @@ import { PROFILE_DIR, registerProfileBannerHandlers } from "./ipc/profileBanner"
 import { installPlayerHeaderInjector, registerPlayerHeaderOrigin, registerPlayerHeaders, unregisterPlayerHeaders } from "./playerHeaders";
 import { resolveFinalStreamUrl } from "./playerStream";
 import { clearDiscordPresence, setDiscordRpcEnabled, setIdleDiscordPresence, shutdownDiscordRpc, updateDiscordPresence } from "./discordRpc";
+import { DEEP_LINK_SCHEME, findDeepLinkInArgv, parseWatchDeepLink } from "./deepLink";
 import { createBackup, restoreBackup } from "./backup";
 import { initLogger, log, logger, recentEntries, type LogEntry, type LogLevel } from "./logger";
 import { exportLog, openLogFolder } from "./logExport";
@@ -46,6 +47,18 @@ protocol.registerSchemesAsPrivileged([
 app.setName("hibiki");
 app.setAppUserModelId("com.hibiki.desktop");
 
+// What lets a "Watch" button on a Discord Rich Presence card (see discordRpc.ts) actually open this
+// app - the OS hands a "hibiki://..." link to whichever process registered as its handler, the same
+// mechanism Spotify/Steam presence buttons rely on. Safe to call unconditionally; on Windows/Linux
+// it's a registry/desktop-file entry, so calling it again on every launch just keeps it current.
+app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
+// macOS delivers a protocol launch through this event instead of a second `second-instance` (below)
+// - registered before `whenReady` since a cold start can fire it immediately.
+app.on("open-url", (event, url) => {
+  event.preventDefault();
+  handleDeepLink(url);
+});
+
 // A second launch (double-clicking the icon again, a stray shortcut, ...) used to just open a
 // second, fully independent window onto the same userData folder - including the same SQLite
 // file, which better-sqlite3 has no cross-process locking story for. Two processes writing to it
@@ -62,10 +75,14 @@ if (!app.requestSingleInstanceLock()) {
   // The instance that *did* get the lock hears about every later launch attempt through this -
   // surface the window that's already open rather than leaving the new launch looking like it
   // silently did nothing.
-  app.on("second-instance", () => {
+  app.on("second-instance", (_event, argv) => {
     if (!mainWindow) return;
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.focus();
+    // Windows/Linux deliver a protocol launch (see the "Watch" button in discordRpc.ts) as a second
+    // instance with the "hibiki://..." link as a plain argv entry, rather than macOS's "open-url".
+    const url = findDeepLinkInArgv(argv);
+    if (url) handleDeepLink(url);
   });
 }
 
@@ -78,6 +95,23 @@ const EXTENSIONS_DIR = path.join(app.getPath("userData"), "extensions");
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 
 let mainWindow: BrowserWindow | null = null;
+// Set only when a deep link arrives before the renderer is ready to receive it (a cold start, or
+// one that raced the window's own first load) - flushed once `did-finish-load` fires below.
+let pendingDeepLinkUrl: string | null = null;
+
+// Parses the link and either forwards it to the renderer right away or, if there is nowhere to
+// forward it to yet, remembers it for the flush below. Invalid/unrelated links are dropped here -
+// nothing downstream ever sees a link this app didn't itself produce.
+function handleDeepLink(rawUrl: string): void {
+  const target = parseWatchDeepLink(rawUrl);
+  if (!target) return;
+  if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isLoadingMainFrame()) {
+    mainWindow.webContents.send(IPC.appDeepLinkWatch, target);
+  } else {
+    pendingDeepLinkUrl = rawUrl;
+  }
+}
+
 // Held at module scope only so before-quit can tear its worker pool down - everything else reaches
 // it through the IPC handlers it was registered with.
 let extensionRuntime: ExtensionRuntime | null = null;
@@ -404,7 +438,20 @@ app.whenReady().then(() => {
   // After the window exists, not before: warming the worker pool parses a bundle on new threads,
   // and doing that while Chromium is still bringing up the renderer only slows down first paint.
   // Source queries arriving before warm-up finishes still take the normal fresh-worker path.
-  mainWindow?.webContents.once("did-finish-load", () => runtime.warmWorkers());
+  mainWindow?.webContents.once("did-finish-load", () => {
+    runtime.warmWorkers();
+    // A cold start via a "hibiki://..." link (see handleDeepLink above) has nowhere to send it
+    // until the renderer's own listener is up - the window's first `did-finish-load` is that point.
+    if (pendingDeepLinkUrl) {
+      const url = pendingDeepLinkUrl;
+      pendingDeepLinkUrl = null;
+      handleDeepLink(url);
+    }
+  });
+  // Windows/Linux launching this app fresh (it was not already running) via a "hibiki://..." link
+  // hands it over as a plain argv entry, same shape as the second-instance case above.
+  const coldStartUrl = findDeepLinkInArgv(process.argv);
+  if (coldStartUrl) handleDeepLink(coldStartUrl);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

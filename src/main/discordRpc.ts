@@ -1,6 +1,7 @@
 import { Client } from "@xhayper/discord-rpc";
 import { ActivityType } from "discord-api-types/v10";
 import type { DiscordPresence } from "@shared/types";
+import { buildWatchDeepLink } from "./deepLink";
 
 // Same Application ID as the Android app's own DiscordRpcManager (DISCORD_APPLICATION_ID) - an
 // "Application" isn't platform-locked, it's just a shared identity (name/icon/Rich Presence
@@ -13,6 +14,7 @@ const DISCORD_CLIENT_ID = "1527613923338096764";
 
 const EPISODE_LABEL = "Эп."; // Localizing this would need the renderer's own i18n state piped
 // over IPC just for one word - not worth it for a label only shown on a Discord profile card.
+const WATCH_BUTTON_LABEL = "Смотреть"; // Same reasoning as EPISODE_LABEL above.
 
 // Discord fetches image URLs itself, so this has to be a real public host, not a bundled local
 // file - reusing the icon already published in the project's own public GitHub repo. A raster
@@ -35,6 +37,52 @@ let pending: PendingState = null;
 // "for X minutes" Discord shows keeps counting from when browsing actually started instead of
 // resetting every time setIdleDiscordPresence happens to be called again.
 let idleSinceMs: number | null = null;
+
+// Whether Discord itself can actually load a poster URL, keyed by that URL - Discord's client
+// fetches Rich Presence images from its own infrastructure, entirely outside this app's own
+// Electron session, so the Referer/Origin rewriting this app relies on to satisfy fussy image CDNs
+// (see shared/imageRequestHeaders.ts) never applies to it. A poster from a host that rejects a
+// generic outside fetch shows up on the Discord card as a broken-image placeholder, not as this
+// app's own hibiki-icon fallback - `posterUrl` was never null to begin with, so that fallback never
+// triggered. Checked once per URL and cached, since the same poster gets re-sent on every position
+// tick for as long as an episode plays.
+const posterReachability = new Map<string, boolean>();
+const posterChecksInFlight = new Set<string>();
+
+async function isReachableForDiscord(url: string): Promise<boolean> {
+  try {
+    const response = await fetch(url, { method: "GET", signal: AbortSignal.timeout(5000) });
+    // Only the response's existence matters here - draining the body would download the whole
+    // poster image for a check that only needs the status code.
+    void response.body?.cancel();
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+function scheduleReachabilityCheck(url: string): void {
+  if (posterChecksInFlight.has(url)) return;
+  posterChecksInFlight.add(url);
+  isReachableForDiscord(url)
+    .then((reachable) => {
+      posterReachability.set(url, reachable);
+      // Corrects an activity that was already sent optimistically with the real poster, in case
+      // this resolves to unreachable - `pending` still holds whatever is currently meant to be
+      // showing, so this is a no-op if a newer update already replaced it with something else.
+      if (!reachable) applyPending();
+    })
+    .finally(() => posterChecksInFlight.delete(url));
+}
+
+// The large image key to actually send: the poster, unless it is already known to fail for Discord
+// - in which case this also kicks off the check that will correct a still-optimistic send above.
+function resolveLargeImage(posterUrl: string | null): string {
+  if (!posterUrl) return HIBIKI_ICON_URL;
+  if (posterReachability.get(posterUrl) === false) return HIBIKI_ICON_URL;
+  if (!posterReachability.has(posterUrl)) scheduleReachabilityCheck(posterUrl);
+  return posterUrl;
+}
 
 function log(message: string, error?: unknown): void {
   console.warn(`[discord] ${message}`, error instanceof Error ? error.message : (error ?? ""));
@@ -93,6 +141,9 @@ function applyWatchingPresence(presence: DiscordPresence): void {
     .filter((part): part is string => !!part)
     .join(" · ");
 
+  const largeImage = resolveLargeImage(presence.posterUrl);
+  const usingPoster = largeImage !== HIBIKI_ICON_URL;
+
   client.user
     .setActivity({
       type: ActivityType.Watching,
@@ -105,10 +156,15 @@ function applyWatchingPresence(presence: DiscordPresence): void {
       // is what @xhayper/discord-rpc maps straight onto that field (its separate `largeImageUrl`
       // option maps onto `assets.large_url` instead, which Discord's client doesn't render from at
       // all - that's the dead end the OAuth/External-Assets detour upstream of this was chasing).
-      largeImageKey: presence.posterUrl ?? HIBIKI_ICON_URL,
-      largeImageText: presence.posterUrl ? presence.animeTitle : "hibiki",
-      smallImageKey: presence.posterUrl ? HIBIKI_ICON_URL : undefined,
-      smallImageText: presence.posterUrl ? "hibiki" : undefined,
+      largeImageKey: largeImage,
+      largeImageText: usingPoster ? presence.animeTitle : "hibiki",
+      smallImageKey: usingPoster ? HIBIKI_ICON_URL : undefined,
+      smallImageText: usingPoster ? "hibiki" : undefined,
+      // Discord only shows this to someone else viewing the activity, never on the user's own
+      // client - a known limitation of Rich Presence buttons, not a bug here. Clicking it hands the
+      // link to their OS, which opens this app via the "hibiki" protocol handler (see
+      // app.setAsDefaultProtocolClient in main/index.ts) if they have it installed at all.
+      buttons: [{ label: WATCH_BUTTON_LABEL, url: buildWatchDeepLink(presence) }],
       instance: false,
     })
     .then(() => console.log(`[discord] activity set: ${presence.animeTitle}`))

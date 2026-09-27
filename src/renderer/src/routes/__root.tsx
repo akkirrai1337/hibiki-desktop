@@ -15,6 +15,7 @@ import { useAppZoom } from "@/lib/useAppZoom";
 import { cn } from "@/lib/cn";
 import { Onboarding } from "@/features/onboarding/Onboarding";
 import { SignInPromptProvider } from "@/components/SignInPrompt";
+import { DeepLinkHandler } from "@/components/DeepLinkHandler";
 import { rememberSectionTitle, type BrowseSection } from "@/lib/sectionTitleMemory";
 
 // Every static (paramless) route's own route component is a no-op (see index.tsx) - its real
@@ -52,6 +53,7 @@ export const Route = createRootRoute({ component: RootLayout });
 function RootLayout() {
   return (
     <SignInPromptProvider>
+      <DeepLinkHandler />
       <RootLayoutContent />
     </SignInPromptProvider>
   );

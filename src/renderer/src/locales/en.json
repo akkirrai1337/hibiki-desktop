@@ -377,6 +377,11 @@
     "signInPrompt": {
       "title": "Sign-in required",
       "body": "This action needs an account on {{source}}."
+    },
+    "installPrompt": {
+      "title": "Source not installed",
+      "body": "To open this anime, install the \"{{source}}\" source in Sources first.",
+      "action": "Open Sources"
     }
   },
   "achievements": {

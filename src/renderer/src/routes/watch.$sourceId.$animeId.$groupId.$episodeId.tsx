@@ -481,9 +481,9 @@ function WatchPage() {
   // shows up, so a poster loading in doesn't also re-trigger VideoPlayer's source-setup effect
   // (which keys off onProgress) - the same reset-on-unrelated-change class of bug fixed earlier for
   // `link`, just for these two callbacks instead.
-  const discordMetaRef = useRef({ title: "", dubName: null as string | null, posterUrl: null as string | null });
+  const discordMetaRef = useRef({ title: "", dubName: null as string | null, posterUrl: null as string | null, groupId, episodeId });
   useEffect(() => {
-    discordMetaRef.current = { title, dubName, posterUrl: anime?.posterUrl ?? null };
+    discordMetaRef.current = { title, dubName, posterUrl: anime?.posterUrl ?? null, groupId, episodeId };
     // The very first update after an episode change (see the episodeId effect below) can easily
     // fire before this data has loaded at all - once it does load, correct the card right away
     // instead of leaving it poster-less/dub-less until the next throttled tick (up to 16s later).
@@ -497,8 +497,12 @@ function WatchPage() {
       durationMs: lastPlaybackRef.current.durationMs,
       isPlaying: true,
       posterUrl: anime?.posterUrl ?? null,
+      sourceId,
+      animeId,
+      groupId,
+      episodeId,
     });
-  }, [title, dubName, anime?.posterUrl, episodeNumber, canShareDiscordPresence]);
+  }, [title, dubName, anime?.posterUrl, episodeNumber, canShareDiscordPresence, groupId, episodeId]);
 
   const watchedThreshold = usePlayerPrefsStore((s) => s.watchedThresholdPercent) / 100;
   // Plain primitives (not `link` itself) in onProgress's dependency list - same reasoning as
@@ -586,6 +590,10 @@ function WatchPage() {
           durationMs,
           isPlaying: true,
           posterUrl: meta.posterUrl,
+          sourceId,
+          animeId,
+          groupId,
+          episodeId,
         });
       }
     },
@@ -609,9 +617,13 @@ function WatchPage() {
         durationMs: lastPlaybackRef.current.durationMs,
         isPlaying: playing,
         posterUrl: meta.posterUrl,
+        sourceId,
+        animeId,
+        groupId: meta.groupId,
+        episodeId: meta.episodeId,
       });
     },
-    [episodeNumber],
+    [episodeNumber, sourceId, animeId],
   );
 
   // A fresh episode should show up on the Discord card right away, not whenever the throttled

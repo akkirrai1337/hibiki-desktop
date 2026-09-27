@@ -7,6 +7,7 @@ import type {
   CachedPlaybackGroupsEntry,
   CachedTitleListEntry,
   DailyActivity,
+  DeepLinkWatchTarget,
   DiscordPresence,
   DownloadedEpisode,
   DownloadProgress,
@@ -211,6 +212,13 @@ const api = {
   app: {
     getVersion: (): Promise<string> => ipcRenderer.invoke(IPC.appGetVersion),
     relaunch: (): void => { ipcRenderer.send(IPC.appRelaunch); },
+    // A friend's "Watch" button on this app's own Discord Rich Presence card (see discordRpc.ts)
+    // opened a "hibiki://watch/..." link, and main finished parsing and routing it here.
+    onDeepLinkWatch: (callback: (target: DeepLinkWatchTarget) => void): (() => void) => {
+      const listener = (_e: Electron.IpcRendererEvent, target: DeepLinkWatchTarget) => callback(target);
+      ipcRenderer.on(IPC.appDeepLinkWatch, listener);
+      return () => ipcRenderer.removeListener(IPC.appDeepLinkWatch, listener);
+    },
   },
   // Diagnostics: the renderer both writes into the shared log (its own playback/resolve failures,
   // which main never sees) and reads it back for the Settings preview / "Export log".

@@ -5,6 +5,7 @@ import type {
   CachedPlaybackGroupsEntry,
   CachedTitleListEntry,
   DailyActivity,
+  DeepLinkWatchTarget,
   DiscordPresence,
   DownloadedEpisode,
   DownloadProgress,
@@ -149,6 +150,7 @@ export interface HibikiApi {
   app: {
     getVersion(): Promise<string>;
     relaunch(): void;
+    onDeepLinkWatch(callback: (target: DeepLinkWatchTarget) => void): () => void;
   };
   logs: {
     /** Resolves the written path, or null if the save dialog was cancelled. */

@@ -439,6 +439,21 @@ export interface DiscordPresence {
   durationMs: number;
   isPlaying: boolean;
   posterUrl: string | null;
+  /** Exactly what a "hibiki://watch/..." deep link needs to reopen this same episode/dub - see the
+   * Rich Presence "Watch" button in discordRpc.ts and DeepLinkHandler on the receiving end. */
+  sourceId: string;
+  animeId: string;
+  groupId: string;
+  episodeId: string;
+}
+
+/** What a "hibiki://watch/<sourceId>/<animeId>/<groupId>/<episodeId>" deep link resolves to - see
+ * main/deepLink.ts (parsing) and components/DeepLinkHandler.tsx (acting on it). */
+export interface DeepLinkWatchTarget {
+  sourceId: string;
+  animeId: string;
+  groupId: string;
+  episodeId: string;
 }
 
 /** A GitHub release newer than the running build - see main/appUpdates.ts. */
