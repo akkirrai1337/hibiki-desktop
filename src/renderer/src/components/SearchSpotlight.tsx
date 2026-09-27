@@ -86,7 +86,11 @@ function SpotlightPanel() {
   // keyboard put there stays.
   const [selected, setSelected] = useState(0);
   const viaPointer = useRef(false);
-  const pointAt = (index: number) => { viaPointer.current = true; setSelected(index); };
+  const pointAt = (index: number) => { viaPointer.current = true; setDefaultSelection(false); setSelected(index); };
+  // Nothing picked yet: Enter should mean "see everything", not "open whatever happens to be
+  // first" - so until an arrow key or the pointer actually lands on a row, the highlighted (and
+  // Enter-activated) row is "all results" itself rather than index 0. See effectiveSelected below.
+  const [defaultSelection, setDefaultSelection] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const { draft, change } = useLiveFilters(filters, setFilters);
   const filterDefs = filterCatalog.data?.filters ?? [];
@@ -124,7 +128,11 @@ function SpotlightPanel() {
   // The last row is "all results", reachable with the arrows like any other.
   const hasAll = !showingRecent && items.length > 0;
   const rowCount = showingRecent ? recent.length : items.length + (hasAll ? 1 : 0);
-  useEffect(() => { viaPointer.current = false; setSelected(0); }, [settled, showingRecent, filters]);
+  // The row Enter/highlighting actually act on: the real `selected` once the user has touched the
+  // list, or "all results" (falling back to the first item when there's nothing to view "all" of)
+  // while it's still untouched - see `defaultSelection` above.
+  const effectiveSelected = !showingRecent && defaultSelection ? (hasAll ? items.length : items.length > 0 ? 0 : -1) : selected;
+  useEffect(() => { viaPointer.current = false; setDefaultSelection(true); setSelected(0); }, [settled, showingRecent, filters]);
   // Only a row the keyboard moved to is scrolled into view; one the pointer is over is already under it, and
   // scrolling it would make the list jump away from the pointer.
   useEffect(() => {
@@ -151,11 +159,25 @@ function SpotlightPanel() {
   const onKeyDown = (event: React.KeyboardEvent) => {
     // Esc peels one layer off: the filters first, then the panel.
     if (event.key === "Escape") { event.preventDefault(); if (filtersOpen) setFiltersOpen(false); else close(); return; }
-    if (event.key === "ArrowDown") { event.preventDefault(); viaPointer.current = false; if (rowCount > 0) setSelected((i) => (i + 1) % rowCount); return; }
-    if (event.key === "ArrowUp") { event.preventDefault(); viaPointer.current = false; if (rowCount > 0) setSelected((i) => (i < 0 ? rowCount - 1 : (i - 1 + rowCount) % rowCount)); return; }
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      viaPointer.current = false;
+      // Stepping off the default "all results" highlight starts from item 0, same as if it had
+      // been sitting at the last real row already (rowCount - 1) and this were just the next step.
+      setDefaultSelection(false);
+      if (rowCount > 0) setSelected((i) => (defaultSelection ? 0 : (i + 1) % rowCount));
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      viaPointer.current = false;
+      setDefaultSelection(false);
+      if (rowCount > 0) setSelected((i) => (defaultSelection || i < 0 ? rowCount - 1 : (i - 1 + rowCount) % rowCount));
+      return;
+    }
     if (event.key === "Enter") {
       event.preventDefault();
-      const row = selected < 0 ? 0 : selected;
+      const row = effectiveSelected < 0 ? 0 : effectiveSelected;
       if (showingRecent) return setValue(recent[row] ?? "");
       if (event.ctrlKey || event.metaKey) return hasAll ? openAll() : undefined;
       if (row === items.length) return openAll();
@@ -268,7 +290,7 @@ function SpotlightPanel() {
             {items.map((anime, index) => {
               const meta = [anime.type ? anime.type.toUpperCase() : null, anime.year || null].filter(Boolean).join(" · ");
               return (
-                <button key={`${anime.sourceId}:${anime.id}`} data-row={index} onMouseMove={() => pointAt(index)} onClick={() => openTitle(anime)} className={cn("flex w-full items-center gap-3.5 rounded-xl px-2.5 py-2 text-left transition-colors", selected === index && "bg-text/[.08]")}>
+                <button key={`${anime.sourceId}:${anime.id}`} data-row={index} onMouseMove={() => pointAt(index)} onClick={() => openTitle(anime)} className={cn("flex w-full items-center gap-3.5 rounded-xl px-2.5 py-2 text-left transition-colors", effectiveSelected === index && "bg-text/[.08]")}>
                   <div className="h-[54px] w-9 shrink-0 overflow-hidden rounded-md bg-surface ring-1 ring-border">
                     {anime.posterUrl && <SmoothImage src={anime.posterUrl} alt="" className="h-full w-full object-cover" />}
                   </div>
@@ -276,12 +298,12 @@ function SpotlightPanel() {
                     <p className="line-clamp-1 text-sm font-semibold text-text">{animeTitle(anime)}</p>
                     {meta && <p className="mt-0.5 line-clamp-1 text-xs text-muted">{meta}</p>}
                   </div>
-                  {selected === index && <CornerDownLeft className="h-4 w-4 shrink-0 text-muted" strokeWidth={2} />}
+                  {effectiveSelected === index && <CornerDownLeft className="h-4 w-4 shrink-0 text-muted" strokeWidth={2} />}
                 </button>
               );
             })}
             {hasAll && (
-              <button data-row={items.length} onMouseMove={() => pointAt(items.length)} onClick={openAll} className={cn("mt-1 flex w-full items-center gap-3.5 rounded-xl px-2.5 py-2 text-left transition-colors", selected === items.length && "bg-text/[.08]")}>
+              <button data-row={items.length} onMouseMove={() => pointAt(items.length)} onClick={openAll} className={cn("mt-1 flex w-full items-center gap-3.5 rounded-xl px-2.5 py-2 text-left transition-colors", effectiveSelected === items.length && "bg-text/[.08]")}>
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent-text">
                   <LayoutGrid className="h-[18px] w-[18px]" strokeWidth={2} />
                 </div>
