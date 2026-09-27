@@ -27,6 +27,7 @@ import {
 import type { Episode, PlayerLink, VideoSegment } from "@shared/types";
 import { pickLinkForDimension, pickLinkForQuality, playerOptions, qualityOptions, translationOptions } from "@/lib/playerLinks";
 import { playbackUrl } from "@/lib/playbackUrl";
+import { isGenericDubTitle } from "@/lib/dubTitle";
 import { hibiki } from "@/lib/hibiki";
 import { cn } from "@/lib/cn";
 import { log } from "@/lib/log";
@@ -350,8 +351,13 @@ function PlayerSettingsMenu({
     return <ListPage title={t("watch.settings.quality")} options={qualityOptions} selected={selectedQuality} onSelect={(v) => { onSelectQuality(v); setPage("main"); }} onBack={() => setPage("main")} />;
   }
 
+  // A source with no real per-dub grouping names its one-and-only group "Episodes" - a structural
+  // placeholder, not an actual dub name (see isGenericDubTitle) - so with nothing else to pick from
+  // either, this row would only ever announce that placeholder as if it meant something.
+  const hideDubRow = dubOptions.length <= 1 && isGenericDubTitle(dubOptions[0]?.title);
+
   return <div className="w-56 p-1.5">
-    <MenuRow label={t("watch.settings.dub")} value={selectedDub?.title ?? "—"} onClick={() => { onOpenDub(); setPage("dub"); }} />
+    {!hideDubRow && <MenuRow label={t("watch.settings.dub")} value={selectedDub?.title ?? "—"} onClick={() => { onOpenDub(); setPage("dub"); }} />}
     {translationOptions.length > 1 && <MenuRow label={t("watch.settings.translation")} value={selectedTranslation ?? "—"} onClick={() => setPage("translation")} />}
     {playerOptions.length > 0 && <MenuRow label={t("watch.settings.player")} value={selectedPlayerName ?? "—"} onClick={playerOptions.length > 1 ? () => setPage("player") : undefined} />}
     {qualityLocked

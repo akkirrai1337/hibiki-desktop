@@ -6,6 +6,7 @@ import { ArrowLeft, Loader2, TriangleAlert } from "lucide-react";
 import type { PlaybackGroup, PlayerLink } from "@shared/types";
 import { pickDefaultLink, pickPlaybackFallback, pickPreferredLink, pickResolvedLink } from "@/lib/playerLinks";
 import { usePlaybackGroups } from "@/lib/playbackGroups";
+import { isGenericDubTitle } from "@/lib/dubTitle";
 import { hibiki, downloadFileUrl } from "@/lib/hibiki";
 import { log } from "@/lib/log";
 import { usePlayerPrefsStore } from "@/stores/playerPrefsStore";
@@ -471,8 +472,11 @@ function WatchPage() {
   const episodeLabel = episode ? (episode.title || t("detail.episodeFallback", { number: episode.number })) : "";
   // A link's own `translation` (see runtime.ts's resolveEmbedLinks carrying it over from the
   // source EMBED link) is the actual dub playing right now, more precise than the playback
-  // group's title where a source's groups don't map 1:1 to dub studios.
-  const dubName = link?.translation || group?.title || null;
+  // group's title where a source's groups don't map 1:1 to dub studios. The group's title is a
+  // structural placeholder ("Episodes") rather than a dub name at all for a source with no real
+  // per-dub grouping - that's not something to show as the dub anywhere, Discord's Rich Presence
+  // included (see hibiki.discord.updatePresence below).
+  const dubName = link?.translation || (group && !isGenericDubTitle(group.title) ? group.title : null);
 
   // title/dubName/posterUrl each depend on their own async query (anime, playback groups) and can
   // legitimately still be loading - or arrive a beat late - right when the player first mounts.
