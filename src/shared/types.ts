@@ -201,6 +201,21 @@ export interface SourceSetting {
   options?: SearchFilterOption[];
   /** TOGGLE and TEXT. Absent means off / empty. */
   default?: boolean | string;
+  /**
+   * ACCOUNT only, and all optional - a source whose site doesn't call its own two fields "login"
+   * and "password" (an email address, say) can say so instead of the app's generic wording
+   * showing up in the login form. Same per-language shape as title/descriptionI18n above.
+   */
+  loginLabel?: string | null;
+  loginLabelI18n?: Record<string, string> | null;
+  passwordLabel?: string | null;
+  passwordLabelI18n?: Record<string, string> | null;
+  /**
+   * ACCOUNT only. The scale this source's own rating actually runs on (its site's real 1-N) -
+   * defaults to 10 when absent, but that was never a fact about every source, only the one the
+   * host used to assume for all of them regardless of what RatingButton actually sent back.
+   */
+  ratingScale?: number;
 }
 
 /** Who is signed in to a source, as far as the source is concerned. */

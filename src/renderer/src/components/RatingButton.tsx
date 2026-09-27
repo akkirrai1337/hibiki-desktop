@@ -8,9 +8,10 @@ import { hibiki } from "@/lib/hibiki";
 import { useSignInPrompt } from "@/components/SignInPrompt";
 import { cn } from "@/lib/cn";
 
-// Every source here scores out of ten, so this is the app's scale too, not a per-source one to be
-// discovered at runtime.
-const MAX_RATING = 10;
+// Most sources score out of ten, so that is the fallback - but only that, not an assumption every
+// source is held to regardless of what its own site actually uses. A source says otherwise via its
+// ACCOUNT setting row's `ratingScale` (see SourceSetting in shared/types.ts).
+const DEFAULT_MAX_RATING = 10;
 
 /**
  * The user's own score for a title, next to the library button.
@@ -69,6 +70,9 @@ export function RatingButton({ source, animeId }: { source: SourceInfo; animeId:
   // render nothing.
   if (!source.capabilities.includes("LIBRARY_SYNC")) return null;
 
+  const accountSetting = source.settings.find((setting) => setting.type === "ACCOUNT");
+  const maxRating = accountSetting?.ratingScale && accountSetting.ratingScale > 0 ? accountSetting.ratingScale : DEFAULT_MAX_RATING;
+
   const current = rating.data ?? null;
   // What the panel is currently talking about: the star under the pointer, or the saved score.
   const shown = hovered ?? current;
@@ -113,7 +117,7 @@ export function RatingButton({ source, animeId }: { source: SourceInfo; animeId:
               </div>
 
               <div className="flex gap-0.5">
-                {Array.from({ length: MAX_RATING }, (_, index) => index + 1).map((value) => {
+                {Array.from({ length: maxRating }, (_, index) => index + 1).map((value) => {
                   // Filled up to whatever is being considered - the hovered value while a pointer is
                   // in the row, the saved one otherwise. A rating scale that only lights the single
                   // number under the cursor reads as ten separate choices rather than one scale.

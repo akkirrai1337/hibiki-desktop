@@ -105,6 +105,17 @@ function useSourceText(row: SourceSetting): { title: string; description: string
   };
 }
 
+/** Same per-language fallback as useSourceText, for the ACCOUNT row's own field labels - most
+ * sources leave both unset and get the app's generic "Login"/"Password" wording. */
+function useAccountFieldLabels(row: SourceSetting): { login: string; password: string } {
+  const { t, i18n } = useTranslation();
+  const language = i18n.language.split("-")[0];
+  return {
+    login: row.loginLabelI18n?.[language] ?? row.loginLabel ?? t("sources.accountLogin"),
+    password: row.passwordLabelI18n?.[language] ?? row.passwordLabel ?? t("sources.accountPassword"),
+  };
+}
+
 function RowHeader({ row }: { row: SourceSetting }) {
   const { title, description } = useSourceText(row);
   return (
@@ -189,6 +200,7 @@ function TextRow({ row, value, onSave }: { row: SourceSetting; value: string; on
 
 function AccountRow({ sourceId, row }: { sourceId: string; row: SourceSetting }) {
   const { t } = useTranslation();
+  const fieldLabels = useAccountFieldLabels(row);
   const queryClient = useQueryClient();
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
@@ -268,14 +280,14 @@ function AccountRow({ sourceId, row }: { sourceId: string; row: SourceSetting })
             <input
               value={login}
               onChange={(event) => setLogin(event.target.value)}
-              placeholder={t("sources.accountLogin")}
+              placeholder={fieldLabels.login}
               autoComplete="username"
               className="w-full rounded-lg border border-border bg-text/[.04] px-3 py-2 text-sm text-text outline-none focus:border-accent"
             />
             <input
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder={t("sources.accountPassword")}
+              placeholder={fieldLabels.password}
               type="password"
               autoComplete="current-password"
               className="w-full rounded-lg border border-border bg-text/[.04] px-3 py-2 text-sm text-text outline-none focus:border-accent"
