@@ -35,10 +35,7 @@ export function loginViaWebview(sourceId: string, url: string, successCookieName
     return Promise.reject(new Error("A sign-in window for this source is already open"));
   }
 
-  let domain: string;
-  try {
-    domain = new URL(url).hostname;
-  } catch {
+  if (!URL.canParse(url)) {
     return Promise.reject(new Error(`Source "${sourceId}" declares an invalid web login URL`));
   }
 
@@ -73,7 +70,12 @@ export function loginViaWebview(sourceId: string, url: string, successCookieName
       if (settled) return;
       let cookies: Electron.Cookie[];
       try {
-        cookies = await session.fromPartition(partition).cookies.get({ domain });
+        // Not scoped to the login page's own host: a site can (and this partition has already
+        // shown, in practice, one that does) land its real session cookie on a different
+        // subdomain than the one the login form itself lives on. The partition is already scoped
+        // to this one source, so grabbing everything in it is exactly as safe and a lot less
+        // fragile than guessing which host the cookie actually landed on.
+        cookies = await session.fromPartition(partition).cookies.get({});
       } catch (error) {
         logger.error("ext", `${sourceId} web login cookie read failed: ${error instanceof Error ? error.message : String(error)}`);
         return;
