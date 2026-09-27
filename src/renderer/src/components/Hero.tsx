@@ -39,15 +39,19 @@ export interface HeroSlide {
 export function HeroCarousel({ slides, label }: { slides: HeroSlide[]; label: string }) {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
-  // How much of this slide's dwell time is actually left - a plain setInterval restarted a fresh
-  // HERO_INTERVAL_MS on every single pause/resume, which is exactly what glancing at the hero (or
-  // just moving the mouse across it on the way to something else - it covers most of the page's
-  // top) does on a real page: the countdown kept getting thrown back to the start before it ever
-  // got anywhere close to firing, and the progress bar below (which mirrors it 1:1 via CSS's own
-  // pause/resume-in-place, not a restart) read as broken because of it, not because it was.
-  const remainingRef = useRef(HERO_INTERVAL_MS);
   const slideKey = slides.map((slide) => slide.key).join(",");
-  useEffect(() => { setIndex(0); remainingRef.current = HERO_INTERVAL_MS; }, [slideKey]);
+  // The one source of truth for "when does the current slide end" - a wall-clock timestamp,
+  // instead of a countdown that has to be manually decremented on every pause/resume/skip. The
+  // previous version tracked a "remaining time" number and adjusted it from effect cleanups; that
+  // had a real bug: clicking a dot (goTo) reset it to a fresh interval, but the timer effect's own
+  // cleanup - closing over a `startedAt` from *before* the click - then subtracted the time since
+  // that older start from the just-reset value, silently shrinking the new slide's dwell time down
+  // to whatever was left of the old one. A deadline only ever gets set to "now + one full
+  // interval" (on advance, on a click, on a fresh slide list) or shifted forward by exactly however
+  // long a pause lasted - nothing reads or writes it from a stale closure, so it can't drift.
+  const deadlineRef = useRef(Date.now() + HERO_INTERVAL_MS);
+  const pausedAtRef = useRef<number | null>(null);
+  useEffect(() => { setIndex(0); deadlineRef.current = Date.now() + HERO_INTERVAL_MS; }, [slideKey]);
   // A pause set by the pointer resting on the hero has no matching "it left" to clear it if the
   // window gets minimized (or the app loses focus some other way) while that's still true - no
   // mouse events reach a hidden window at all, mouse-leave included, so without this the carousel
@@ -58,25 +62,26 @@ export function HeroCarousel({ slides, label }: { slides: HeroSlide[]; label: st
     return () => document.removeEventListener("visibilitychange", onVisibilityChange);
   }, []);
   useEffect(() => {
-    if (paused || slides.length <= 1) return;
-    const startedAt = Date.now();
-    let fired = false;
+    if (paused) {
+      pausedAtRef.current = Date.now();
+      return;
+    }
+    // Resuming shifts the deadline forward by exactly how long the pause lasted, rather than
+    // reconstructing "how much was left" by hand - the wall clock already knows the answer.
+    if (pausedAtRef.current !== null) {
+      deadlineRef.current += Date.now() - pausedAtRef.current;
+      pausedAtRef.current = null;
+    }
+    if (slides.length <= 1) return;
     const id = setTimeout(() => {
-      fired = true;
-      remainingRef.current = HERO_INTERVAL_MS;
+      deadlineRef.current = Date.now() + HERO_INTERVAL_MS;
       setIndex((i) => (i + 1) % slides.length);
-    }, remainingRef.current);
-    return () => {
-      clearTimeout(id);
-      // Only an interruption (pausing, unmounting, the slide list changing) spends any of the
-      // remaining time - the timeout firing on its own already set a fresh amount above, and
-      // re-subtracting a whole interval's worth from that here would send it straight to zero.
-      if (!fired) remainingRef.current = Math.max(0, remainingRef.current - (Date.now() - startedAt));
-    };
+    }, Math.max(0, deadlineRef.current - Date.now()));
+    return () => clearTimeout(id);
   }, [paused, index, slides.length, slideKey]);
   const current = slides[Math.min(index, slides.length - 1)];
   if (!current) return null;
-  const goTo = (i: number) => { remainingRef.current = HERO_INTERVAL_MS; setIndex(i); };
+  const goTo = (i: number) => { deadlineRef.current = Date.now() + HERO_INTERVAL_MS; setIndex(i); };
   return <div className="relative" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
     <AnimatePresence mode="wait">
       <motion.div key={current.key} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4, ease: "easeOut" }}>
