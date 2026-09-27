@@ -128,7 +128,7 @@ export function StreakBadge({
   return (
     <span
       title={atRisk ? t("profile.streakAtRisk") : best > current ? t("profile.streakBest", { count: best }) : undefined}
-      className={cn("relative inline-flex shrink-0 items-center gap-2 overflow-visible rounded-full py-1 pl-2 pr-2.5 text-sm font-bold transition-colors duration-500", tier.legendary && "streak-legendary")}
+      className={cn("relative inline-flex shrink-0 items-center gap-2 overflow-visible rounded-full py-1 pl-2 pr-2.5 text-sm font-bold transition-colors duration-500", tier.legendary && "legendary-glow")}
       style={{ background: tier.bg, color: tier.text, boxShadow: tier.min >= 250 ? `0 0 10px ${tier.glow}40` : undefined }}
     >
       {/* Stays lit for the whole time a top-tier streak holds, unlike everything else here which

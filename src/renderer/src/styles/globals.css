@@ -203,13 +203,14 @@ textarea {
   transform: translate(-50%, -50%);
 }
 
-/* The 500+ streak tier's badge (see StreakBadge in profile.tsx) - a slow color cycle on top of
-   its own tint, marking it as visibly a step above the static gold ring of the tier below it. */
-@keyframes streak-legendary-glow {
+/* The top tier of a tiered badge (the 500+ streak and the highest level bracket, both in
+   profile.tsx) - a slow color cycle on top of its own tint, marking it as visibly a step above
+   the static gold ring of the tier below it. */
+@keyframes legendary-glow {
   to {
     filter: hue-rotate(360deg);
   }
 }
-.streak-legendary {
-  animation: streak-legendary-glow 3s linear infinite;
+.legendary-glow {
+  animation: legendary-glow 3s linear infinite;
 }

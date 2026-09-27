@@ -435,14 +435,48 @@ function BannerActions({ filename, onChange }: { filename: string | null; onChan
   );
 }
 
+// A higher level is worth more visual weight, not just a bigger number - same idea as
+// StreakBadge's own tiers (a full reskin of the chip: color, then a standing ring, then a slow
+// color-cycle at the very top), applied here to both the level chip and the bar it fills.
+interface LevelTier {
+  min: number;
+  bg: string;
+  text: string;
+  ring?: boolean;
+  legendary?: boolean;
+}
+const LEVEL_TIERS: LevelTier[] = [
+  { min: 50, bg: "rgba(217,70,239,.18)", text: "#e879f9", ring: true, legendary: true },
+  { min: 35, bg: "rgba(234,179,8,.18)", text: "#facc15", ring: true },
+  { min: 20, bg: "rgba(168,85,247,.16)", text: "#c084fc" },
+  { min: 10, bg: "rgba(56,189,248,.16)", text: "#38bdf8" },
+  { min: 5, bg: "rgba(239,68,68,.16)", text: "#f87171" },
+  // Below the first real tier, this just tracks the app's own accent color instead of a fixed
+  // hue - the chip looks exactly like it always did until leveling actually earns it a color.
+  { min: 1, bg: "rgb(var(--color-accent) / .15)", text: "rgb(var(--color-accent-text))" },
+];
+function levelTierFor(level: number): LevelTier {
+  return LEVEL_TIERS.find((tier) => level >= tier.min)!;
+}
+
 function LevelBar({ levelProgress }: { levelProgress: LevelProgress }) {
   const { t } = useTranslation();
   const percent = Math.min(100, (levelProgress.xpIntoLevel / levelProgress.xpForLevel) * 100);
+  const tier = levelTierFor(levelProgress.level);
   return (
     <div className="mt-2.5 flex max-w-xs items-center gap-2.5">
-      <span className="shrink-0 rounded-md bg-accent/15 px-2 py-0.5 text-xs font-bold text-accent-text">{t("profile.levelBadge", { level: levelProgress.level })}</span>
+      <span
+        className={cn("relative shrink-0 rounded-md px-2 py-0.5 text-xs font-bold transition-colors duration-500", tier.legendary && "legendary-glow")}
+        style={{ background: tier.bg, color: tier.text }}
+      >
+        {tier.ring && <span className="pointer-events-none absolute -inset-[3px] rounded-md" style={{ border: `1.5px solid ${tier.text}`, opacity: 0.7 }} />}
+        {t("profile.levelBadge", { level: levelProgress.level })}
+      </span>
       <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-text/[.08]">
-        <div className="h-full rounded-full bg-accent ring-1 ring-inset ring-border transition-[width] duration-500" style={{ width: `${percent}%` }} />
+        <div
+          className="h-full rounded-full ring-1 ring-inset ring-border transition-[width,background-color] duration-500"
+          style={{ width: `${percent}%`, background: tier.text, boxShadow: tier.min >= 35 ? `0 0 8px ${tier.text}60` : undefined }}
+        />
       </div>
       <span className="shrink-0 text-[11px] tabular-nums text-muted">{levelProgress.xpIntoLevel}/{levelProgress.xpForLevel} {t("profile.xp")}</span>
     </div>
