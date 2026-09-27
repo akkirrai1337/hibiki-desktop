@@ -70,7 +70,11 @@ function useCardTitles(rows: WatchProgress[]): Record<string, AnimeTitle | null 
     queries: (cachedTitles ? unique : []).map((row) => {
       const key = `${row.sourceId}:${row.titleId}`;
       return {
-        queryKey: ["continue-item", row.sourceId, row.titleId],
+        // Same key the detail and watch pages fetch a title's full record under (["anime",
+        // sourceId, id]) - not a card-only key of its own. Clicking straight from this row into
+        // an episode used to skip the detail page's own warm cache entirely, so the watch page's
+        // title bar sat blank for a beat while it redid the exact getById this row just made.
+        queryKey: ["anime", row.sourceId, row.titleId],
         // Each title resolves independently - a slow or dead source shouldn't block the others.
         queryFn: async (): Promise<AnimeTitle | null> => {
           try {
