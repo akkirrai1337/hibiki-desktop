@@ -48,6 +48,15 @@ export function HeroCarousel({ slides, label }: { slides: HeroSlide[]; label: st
   const remainingRef = useRef(HERO_INTERVAL_MS);
   const slideKey = slides.map((slide) => slide.key).join(",");
   useEffect(() => { setIndex(0); remainingRef.current = HERO_INTERVAL_MS; }, [slideKey]);
+  // A pause set by the pointer resting on the hero has no matching "it left" to clear it if the
+  // window gets minimized (or the app loses focus some other way) while that's still true - no
+  // mouse events reach a hidden window at all, mouse-leave included, so without this the carousel
+  // stayed paused forever after coming back, not just while actually minimized.
+  useEffect(() => {
+    const onVisibilityChange = () => { if (document.hidden) setPaused(false); };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, []);
   useEffect(() => {
     if (paused || slides.length <= 1) return;
     const startedAt = Date.now();
