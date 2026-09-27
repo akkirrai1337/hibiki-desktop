@@ -68,6 +68,8 @@ function SpotlightPanel() {
   const activeSourceId = useUiStore((s) => s.activeSourceId);
   const recent = useSearchHistoryStore((s) => s.queries);
   const addRecent = useSearchHistoryStore((s) => s.add);
+  const removeRecent = useSearchHistoryStore((s) => s.remove);
+  const clearRecent = useSearchHistoryStore((s) => s.clear);
   const filters = useSearchFiltersStore((s) => s.filters);
   const setFilters = useSearchFiltersStore((s) => s.setFilters);
   const sources = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });
@@ -239,11 +241,22 @@ function SpotlightPanel() {
           <div ref={listRef} style={popoverTheme} onMouseLeave={() => { if (viaPointer.current) setSelected(-1); }} className={cn("no-scrollbar mt-2 overflow-y-auto rounded-2xl border border-border bg-app-popover p-1.5 shadow-2xl", filtersOpen ? "max-h-[28vh]" : "max-h-[56vh]")}>
             {showingRecent && (
               <>
-                <p className="px-3 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wide text-muted">{t("search.recent")}</p>
+                <div className="flex items-center justify-between px-3 pb-1 pt-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-muted">{t("search.recent")}</p>
+                  <button onClick={clearRecent} className="text-[11px] font-semibold text-muted transition-colors hover:text-text">{t("search.clearRecent")}</button>
+                </div>
                 {recent.map((query, index) => (
-                  <button key={query} data-row={index} onMouseMove={() => pointAt(index)} onClick={() => { setValue(query); inputRef.current?.focus(); }} className={cn("flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-text transition-colors", selected === index && "bg-text/[.08]")}>
-                    <Clock className="h-4 w-4 text-muted" strokeWidth={2} />
-                    {query}
+                  <button
+                    key={query}
+                    data-row={index}
+                    onMouseMove={() => pointAt(index)}
+                    onClick={() => { setValue(query); inputRef.current?.focus(); }}
+                    onContextMenu={(e) => { e.preventDefault(); removeRecent(query); }}
+                    title={t("search.removeRecent")}
+                    className={cn("flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-text transition-colors", selected === index && "bg-text/[.08]")}
+                  >
+                    <Clock className="h-4 w-4 shrink-0 text-muted" strokeWidth={2} />
+                    <span className="min-w-0 flex-1 truncate">{query}</span>
                   </button>
                 ))}
               </>
