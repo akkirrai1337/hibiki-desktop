@@ -437,10 +437,21 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       else log.error("player", `playback ${stage} timeout after ${PLAYBACK_LOAD_TIMEOUT_MS}ms`);
       setPlaybackError(t("common.playbackTimeout"));
       setBuffering(false);
+      // A switch that never finishes shouldn't leave the clock frozen at wherever it started
+      // forever - once it's given up, the element's own (however broken) state is more honest.
+      frozenDisplayRef.current = null;
     }, PLAYBACK_LOAD_TIMEOUT_MS);
   }, [t]);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  // Setting a new source on the same <video> element resets its own currentTime/duration to 0/NaN
+  // the instant it happens, well before the replacement stream's metadata (and the seek back to
+  // where playback was) arrives - long enough that onTimeUpdate/onLoadedMetadata below faithfully
+  // report that transient 0:00/0:00 into state. Purely a display glitch (the resume-to-position
+  // logic elsewhere already uses `pendingSourceSwitchRef`, not this), so it's fixed the same way:
+  // freeze what the clock/seek bar *show* at the values they held right before the switch, for as
+  // long as one is in flight, instead of tracking the element through its reset.
+  const frozenDisplayRef = useRef<{ time: number; duration: number } | null>(null);
   const [buffered, setBuffered] = useState(0);
   // Seeded from the persisted preference rather than the element's own 1.0 default, so the very
   // first controls render already shows the volume this episode is about to play at.
@@ -541,18 +552,20 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     if (target && link && target.type === link.type && target.url === link.url) return false;
 
     const video = videoRef.current;
+    const position = video && Number.isFinite(video.currentTime) ? video.currentTime : currentTime;
     pendingSourceSwitchRef.current = {
       fromUrl: link?.url ?? null,
-      position: video && Number.isFinite(video.currentTime) ? video.currentTime : currentTime,
+      position,
       resume: video ? !video.paused : playing,
     };
+    frozenDisplayRef.current = { time: position, duration };
     video?.pause();
     setSettingsOpen(false);
     setBuffering(true);
     armPlaybackTimeout("startup");
     setSwitchingSource(true);
     return true;
-  }, [currentTime, link, playing, armPlaybackTimeout]);
+  }, [currentTime, duration, link, playing, armPlaybackTimeout]);
   /** Whether the pick actually moved playback somewhere. */
   const selectDimension = (changed: Partial<Pick<PlayerLink, "translation" | "playerName" | "quality">>): boolean => {
     // With no link resolved yet there is nothing to keep the other two dimensions *close* to, so
@@ -1070,6 +1083,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       if (pendingSwitch.resume) void video.play().catch((error: unknown) => logPlayRequestFailure("source switch", error));
       else video.pause();
       pendingSourceSwitchRef.current = null;
+      frozenDisplayRef.current = null;
       setSwitchingSource(false);
     };
     const onCanPlayEvent = () => onCanPlay();
@@ -1534,6 +1548,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   const finishEmbedSourceSwitch = () => {
     if (!switchingSource) return;
     pendingSourceSwitchRef.current = null;
+    frozenDisplayRef.current = null;
     setSwitchingSource(false);
     setBuffering(false);
   };
@@ -1565,8 +1580,15 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   }
 
   const VolumeIcon = muted || volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
-  const playedPercent = duration ? (currentTime / duration) * 100 : 0;
-  const bufferedPercent = duration ? (buffered / duration) * 100 : 0;
+  // What the clock and seek bar actually render - the frozen snapshot while a switch is still
+  // settling (see frozenDisplayRef above), the element's real state otherwise. Every other use of
+  // currentTime/duration in this file (segment detection, onProgress, the seek ratio math) keeps
+  // reading the live values - only what's drawn on screen is held still.
+  const isSwitching = sourceSwitching || switchingSource;
+  const displayCurrentTime = isSwitching && frozenDisplayRef.current ? frozenDisplayRef.current.time : currentTime;
+  const displayDuration = isSwitching && frozenDisplayRef.current ? frozenDisplayRef.current.duration : duration;
+  const playedPercent = displayDuration ? (displayCurrentTime / displayDuration) * 100 : 0;
+  const bufferedPercent = displayDuration ? (buffered / displayDuration) * 100 : 0;
 
   return (
     <div
@@ -1806,8 +1828,8 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
               className="shrink-0 rounded px-1 py-0.5 text-xs font-medium tabular-nums text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
             >
               {showRemainingTime
-                ? `-${formatTime(Math.max(0, duration - currentTime))}`
-                : `${formatTime(currentTime)} / ${formatTime(duration)}`}
+                ? `-${formatTime(Math.max(0, displayDuration - displayCurrentTime))}`
+                : `${formatTime(displayCurrentTime)} / ${formatTime(displayDuration)}`}
             </button>
           </div>
 
