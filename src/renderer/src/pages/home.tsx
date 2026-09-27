@@ -11,7 +11,7 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { HERO_ACTION_CLASS, HeroCarousel, type HeroSlide } from "@/components/Hero";
 import { useContinueWatching } from "@/lib/continueWatching";
 import { useUiStore } from "@/stores/uiStore";
-import { pickPopularSort } from "@/lib/catalogSort";
+import { pickRelevanceSort } from "@/lib/catalogSort";
 import type { AnimeTitle } from "@shared/types";
 
 const RECOMMENDED_COUNT = 20;
@@ -58,7 +58,7 @@ export function CatalogPage() {
   const sortOptions = settings.data?.sortOptions ?? [];
   const sortMode = (homeSortOverride && sortOptions.some((o) => o.id === homeSortOverride))
     ? homeSortOverride
-    : pickPopularSort(sortOptions);
+    : pickRelevanceSort(sortOptions);
   const settingsReady = settings.isFetched;
   const hero = useCachedTitleList({
     queryKey: ["hero", source?.id, sortMode ?? ""],

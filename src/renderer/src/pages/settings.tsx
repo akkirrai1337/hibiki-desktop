@@ -515,8 +515,9 @@ function BackupSection() {
 }
 
 // Which of the active source's own catalog sort orders fills the home page's hero and "popular"
-// row - the app guesses one itself (pickPopularSort, in home.tsx), but a source's sort ids are its
-// own vocabulary, not a fixed one the host can rely on, so this is the way to override a wrong guess.
+// row - "Auto" (see pickRelevanceSort, in home.tsx) sends the source's own relevance ordering, or
+// no sort at all where it has no such concept. A source's sort ids are its own vocabulary, not a
+// fixed one the host can rely on, so this is the way to pick something more specific per source.
 function HomeSortSection() {
   const { t } = useTranslation();
   const sourcesQuery = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });

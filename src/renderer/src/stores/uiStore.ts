@@ -55,9 +55,9 @@ interface UiState {
   // to start doing to someone who never asked for it. Settings is where you turn it *on*.
   autoUpdate: boolean;
   // Which of a source's own catalog sort orders (see SearchFilterCatalog.sortOptions) fills the home
-  // page's hero and "popular" row, keyed by source id. Missing = let the app guess one itself (see
-  // pickPopularSort) - a source's sort ids aren't a fixed vocabulary the host can rely on, so this
-  // is the escape hatch for whenever that guess picks the wrong one.
+  // page's hero and "popular" row, keyed by source id. Missing = "Auto" (see pickRelevanceSort) -
+  // a source's sort ids aren't a fixed vocabulary the host can rely on, so this is the way to pick
+  // something more specific than that per source.
   homeSortBySource: Record<string, string>;
   setTheme: (theme: "light" | "dark") => void;
   setActiveSourceId: (id: string | null) => void;

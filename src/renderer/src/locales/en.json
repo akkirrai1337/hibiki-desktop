@@ -592,7 +592,7 @@
       "title": "Home",
       "sort": "Home page sort",
       "sortHint": "Which of {{source}}'s own orderings fills the hero and \"Popular\" row",
-      "sortAuto": "Auto (popular)"
+      "sortAuto": "Auto"
     },
     "data": {
       "title": "Data",

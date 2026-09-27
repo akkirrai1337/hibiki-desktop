@@ -19,10 +19,12 @@ export function sortLabel(option: SearchFilterOption, t: TFunction): string {
   return title.charAt(0).toUpperCase() + title.slice(1);
 }
 
-// Which of a source's own orders suits "the best-known titles" - the hero and the popular row of the
-// home page. Matched on words in the id or title, since what the source calls it is up to the source.
-const POPULAR_WORDS = /rating|score|popular|trend|views|viewed|top|оцен|рейтинг|популяр|просмотр|перегляд|рейтинг/i;
-
-export function pickPopularSort(options: SearchFilterOption[]): string | undefined {
-  return (options.find((o) => /popular|views|viewed|просмотр|популяр|перегляд/i.test(`${o.id} ${o.title}`)) ?? options.find((o) => POPULAR_WORDS.test(`${o.id} ${o.title}`)))?.id;
+// The home page's own "auto" default (see Settings > Home): the source's own relevance ordering
+// where it has one, or no sort at all otherwise - never a keyword-matched guess at "popular". A
+// guess like that used to pick whichever of the source's own sort ids happened to contain a word
+// like "views" or "top", which is exactly the kind of vocabulary the host has no business assuming
+// every source shares - and in practice it picked worse results than just asking for nothing at
+// all (relevance, or the source's own default listing when it doesn't have that concept either).
+export function pickRelevanceSort(options: SearchFilterOption[]): string | undefined {
+  return options.find((o) => o.id === "relevance")?.id;
 }
