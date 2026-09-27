@@ -83,12 +83,17 @@ interface PosterCardProps {
   description?: string | null;
   progress?: number;
   source?: AnimeCardSource;
+  /** Drops episode count/rating from the meta line, keeping just the year - for a card given only
+   * a narrow fixed-width column (profile's "continue watching" preview) rather than the usual
+   * poster-grid width. The full line wrapped or truncated mid-word there once the type badge, year,
+   * episode count and rating all had to share ~180px; the year alone always fits. */
+  compact?: boolean;
 }
 
 /** Shared visual body for source titles and provider entries; navigation stays with each caller. */
-export function PosterCard({ title, posterUrl, type, year, episodeCount, rating, genres, description, progress, source }: PosterCardProps) {
+export function PosterCard({ title, posterUrl, type, year, episodeCount, rating, genres, description, progress, source, compact }: PosterCardProps) {
   const { t } = useTranslation();
-  const meta = [
+  const meta = compact ? [year].filter(Boolean).join(" · ") : [
     year,
     episodeCount && t("common.episodesShort", { count: episodeCount }),
     rating != null && `★ ${formatRating(rating)}`,
@@ -139,7 +144,7 @@ export function PosterCard({ title, posterUrl, type, year, episodeCount, rating,
   </>;
 }
 
-export const AnimeCard = memo(function AnimeCard({ anime, progress, source }: { anime: AnimeTitle; progress?: number; source?: AnimeCardSource }) {
+export const AnimeCard = memo(function AnimeCard({ anime, progress, source, compact }: { anime: AnimeTitle; progress?: number; source?: AnimeCardSource; compact?: boolean }) {
   const title = animeTitle(anime);
   return <Link
     to="/anime/$sourceId/$animeId"
@@ -157,6 +162,7 @@ export const AnimeCard = memo(function AnimeCard({ anime, progress, source }: { 
       description={anime.description}
       progress={progress}
       source={source}
+      compact={compact}
     />
   </Link>;
 });

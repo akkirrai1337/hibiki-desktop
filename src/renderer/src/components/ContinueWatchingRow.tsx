@@ -37,7 +37,10 @@ export function ContinueWatchingRow({ limit, sourceById }: { limit?: number; sou
     return (
       <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${limit}, minmax(0, 1fr))` }}>
         {visible.map((slot) => (
-          <ContinueWatchingCard key={`${slot.progress.sourceId}:${slot.progress.titleId}`} slot={slot} sourceById={sourceById} />
+          // Compact meta (see AnimeCard/PosterCard) - a fixed `limit`-column grid gives each card
+          // only a slice of the profile's own (already narrower-than-a-full-page) column, nowhere
+          // near enough room for the usual year/episodes/rating line without it truncating mid-word.
+          <ContinueWatchingCard key={`${slot.progress.sourceId}:${slot.progress.titleId}`} slot={slot} sourceById={sourceById} compact />
         ))}
       </div>
     );
@@ -56,7 +59,7 @@ export function ContinueWatchingRow({ limit, sourceById }: { limit?: number; sou
 // Exported for the full history page (routes/history.tsx), which renders every entry as a plain
 // poster grid instead of this file's own bounded/scrollable layouts - it wants the exact same
 // card (progress bar, delete-progress context menu, missing-source badge) without duplicating it.
-export function ContinueWatchingCard({ slot, sourceById }: { slot: ContinueWatchingSlot; sourceById?: Map<string, AnimeCardSource> }) {
+export function ContinueWatchingCard({ slot, sourceById, compact }: { slot: ContinueWatchingSlot; sourceById?: Map<string, AnimeCardSource>; compact?: boolean }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const popoverTheme = usePopoverTheme();
@@ -87,6 +90,7 @@ export function ContinueWatchingCard({ slot, sourceById }: { slot: ContinueWatch
             anime={slot.anime}
             progress={slot.progress.durationMs ? (slot.progress.positionMs / slot.progress.durationMs) * 100 : 0}
             source={cardSource}
+            compact={compact}
           />
         </div>
       </ContextMenu.Trigger>
