@@ -588,6 +588,12 @@
       "enabled": "Auto-load catalog",
       "hint": "Loads the next page as you scroll"
     },
+    "home": {
+      "title": "Home",
+      "sort": "Home page sort",
+      "sortHint": "Which of {{source}}'s own orderings fills the hero and \"Popular\" row",
+      "sortAuto": "Auto (popular)"
+    },
     "data": {
       "title": "Data",
       "backup": "Backup",

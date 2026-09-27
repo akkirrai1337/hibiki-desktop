@@ -51,7 +51,14 @@ export function CatalogPage() {
     enabled: !!source,
     queryFn: () => hibiki.sources.filterCatalog(source!.id),
   });
-  const sortMode = pickPopularSort(settings.data?.sortOptions ?? []);
+  // A user-picked override (Settings > Home) wins whenever the current source still actually offers
+  // that sort id - a source can change its own sort ids between versions, and silently falling back
+  // to the auto-guess is safer than sending a now-nonexistent id to the source.
+  const homeSortOverride = useUiStore((s) => (source ? s.homeSortBySource[source.id] : undefined));
+  const sortOptions = settings.data?.sortOptions ?? [];
+  const sortMode = (homeSortOverride && sortOptions.some((o) => o.id === homeSortOverride))
+    ? homeSortOverride
+    : pickPopularSort(sortOptions);
   const settingsReady = settings.isFetched;
   const hero = useCachedTitleList({
     queryKey: ["hero", source?.id, sortMode ?? ""],

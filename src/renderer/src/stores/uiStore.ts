@@ -54,6 +54,11 @@ interface UiState {
   // Off by default: downloading a hundred-plus megabytes and restarting the app is not something
   // to start doing to someone who never asked for it. Settings is where you turn it *on*.
   autoUpdate: boolean;
+  // Which of a source's own catalog sort orders (see SearchFilterCatalog.sortOptions) fills the home
+  // page's hero and "popular" row, keyed by source id. Missing = let the app guess one itself (see
+  // pickPopularSort) - a source's sort ids aren't a fixed vocabulary the host can rely on, so this
+  // is the escape hatch for whenever that guess picks the wrong one.
+  homeSortBySource: Record<string, string>;
   setTheme: (theme: "light" | "dark") => void;
   setActiveSourceId: (id: string | null) => void;
   setSidebarWidth: (width: number) => void;
@@ -69,6 +74,7 @@ interface UiState {
   setCatalogAutoLoad: (enabled: boolean) => void;
   setZoomFactor: (factor: number) => void;
   setAutoUpdate: (enabled: boolean) => void;
+  setHomeSort: (sourceId: string, sortId: string | null) => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -89,6 +95,7 @@ export const useUiStore = create<UiState>()(
       catalogAutoLoad: true,
       zoomFactor: 1,
       autoUpdate: false,
+      homeSortBySource: {},
       setTheme: (theme) => set({ theme }),
       setActiveSourceId: (activeSourceId) => set({ activeSourceId }),
       setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
@@ -105,6 +112,13 @@ export const useUiStore = create<UiState>()(
       setCatalogAutoLoad: (catalogAutoLoad) => set({ catalogAutoLoad }),
       setZoomFactor: (zoomFactor) => set({ zoomFactor: normalizeZoom(zoomFactor) }),
       setAutoUpdate: (autoUpdate) => set({ autoUpdate }),
+      setHomeSort: (sourceId, sortId) =>
+        set((state) => {
+          const homeSortBySource = { ...state.homeSortBySource };
+          if (sortId) homeSortBySource[sourceId] = sortId;
+          else delete homeSortBySource[sourceId];
+          return { homeSortBySource };
+        }),
     }),
     {
       name: "hibiki-ui",

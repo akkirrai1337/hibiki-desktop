@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowDownToLine, Ban, Check, CheckCircle2, ChevronDown, ChevronUp, DatabaseBackup, FileText, FolderOpen, Info, Languages, MessageCircle, Moon, Palette, RefreshCw, RotateCcw, ScrollText, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowDownToLine, ArrowUpDown, Ban, Check, CheckCircle2, ChevronDown, ChevronUp, DatabaseBackup, FileText, FolderOpen, Info, Languages, MessageCircle, Moon, Palette, RefreshCw, RotateCcw, ScrollText, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Switch } from "@/components/Switch";
 import { SUPPORTED_LOCALES, setLocale } from "@/lib/i18n";
 import { SKIP_TIMER_MAX_SECONDS, SKIP_TIMER_MIN_SECONDS, WATCHED_THRESHOLD_MAX_PERCENT, WATCHED_THRESHOLD_MIN_PERCENT, usePlayerPrefsStore } from "@/stores/playerPrefsStore";
 import { useUiStore } from "@/stores/uiStore";
 import { ACCENT_PRESETS, applyAccentColor, BACKGROUND_THEME_PRESETS, DEFAULT_ACCENT } from "@/lib/theme";
+import { sortLabel } from "@/lib/catalogSort";
 import { hibiki, type LogEntry } from "@/lib/hibiki";
 
 // A bold title above its rows - the rows themselves are separate cards (see SettingsRow), matching
@@ -511,6 +513,43 @@ function BackupSection() {
   );
 }
 
+// Which of the active source's own catalog sort orders fills the home page's hero and "popular"
+// row - the app guesses one itself (pickPopularSort, in home.tsx), but a source's sort ids are its
+// own vocabulary, not a fixed one the host can rely on, so this is the way to override a wrong guess.
+function HomeSortSection() {
+  const { t } = useTranslation();
+  const sourcesQuery = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });
+  const activeSourceId = useUiStore((s) => s.activeSourceId);
+  const source = sourcesQuery.data?.find((s) => s.id === activeSourceId) ?? sourcesQuery.data?.[0];
+  // The same key the home page and the filter panel read, so this costs no extra request.
+  const catalogQuery = useQuery({
+    queryKey: ["filterCatalog", source?.id],
+    enabled: !!source,
+    queryFn: () => hibiki.sources.filterCatalog(source!.id),
+  });
+  const homeSortBySource = useUiStore((s) => s.homeSortBySource);
+  const setHomeSort = useUiStore((s) => s.setHomeSort);
+  if (!source) return null;
+  const options = catalogQuery.data?.sortOptions ?? [];
+  return (
+    <SettingsSection title={t("settings.home.title")}>
+      <SettingsRow icon={<ArrowUpDown className="h-[18px] w-[18px]" strokeWidth={2} />}>
+        <p className="text-sm font-semibold text-text">{t("settings.home.sort")}</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.home.sortHint", { source: source.name })}</p>
+        <select
+          value={homeSortBySource[source.id] ?? ""}
+          onChange={(e) => setHomeSort(source.id, e.target.value || null)}
+          disabled={options.length === 0}
+          className="mt-3 w-full rounded-lg border border-border bg-text/[.04] px-3 py-2 text-sm text-text outline-none focus:border-accent/70 disabled:opacity-50"
+        >
+          <option value="">{t("settings.home.sortAuto")}</option>
+          {options.map((option) => <option key={option.id} value={option.id}>{sortLabel(option, t)}</option>)}
+        </select>
+      </SettingsRow>
+    </SettingsSection>
+  );
+}
+
 export function SettingsPage() {
   const { t, i18n } = useTranslation();
   const autoSkipDelaySeconds = usePlayerPrefsStore((s) => s.autoSkipDelaySeconds);
@@ -667,6 +706,7 @@ export function SettingsPage() {
         </SettingsRow>
       </SettingsSection>
 
+      <HomeSortSection />
       <BackupSection />
       <DiagnosticsSection />
     </div>
