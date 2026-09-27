@@ -1637,7 +1637,15 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   if (isEmbed) {
     return (
       <div ref={containerRef} className="relative h-full w-full bg-black">
-        <iframe ref={embedRef} src={link.url} onLoad={finishEmbedSourceSwitch} allow="autoplay; fullscreen" allowFullScreen className="h-full w-full border-0" />
+        {/* No cross-origin way to mute this page's own audio after the fact (it isn't our <video>
+            element, and a plain iframe exposes nothing like a webview's setAudioMuted) - the one
+            lever this app actually has is never granting unmuted-autoplay permission while muted.
+            Chromium's own autoplay policy then falls back to autoplaying muted by default for any
+            embed whose own player is a standard <video autoplay> (most of them), the same way it
+            would for a bare page loaded without this permission at all. Not airtight - a player
+            that starts audio some other way (Web Audio, requiring a click) can still ignore it -
+            but it is the only honest thing this can do about a page it has no other access into. */}
+        <iframe ref={embedRef} src={link.url} onLoad={finishEmbedSourceSwitch} allow={muted ? "fullscreen" : "autoplay; fullscreen"} allowFullScreen className="h-full w-full border-0" />
         {(sourceSwitching || switchingSource) && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-[1px]">
             <Loader2 className="h-12 w-12 animate-spin text-white/80" strokeWidth={2} />
