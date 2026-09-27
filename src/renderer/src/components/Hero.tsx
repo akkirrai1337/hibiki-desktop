@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, animate, motion, useMotionValue } from "motion/react";
-import { ChevronDown, Star } from "lucide-react";
+import { ChevronDown, Radio, Star } from "lucide-react";
 import { GenreChip } from "@/components/GenreChip";
 
 /** The look of a hero's own call to action, so every caller's Link matches without the carousel
@@ -24,6 +24,8 @@ export interface HeroSlide {
   key: string;
   /** Which source this slide's own genre chips should open the catalog against. */
   sourceId: string;
+  /** Shown next to the trending-on label - falls back to a plain icon when the source has none. */
+  sourceIconUrl?: string | null;
   title: string;
   description?: string | null;
   posterUrl?: string | null;
@@ -163,7 +165,12 @@ function Hero({ slide, label, paused }: { slide: HeroSlide; label: string; pause
       ].join(", ") }} />
     </div>
     <div className="max-w-2xl">
-      <span className="mb-4 inline-block rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[.14em] text-accent-text">{label}</span>
+      <span className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-white/10 py-1 pl-1 pr-3 text-[11px] font-bold uppercase tracking-[.14em] text-accent-text">
+        <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/15">
+          {slide.sourceIconUrl ? <img src={slide.sourceIconUrl} alt="" className="h-full w-full object-cover" /> : <Radio className="h-2.5 w-2.5 text-zinc-300" strokeWidth={2} />}
+        </span>
+        {label}
+      </span>
       {/* The min-h wrapper reserves space for a full 2-line title regardless of how long this
           slide's title actually is - without it, switching from a 2-line to a 1-line title (or
           back) between carousel slides abruptly resizes this block and everything below it.

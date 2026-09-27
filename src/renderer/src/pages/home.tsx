@@ -103,7 +103,7 @@ export function CatalogPage() {
     {sources.isLoading && <HeroSkeleton />}{sources.data?.length === 0 && <EmptySources />}{sources.isError && <ErrorBanner message={(sources.error as Error).message} className="m-8" />}
     {source && <>
       {heroSlides.length > 0
-        ? <HeroCarousel slides={heroSlides.map((slide) => toHeroSlide(slide, t("catalog.openTitle")))} label={t("catalog.trendingOn", { source: source.name })} />
+        ? <HeroCarousel slides={heroSlides.map((slide) => toHeroSlide(slide, t("catalog.openTitle"), source.iconUrl))} label={t("catalog.trendingOn", { source: source.name })} />
         : hero.isLoading && <HeroSkeleton />}
       <div className="space-y-12 px-8 pt-10">
         {pool.isError && <ErrorBanner message={(pool.error as Error).message} />}
@@ -125,10 +125,11 @@ export function CatalogPage() {
 }
 /** A source title as the shared carousel wants it - see HeroSlide for why this mapping exists at
  * all rather than the carousel taking an AnimeTitle. */
-function toHeroSlide(anime: AnimeTitle, openLabel: string): HeroSlide {
+function toHeroSlide(anime: AnimeTitle, openLabel: string, sourceIconUrl?: string | null): HeroSlide {
   return {
     key: `${anime.sourceId}:${anime.id}`,
     sourceId: anime.sourceId,
+    sourceIconUrl,
     title: animeTitle(anime),
     description: anime.description,
     posterUrl: anime.posterUrl,
