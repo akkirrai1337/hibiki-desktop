@@ -332,14 +332,16 @@ function ProfileHeader({
   playStreakOnMount: boolean;
 }) {
   return (
-    <div className="group/header relative min-h-[176px] overflow-hidden border-b border-border">
+    <div className="group/header relative flex min-h-[176px] items-center overflow-hidden border-b border-border">
       <BannerMedia filename={bannerFilename} />
       {/* The banner's own darkening only guarantees contrast for light text on it - forced here
           via the same CSS vars text-text/text-muted read from, regardless of which theme (light
           or dark) is actually active, since a light theme's near-black text would otherwise
-          vanish into that overlay. */}
+          vanish into that overlay. Centered vertically in the banner (the outer flex above) rather
+          than pinned to its bottom - a taller banner used to leave the avatar/name hugging the
+          bottom edge with a lot of dead space above them instead of sitting in the middle of it. */}
       <div
-        className="relative flex items-center gap-5 px-8 pb-8 pt-10"
+        className="relative flex w-full items-center gap-5 px-8 py-8"
         style={bannerFilename ? ({ "--color-text": "244 244 245", "--color-muted": "161 161 170" } as React.CSSProperties) : undefined}
       >
         <AvatarPicker avatarDataUrl={avatarDataUrl} onChange={onAvatarChange} />
