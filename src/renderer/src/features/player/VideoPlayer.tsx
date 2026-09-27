@@ -505,8 +505,13 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         const video = videoRef.current;
         const position = video && Number.isFinite(video.currentTime) ? video.currentTime : 0;
         const mediaDuration = video && Number.isFinite(video.duration) ? video.duration : 0;
-        pendingSourceSwitchRef.current = { fromUrl: failedLink.url, position, resume: video ? !video.paused : true };
+        const resume = video ? !video.paused : true;
+        pendingSourceSwitchRef.current = { fromUrl: failedLink.url, position, resume };
         frozenDisplayRef.current = { time: position, duration: mediaDuration };
+        // Same as beginSourceSwitch: stop the dying stream itself, rather than leaving it running
+        // (silently, off both the visible frame and the frozen clock above it) until the replacement
+        // is ready to take over.
+        video?.pause();
         setSwitchingSource(true);
         armPlaybackTimeout("startup");
       }
@@ -1142,8 +1147,19 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       const pendingSwitch = pendingSourceSwitchRef.current;
       if (!pendingSwitch || pendingSwitch.fromUrl === link?.url) return;
 
-      if (pendingSwitch.resume) void video.play().catch((error: unknown) => logPlayRequestFailure("source switch", error));
-      else video.pause();
+      // Explicitly synced afterwards rather than left to the element's own "play"/"pause" events:
+      // this <video> can carry leftover listeners/state from the stream that just failed (an
+      // automatic fallback - see reportPlaybackFailure - never paused the dying stream the way a
+      // user-initiated switch does), and a play() that silently resolves without ever actually
+      // starting playback fires no "play" event to correct `playing` with. Reading `video.paused`
+      // straight after settling is the one thing that can't disagree with what's really happening,
+      // whichever of those left it stuck showing "playing" over audio that was actually paused.
+      if (pendingSwitch.resume) {
+        video.play().catch((error: unknown) => logPlayRequestFailure("source switch", error)).finally(() => setPlaying(!video.paused));
+      } else {
+        video.pause();
+        setPlaying(false);
+      }
       pendingSourceSwitchRef.current = null;
       frozenDisplayRef.current = null;
       setSwitchingSource(false);
