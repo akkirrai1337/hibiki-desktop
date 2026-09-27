@@ -160,7 +160,12 @@ function Hero({ slide, label, sourceName, paused }: { slide: HeroSlide; label: s
     observer.observe(el);
     return () => observer.disconnect();
   }, [description]);
-  const maxHeight = descriptionOpen ? fullHeight : Math.min(collapsedHeight, fullHeight);
+  // Collapsed is always exactly `collapsedHeight`, never shrunk to a shorter description's actual
+  // (smaller) height - a short description otherwise made this whole section a few lines shorter
+  // than a long one, jarringly resizing everything below it on every slide switch. Same trade-off
+  // the title wrapper above already makes: a little unused space under a short description reads
+  // far better than the rest of the page visibly jumping around it.
+  const maxHeight = descriptionOpen ? fullHeight : collapsedHeight;
   const genres = (slide.genres ?? []).slice(0, 3);
   return <section className="relative isolate min-h-[520px] overflow-hidden border-b border-white/[.04] px-8 py-20">
     <div className="absolute inset-0 -z-10 overflow-hidden opacity-75">
@@ -191,8 +196,13 @@ function Hero({ slide, label, sourceName, paused }: { slide: HeroSlide; label: s
           back) between carousel slides abruptly resizes this block and everything below it.
           min-height has to live on a wrapper, not the line-clamped element itself - combining
           -webkit-line-clamp with a min-height on the same element makes Chromium clip the text
-          to nothing instead of just capping it at 2 lines. */}
-      <div className="min-h-[2.1em]">
+          to nothing instead of just capping it at 2 lines. It also needs the h1's own font-size and
+          line-height repeated here, not just its own defaults - `em` resolves against the element's
+          *own* computed font-size, so without them `2.1em` was 2.1 lines of this div's inherited
+          (much smaller) body text, not of the much larger heading it's meant to reserve room for -
+          silently reserving far too little to actually stop the jump between a one-line and a
+          two-line title, which is the whole reason this wrapper exists. */}
+      <div className="min-h-[2.1em] text-4xl leading-[1.05] md:text-6xl">
         <h1 className="line-clamp-2 max-w-xl select-text text-4xl font-bold leading-[1.05] tracking-[-.04em] text-white md:text-6xl">{title}</h1>
       </div>
       <div className="mt-5 max-w-lg overflow-hidden transition-[max-height] duration-300 ease-in-out" style={{ maxHeight }}>
