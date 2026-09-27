@@ -224,7 +224,7 @@ function Hero({ slide, label, sourceName, paused, onHeightChange }: { slide: Her
       {slide.description && <button onClick={() => setDescriptionOpen((value) => !value)} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-zinc-300 transition hover:text-white">{descriptionOpen ? t("common.hideDescription") : t("common.readDescription")}<ChevronDown className={`h-3.5 w-3.5 transition-transform duration-300 ${descriptionOpen ? "rotate-180" : ""}`} strokeWidth={2.5} /></button>}
       <div className="mt-5 flex flex-wrap items-center gap-2 text-xs font-medium text-zinc-200">
         {slide.rating && (
-          <span className="flex items-center gap-1 rounded-md bg-accent/20 px-2 py-1 font-bold text-accent-text">
+          <span className="flex items-center gap-1 rounded-md bg-amber-400/15 px-2 py-1 font-bold text-amber-400">
             <Star className="h-3 w-3 fill-current" strokeWidth={0} />
             {formatHeroRating(slide.rating.value)}
           </span>
