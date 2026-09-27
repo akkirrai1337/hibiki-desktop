@@ -585,11 +585,11 @@ function EpisodeChip({
           {isFavorite && view === "tiles" && <Heart className="absolute left-1.5 top-1.5 h-3 w-3 shrink-0 fill-rose-400 text-rose-400" strokeWidth={0} />}
           <span
             className={cn(
-              "flex items-center gap-1.5 transition-[opacity,transform] duration-200",
+              "flex items-center gap-1.5 transition-transform duration-200",
               view === "tiles" ? "absolute right-1.5 top-1.5 gap-1" : "shrink-0",
-              // Pinned to the row's right edge same as always; on hover they just slide out from
-              // under that same spot rather than the play button stacking on next to them.
-              view === "list" && !downloading && !paused && "group-hover:translate-x-2 group-hover:opacity-0",
+              // Pinned to the row's right edge same as always; on hover they just make room for
+              // the play button rather than it landing on top of them or them vanishing outright.
+              view === "list" && !downloading && !paused && "group-hover:-translate-x-8",
             )}
           >
             {isFavorite && view === "list" && <Heart className="h-3 w-3 shrink-0 fill-rose-400 text-rose-400" strokeWidth={0} />}
@@ -612,9 +612,8 @@ function EpisodeChip({
             {!downloading && !paused && (isDownloaded || download?.status === "done") && <Download className="h-3 w-3 text-emerald-400" strokeWidth={2.5} />}
             {watched && <Check className="h-3 w-3 text-muted" strokeWidth={2.5} />}
           </span>
-          {/* The list's own affordance: sits over the same right-pinned spot the icons above just
-              vacated, rather than a spot of its own - a straight swap in place, not one thing
-              landing next to another. */}
+          {/* The list's own affordance: takes the spot the icons above just made room for by
+              sliding left, rather than covering them or a spot of its own further out. */}
           {view === "list" && !downloading && !paused && (
             <span className="absolute right-3.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-accent text-accent-fg opacity-0 transition-opacity duration-200 group-hover:opacity-100">
               <Play className="h-3 w-3 fill-current" strokeWidth={0} />
