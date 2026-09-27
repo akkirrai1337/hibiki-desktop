@@ -141,12 +141,26 @@ function Hero({ slide, label, sourceName, paused }: { slide: HeroSlide; label: s
   const [descriptionOpen, setDescriptionOpen] = useState(false);
   const description = slide.description || t("catalog.heroFallbackDescription");
   const descriptionRef = useRef<HTMLParagraphElement>(null);
-  const [collapsedHeight] = useState(72); // ~3 lines at text-sm/leading-6
-  const [maxHeight, setMaxHeight] = useState(collapsedHeight);
+  const collapsedHeight = 72; // ~3 lines at text-sm/leading-6
+  // The paragraph's own full height, kept in sync by a ResizeObserver rather than measured once in
+  // a plain effect right after mount - a one-shot read there occasionally landed on 0 (this
+  // component remounts into an AnimatePresence enter transition, and DOM writes and the browser's
+  // own layout pass don't happen in perfect lockstep with when a *effect* callback happens to run),
+  // collapsing the description down to nothing until the next unrelated re-render corrected it - in
+  // practice, that meant it stuck fully collapsed until the "read more" toggle was clicked, since
+  // nothing else was re-running this measurement in between. A ResizeObserver's callback instead
+  // fires from the browser's own layout engine once a size actually exists, and keeps firing again
+  // on every later change (a slow-loading font swapping in, ...), so a bad early read always gets
+  // corrected instead of becoming permanent.
+  const [fullHeight, setFullHeight] = useState(collapsedHeight);
   useEffect(() => {
-    const full = descriptionRef.current?.scrollHeight ?? collapsedHeight;
-    setMaxHeight(descriptionOpen ? full : Math.min(collapsedHeight, full));
-  }, [descriptionOpen, description, collapsedHeight]);
+    const el = descriptionRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => setFullHeight(el.scrollHeight));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [description]);
+  const maxHeight = descriptionOpen ? fullHeight : Math.min(collapsedHeight, fullHeight);
   const genres = (slide.genres ?? []).slice(0, 3);
   return <section className="relative isolate min-h-[520px] overflow-hidden border-b border-white/[.04] px-8 py-20">
     <div className="absolute inset-0 -z-10 overflow-hidden opacity-75">
