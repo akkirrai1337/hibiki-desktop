@@ -9,6 +9,7 @@ import { SKIP_TIMER_MAX_SECONDS, SKIP_TIMER_MIN_SECONDS, WATCHED_THRESHOLD_MAX_P
 import { useUiStore } from "@/stores/uiStore";
 import { ACCENT_PRESETS, applyAccentColor, BACKGROUND_THEME_PRESETS, DEFAULT_ACCENT } from "@/lib/theme";
 import { sortLabel } from "@/lib/catalogSort";
+import { SelectDropdown } from "@/components/SelectDropdown";
 import { hibiki, type LogEntry } from "@/lib/hibiki";
 
 // A bold title above its rows - the rows themselves are separate cards (see SettingsRow), matching
@@ -536,15 +537,14 @@ function HomeSortSection() {
       <SettingsRow icon={<ArrowUpDown className="h-[18px] w-[18px]" strokeWidth={2} />}>
         <p className="text-sm font-semibold text-text">{t("settings.home.sort")}</p>
         <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.home.sortHint", { source: source.name })}</p>
-        <select
+        <SelectDropdown
+          className="mt-3"
           value={homeSortBySource[source.id] ?? ""}
-          onChange={(e) => setHomeSort(source.id, e.target.value || null)}
+          onChange={(id) => setHomeSort(source.id, id || null)}
           disabled={options.length === 0}
-          className="mt-3 w-full rounded-lg border border-border bg-text/[.04] px-3 py-2 text-sm text-text outline-none focus:border-accent/70 disabled:opacity-50"
-        >
-          <option value="">{t("settings.home.sortAuto")}</option>
-          {options.map((option) => <option key={option.id} value={option.id}>{sortLabel(option, t)}</option>)}
-        </select>
+          placeholder={t("settings.home.sortAuto")}
+          options={[{ id: "", label: t("settings.home.sortAuto") }, ...options.map((option) => ({ id: option.id, label: sortLabel(option, t) }))]}
+        />
       </SettingsRow>
     </SettingsSection>
   );
