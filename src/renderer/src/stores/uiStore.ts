@@ -86,7 +86,11 @@ export const useUiStore = create<UiState>()(
       sidebarWidth: 236,
       hiddenNav: [],
       episodesNewestFirst: false,
-      episodesView: "tiles",
+      // A fresh install only - zustand's persist middleware only ever falls back to this default
+      // for a key that was never actually written to localStorage, so anyone with an existing
+      // profile keeps whichever view they already have (even one that only ever got there by way
+      // of the old default) rather than being silently switched over.
+      episodesView: "list",
       discordRpcEnabled: true,
       discordIgnoreNsfwSources: true,
       onboardingCompleted: false,
