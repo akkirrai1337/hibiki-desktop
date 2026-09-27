@@ -578,8 +578,13 @@ function EpisodeChip({
               )}
             </span>
           )}
-          {isFavorite && <Heart className={cn("h-3 w-3 shrink-0 fill-rose-400 text-rose-400", view === "tiles" && "absolute left-1.5 top-1.5")} strokeWidth={0} />}
+          {/* In tiles, its own corner badge; in list, folded into the icon group below instead of
+              sitting here as its own flex child - this row's gap is meant for its two or three
+              real sections (number, title, icon group), not one icon on its own, which is what
+              was leaving it looking oddly far from the rest. */}
+          {isFavorite && view === "tiles" && <Heart className="absolute left-1.5 top-1.5 h-3 w-3 shrink-0 fill-rose-400 text-rose-400" strokeWidth={0} />}
           <span className={cn("flex items-center gap-1.5", view === "tiles" ? "absolute right-1.5 top-1.5 gap-1" : "shrink-0")}>
+            {isFavorite && view === "list" && <Heart className="h-3 w-3 shrink-0 fill-rose-400 text-rose-400" strokeWidth={0} />}
             {queued && <Clock className="h-3 w-3 text-muted" strokeWidth={2.25} />}
             {(download?.status === "error" || download?.status === "unsupported") && <TriangleAlert className="h-3 w-3 text-rose-400" strokeWidth={2.5} />}
             {(downloading || paused) && (
@@ -598,9 +603,12 @@ function EpisodeChip({
             )}
             {!downloading && !paused && (isDownloaded || download?.status === "done") && <Download className="h-3 w-3 text-emerald-400" strokeWidth={2.5} />}
             {watched && <Check className="h-3 w-3 text-muted" strokeWidth={2.5} />}
-            {/* The list's own affordance: a play button that appears under the pointer. */}
+            {/* The list's own affordance: a play button under the pointer. Always taking up its
+                spot (not just appearing there) - it shifts into place on `transform`, which
+                animates on its own layer instead of nudging the icons before it around, and
+                fades in alongside rather than just popping into existence at full size. */}
             {view === "list" && !downloading && !paused && (
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-accent-fg opacity-0 transition-opacity group-hover:opacity-100">
+              <span className="flex h-7 w-7 -translate-x-1 items-center justify-center rounded-full bg-accent text-accent-fg opacity-0 transition-[opacity,transform] duration-200 group-hover:translate-x-0 group-hover:opacity-100">
                 <Play className="h-3 w-3 fill-current" strokeWidth={0} />
               </span>
             )}
