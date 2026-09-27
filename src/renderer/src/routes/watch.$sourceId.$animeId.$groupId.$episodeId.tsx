@@ -639,13 +639,24 @@ function WatchPage() {
           <button onClick={goBack} className="mt-2 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/20">{t("detail.back")}</button>
         </div>
       )}
+      {/* The request itself succeeded, it just came back empty - nothing above (isError) or below
+          (VideoPlayer's own `!link` spinner) ever catches this, so without it this episode spun
+          forever with no way out but the back button in the corner. */}
+      {!link && linksQuery.isSuccess && linksQuery.data.length === 0 && downloadedQuery.isSuccess && !downloadedQuery.data && (
+        <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
+          <TriangleAlert className="h-8 w-8 text-rose-400" strokeWidth={2} />
+          <p className="text-sm text-rose-300">{t("watch.noLinks")}</p>
+          <button onClick={goBack} className="mt-2 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/20">{t("detail.back")}</button>
+        </div>
+      )}
       {/* Mounted as soon as there is *something* to choose between, not only once a link has been
           settled on. While `preferencePending` is still resolving a remembered EMBED pick there is
           no `link` yet, and the player shows its own spinner over the normal chrome (see
           VideoPlayer's optional `link` prop) - which is the difference between "wait a moment" and
           "you are locked out": picking a player that resolves slowly, or never, used to leave a
-          bare full-screen spinner with no settings menu to pick a different one from. */}
-      {(link || linksQuery.data) && (
+          bare full-screen spinner with no settings menu to pick a different one from. Excludes the
+          empty-and-done case above, which owns the screen instead of a player with nothing to play. */}
+      {(link || (linksQuery.data && linksQuery.data.length > 0)) && (
         <VideoPlayer
           link={link}
           availableLinks={linksQuery.data}
