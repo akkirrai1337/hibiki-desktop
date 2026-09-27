@@ -237,6 +237,7 @@ const api = {
     list: (): Promise<XpEvent[]> => ipcRenderer.invoke(IPC.xpEventsList),
     record: (kind: string, xp: number, createdAt: number): Promise<void> =>
       ipcRenderer.invoke(IPC.xpEventsRecord, kind, xp, createdAt),
+    clear: (): Promise<void> => ipcRenderer.invoke(IPC.xpEventsClear),
   },
   downloads: {
     start: (request: DownloadRequest): Promise<void> => ipcRenderer.invoke(IPC.downloadsStart, request),

@@ -71,6 +71,7 @@ export const IPC = {
 
   xpEventsList: "xpEvents:list",
   xpEventsRecord: "xpEvents:record",
+  xpEventsClear: "xpEvents:clear",
 
   downloadsStart: "downloads:start",
   downloadsPause: "downloads:pause",

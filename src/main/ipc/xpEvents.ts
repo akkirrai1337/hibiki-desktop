@@ -16,4 +16,11 @@ export function registerXpEventHandlers(): void {
   ipcMain.handle(IPC.xpEventsRecord, (_e, kind: string, xp: number, createdAt: number) => {
     getDb().insert(xpEvents).values({ kind, xp, createdAt }).run();
   });
+
+  // Only ever clears this log - achievement/level progress is derived from watch time and
+  // unlocked tiers (see levelProgress.ts), not from these rows, so this can't accidentally take
+  // XP or levels away, just the record of how they were earned.
+  ipcMain.handle(IPC.xpEventsClear, () => {
+    getDb().delete(xpEvents).run();
+  });
 }

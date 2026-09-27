@@ -163,6 +163,7 @@ export interface HibikiApi {
   xp: {
     list(): Promise<XpEvent[]>;
     record(kind: string, xp: number, createdAt: number): Promise<void>;
+    clear(): Promise<void>;
   };
   downloads: {
     start(request: DownloadRequest): Promise<void>;

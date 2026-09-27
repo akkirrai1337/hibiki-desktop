@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { motion } from "motion/react";
-import { Pencil, User, Check, Film, Library, Clock, CheckCircle2, Gauge, Sparkles, X } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { Pencil, User, Check, Film, Library, Clock, CheckCircle2, Gauge, Sparkles, Trash2, X } from "lucide-react";
 import { hibiki, profileBannerUrl } from "@/lib/hibiki";
+import { Modal } from "@/components/Modal";
 import { animeTitle } from "@/components/AnimeCard";
 import { ContinueWatchingRow } from "@/components/ContinueWatchingRow";
 import { useContinueWatching } from "@/lib/continueWatching";
@@ -101,6 +102,13 @@ export function ProfilePage() {
   const achievements = useAchievementsStore((s) => s.achievements);
 
   const xpEventsQuery = useQuery({ queryKey: ["xpEvents"], queryFn: () => hibiki.xp.list() });
+  const queryClient = useQueryClient();
+  const [clearHistoryOpen, setClearHistoryOpen] = useState(false);
+  const clearXpHistory = async () => {
+    await hibiki.xp.clear();
+    setClearHistoryOpen(false);
+    void queryClient.invalidateQueries({ queryKey: ["xpEvents"] });
+  };
 
   // Mostly watch time, with unlocking (not just accumulating) achievement tiers as the bigger,
   // occasional bumps - see levelProgress.ts for the exact weighting.
@@ -186,7 +194,19 @@ export function ProfilePage() {
           </section>
 
           <section>
-            <h2 className="mb-3 text-sm font-bold text-text">{t("profile.xpHistoryTitle")}</h2>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-bold text-text">{t("profile.xpHistoryTitle")}</h2>
+              {(xpEventsQuery.data ?? []).length > 0 && (
+                <button
+                  onClick={() => setClearHistoryOpen(true)}
+                  aria-label={t("profile.xpHistoryClear")}
+                  title={t("profile.xpHistoryClear")}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-muted transition-colors hover:bg-text/[.06] hover:text-text"
+                >
+                  <Trash2 className="h-4 w-4" strokeWidth={2} />
+                </button>
+              )}
+            </div>
             {(xpEventsQuery.data ?? []).length === 0 ? (
               <p className="text-sm text-muted">{t("profile.xpHistoryEmpty")}</p>
             ) : (
@@ -197,7 +217,24 @@ export function ProfilePage() {
           </section>
         </div>
       </div>
+      <AnimatePresence>
+        {clearHistoryOpen && <ClearXpHistoryDialog onConfirm={clearXpHistory} onDismiss={() => setClearHistoryOpen(false)} />}
+      </AnimatePresence>
     </div>
+  );
+}
+
+function ClearXpHistoryDialog({ onConfirm, onDismiss }: { onConfirm: () => void; onDismiss: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <Modal onDismiss={onDismiss}>
+      <h2 className="text-base font-bold text-text">{t("profile.xpHistoryClearConfirmTitle")}</h2>
+      <p className="mt-2 select-text text-sm leading-relaxed text-muted">{t("profile.xpHistoryClearConfirmMessage")}</p>
+      <div className="mt-5 flex justify-end gap-2">
+        <button onClick={onDismiss} className="rounded-lg px-3.5 py-2 text-sm font-semibold text-muted transition-colors hover:bg-text/[.06]">{t("common.cancel")}</button>
+        <button onClick={onConfirm} className="rounded-lg bg-rose-500 px-3.5 py-2 text-sm font-bold text-text transition-opacity hover:opacity-90">{t("profile.xpHistoryClear")}</button>
+      </div>
+    </Modal>
   );
 }
 
@@ -296,7 +333,7 @@ function ProfileHeader({
 }) {
   return (
     <div className="group/header relative min-h-[176px] overflow-hidden border-b border-border">
-      <BannerPicker filename={bannerFilename} onChange={onBannerChange} />
+      <BannerMedia filename={bannerFilename} />
       {/* The banner's own darkening only guarantees contrast for light text on it - forced here
           via the same CSS vars text-text/text-muted read from, regardless of which theme (light
           or dark) is actually active, since a light theme's near-black text would otherwise
@@ -311,6 +348,11 @@ function ProfileHeader({
           <LevelBar levelProgress={levelProgress} />
         </div>
       </div>
+      {/* Painted last, after the row above, purely so its buttons win the hit-test over that row's
+          own box (an absolutely-positioned sibling earlier in the DOM loses that fight even where
+          the later one is visually empty) - see BannerActions for why the wrapper itself has to
+          stay click-through. */}
+      <BannerActions filename={bannerFilename} onChange={onBannerChange} />
     </div>
   );
 }
@@ -318,7 +360,28 @@ function ProfileHeader({
 // A GIF or a short muted/looping video behind the whole header - name, level bar and all - the
 // way a streaming profile's cover art sits behind everything rather than as its own separate
 // strip. Darkened so the text on top of it stays readable regardless of what's playing under it.
-function BannerPicker({ filename, onChange }: { filename: string | null; onChange: (filename: string | null) => void }) {
+function BannerMedia({ filename }: { filename: string | null }) {
+  if (!filename) return null;
+  const isVideo = filename.toLowerCase().endsWith(".mp4");
+  return (
+    <div className="absolute inset-0">
+      {isVideo ? (
+        <video key={filename} src={profileBannerUrl(filename)} className="h-full w-full object-cover" autoPlay loop muted playsInline />
+      ) : (
+        <img key={filename} src={profileBannerUrl(filename)} alt="" className="h-full w-full object-cover" />
+      )}
+      {/* Darkens the art under it just enough that white text and icons read the same over any
+          banner, bright or dark, still or moving. */}
+      <div className="absolute inset-0 bg-black/55" />
+    </div>
+  );
+}
+
+// The banner's edit/remove buttons, kept in their own layer on top of everything else in the
+// header (see the comment where this is mounted) - `pointer-events-none` on the layer itself so
+// the empty space around the two buttons still passes clicks through to whatever is actually
+// under it (the avatar, the name field), and `pointer-events-auto` puts it back just on them.
+function BannerActions({ filename, onChange }: { filename: string | null; onChange: (filename: string | null) => void }) {
   const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -344,29 +407,15 @@ function BannerPicker({ filename, onChange }: { filename: string | null; onChang
     onChange(null);
   };
 
-  const isVideo = filename?.toLowerCase().endsWith(".mp4");
-
   return (
-    <div className="absolute inset-0">
-      {filename && (
-        <>
-          {isVideo ? (
-            <video key={filename} src={profileBannerUrl(filename)} className="h-full w-full object-cover" autoPlay loop muted playsInline />
-          ) : (
-            <img key={filename} src={profileBannerUrl(filename)} alt="" className="h-full w-full object-cover" />
-          )}
-          {/* Darkens the art under it just enough that white text and icons read the same over
-              any banner, bright or dark, still or moving. */}
-          <div className="absolute inset-0 bg-black/55" />
-        </>
-      )}
+    <div className="pointer-events-none absolute inset-0">
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
         disabled={busy}
         aria-label={t("profile.editBanner")}
         title={t("profile.editBanner")}
-        className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg bg-black/40 text-text opacity-0 transition-opacity hover:bg-black/60 group-hover/header:opacity-100"
+        className="pointer-events-auto absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg bg-black/40 text-text opacity-0 transition-opacity hover:bg-black/60 group-hover/header:opacity-100"
       >
         <Pencil className="h-4 w-4" strokeWidth={2.25} />
       </button>
@@ -376,12 +425,12 @@ function BannerPicker({ filename, onChange }: { filename: string | null; onChang
           onClick={onClear}
           aria-label={t("profile.removeBanner")}
           title={t("profile.removeBanner")}
-          className="absolute right-14 top-3 flex h-8 w-8 items-center justify-center rounded-lg bg-black/40 text-text opacity-0 transition-opacity hover:bg-black/60 group-hover/header:opacity-100"
+          className="pointer-events-auto absolute right-14 top-3 flex h-8 w-8 items-center justify-center rounded-lg bg-black/40 text-text opacity-0 transition-opacity hover:bg-black/60 group-hover/header:opacity-100"
         >
           <X className="h-4 w-4" strokeWidth={2.25} />
         </button>
       )}
-      <input ref={inputRef} type="file" accept="image/gif,video/mp4" onChange={onPick} className="hidden" />
+      <input ref={inputRef} type="file" accept="image/gif,video/mp4" onChange={onPick} className="pointer-events-auto hidden" />
     </div>
   );
 }
