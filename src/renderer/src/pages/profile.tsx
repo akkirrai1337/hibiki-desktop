@@ -295,9 +295,16 @@ function ProfileHeader({
   playStreakOnMount: boolean;
 }) {
   return (
-    <div className="border-b border-border">
+    <div className="group/header relative min-h-[176px] overflow-hidden border-b border-border">
       <BannerPicker filename={bannerFilename} onChange={onBannerChange} />
-      <div className="flex items-center gap-5 px-8 pb-8 pt-6">
+      {/* The banner's own darkening only guarantees contrast for light text on it - forced here
+          via the same CSS vars text-text/text-muted read from, regardless of which theme (light
+          or dark) is actually active, since a light theme's near-black text would otherwise
+          vanish into that overlay. */}
+      <div
+        className="relative flex items-center gap-5 px-8 pb-8 pt-10"
+        style={bannerFilename ? ({ "--color-text": "244 244 245", "--color-muted": "161 161 170" } as React.CSSProperties) : undefined}
+      >
         <AvatarPicker avatarDataUrl={avatarDataUrl} onChange={onAvatarChange} />
         <div className="min-w-0 flex-1">
           <NameEditor name={name} onChange={onNameChange} streak={streak} playStreakOnMount={playStreakOnMount} />
@@ -308,8 +315,9 @@ function ProfileHeader({
   );
 }
 
-// A GIF or a short muted/looping video behind the header, in the same spot a streaming profile's
-// cover art would go - never a still image, which the avatar right below already covers.
+// A GIF or a short muted/looping video behind the whole header - name, level bar and all - the
+// way a streaming profile's cover art sits behind everything rather than as its own separate
+// strip. Darkened so the text on top of it stays readable regardless of what's playing under it.
 function BannerPicker({ filename, onChange }: { filename: string | null; onChange: (filename: string | null) => void }) {
   const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -339,22 +347,28 @@ function BannerPicker({ filename, onChange }: { filename: string | null; onChang
   const isVideo = filename?.toLowerCase().endsWith(".mp4");
 
   return (
-    <div className="group relative h-36 w-full overflow-hidden bg-text/[.04] sm:h-44">
+    <div className="absolute inset-0">
       {filename && (
-        isVideo ? (
-          <video key={filename} src={profileBannerUrl(filename)} className="h-full w-full object-cover" autoPlay loop muted playsInline />
-        ) : (
-          <img key={filename} src={profileBannerUrl(filename)} alt="" className="h-full w-full object-cover" />
-        )
+        <>
+          {isVideo ? (
+            <video key={filename} src={profileBannerUrl(filename)} className="h-full w-full object-cover" autoPlay loop muted playsInline />
+          ) : (
+            <img key={filename} src={profileBannerUrl(filename)} alt="" className="h-full w-full object-cover" />
+          )}
+          {/* Darkens the art under it just enough that white text and icons read the same over
+              any banner, bright or dark, still or moving. */}
+          <div className="absolute inset-0 bg-black/55" />
+        </>
       )}
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
         disabled={busy}
         aria-label={t("profile.editBanner")}
-        className="absolute inset-0 flex items-center justify-center bg-black/0 text-text opacity-0 transition-[opacity,background-color] group-hover:bg-black/40 group-hover:opacity-100"
+        title={t("profile.editBanner")}
+        className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg bg-black/40 text-text opacity-0 transition-opacity hover:bg-black/60 group-hover/header:opacity-100"
       >
-        <Pencil className="h-5 w-5" strokeWidth={2} />
+        <Pencil className="h-4 w-4" strokeWidth={2.25} />
       </button>
       {filename && (
         <button
@@ -362,7 +376,7 @@ function BannerPicker({ filename, onChange }: { filename: string | null; onChang
           onClick={onClear}
           aria-label={t("profile.removeBanner")}
           title={t("profile.removeBanner")}
-          className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg bg-black/50 text-text opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100"
+          className="absolute right-14 top-3 flex h-8 w-8 items-center justify-center rounded-lg bg-black/40 text-text opacity-0 transition-opacity hover:bg-black/60 group-hover/header:opacity-100"
         >
           <X className="h-4 w-4" strokeWidth={2.25} />
         </button>
