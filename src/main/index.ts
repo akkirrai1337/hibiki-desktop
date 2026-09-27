@@ -45,6 +45,29 @@ protocol.registerSchemesAsPrivileged([
 app.setName("hibiki");
 app.setAppUserModelId("com.hibiki.desktop");
 
+// A second launch (double-clicking the icon again, a stray shortcut, ...) used to just open a
+// second, fully independent window onto the same userData folder - including the same SQLite
+// file, which better-sqlite3 has no cross-process locking story for. Two processes writing to it
+// at once is exactly how that database ended up corrupted once already. Refusing the second
+// launch outright (rather than, say, opening a second window that shares the file some other way)
+// keeps there being only ever one process touching it, which is what every other path in this app
+// already assumes.
+if (!app.requestSingleInstanceLock()) {
+  // `quit()` wouldn't cut it here - it starts an async shutdown sequence, so every side effect
+  // below (the `whenReady().then(...)` setup among them) would still run once before it took
+  // effect. `exit()` tears the process down immediately instead.
+  app.exit(0);
+} else {
+  // The instance that *did* get the lock hears about every later launch attempt through this -
+  // surface the window that's already open rather than leaving the new launch looking like it
+  // silently did nothing.
+  app.on("second-instance", () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  });
+}
+
 // Sources are no longer bundled/preloaded — like the Android app, none are installed by default.
 // The Sources screen installs extensions here from a repository's marketplace (see
 // ipc/marketplace.ts), writing the same <id>.manifest.json + <id>.js pair hibiki-sources itself
