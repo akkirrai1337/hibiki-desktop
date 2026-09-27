@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Loader2, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Loader2, TriangleAlert } from "lucide-react";
 import type { PlaybackGroup, PlayerLink } from "@shared/types";
 import { pickDefaultLink, pickPlaybackFallback, pickPreferredLink, pickResolvedLink } from "@/lib/playerLinks";
 import { usePlaybackGroups } from "@/lib/playbackGroups";
@@ -620,8 +620,25 @@ function WatchPage() {
     lastDiscordUpdateRef.current = 0;
   }, [episodeId]);
 
+  // Whether VideoPlayer is about to mount below and draw its own back/title bar - while it isn't
+  // (still waiting on linksQuery's very first answer, or that answer was an error/empty result),
+  // none of that chrome exists yet, and the screen used to be nothing but a bare spinner on black:
+  // no way back except knowing a keyboard shortcut, no sense of what was even being loaded.
+  const videoPlayerMounted = !!(link || (linksQuery.data && linksQuery.data.length > 0));
+
   return (
     <div className="relative h-full w-full bg-black">
+      {!videoPlayerMounted && (
+        <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-4 bg-gradient-to-b from-black/80 to-transparent px-6 pb-10 pt-5">
+          <button onClick={goBack} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20">
+            <ArrowLeft className="h-[18px] w-[18px]" strokeWidth={2} />
+          </button>
+          <div className="min-w-0">
+            <p className="select-text truncate text-base font-bold text-white">{title}</p>
+            {episodeLabel && <p className="select-text truncate text-xs text-zinc-300">{episodeLabel}</p>}
+          </div>
+        </div>
+      )}
       {/* Gated on `!link` too, not just the query's own state - once a downloaded copy makes `link`
           available, whatever linksQuery is doing (still loading, or failed because there's no
           network to resolve a live link with) no longer matters, since it isn't what's playing. */}
@@ -656,7 +673,7 @@ function WatchPage() {
           "you are locked out": picking a player that resolves slowly, or never, used to leave a
           bare full-screen spinner with no settings menu to pick a different one from. Excludes the
           empty-and-done case above, which owns the screen instead of a player with nothing to play. */}
-      {(link || (linksQuery.data && linksQuery.data.length > 0)) && (
+      {videoPlayerMounted && (
         <VideoPlayer
           link={link}
           availableLinks={linksQuery.data}
