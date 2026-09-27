@@ -81,6 +81,10 @@ interface VideoPlayerProps {
   onSelectEpisode?: (episodeId: string) => void;
   // Set for a few seconds right when the streak count just went up mid-episode - see StreakToast.
   streakToast?: { current: number; best: number } | null;
+  // Set for a few seconds right after handlePlaybackFailure silently swaps to a fallback link - see
+  // PlayerSwitchToast. Silent auto-recovery used to look, from the outside, indistinguishable from
+  // the episode just randomly changing player/quality on its own.
+  playerSwitchToast?: { fromLabel: string; toLabel: string } | null;
 }
 
 const CONTROLS_HIDE_DELAY_MS = 3000;
@@ -114,6 +118,32 @@ const streakToastVariants = {
   visible: { y: 0, opacity: 1, transition: { duration: 0.48, ease: [0.16, 0.9, 0.3, 1.15] } },
   exit: { y: "-140%", opacity: 0, transition: { duration: 0.42, ease: [0.5, 0, 0.75, 0] } },
 } as const;
+
+// Bottom-right, unlike StreakToast's top-center - a celebration earns the center of attention, an
+// error-recovery notice should read as a quiet aside instead of interrupting the video the same way.
+function PlayerSwitchToast({ toast }: { toast: { fromLabel: string; toLabel: string } | null | undefined }) {
+  const { t } = useTranslation();
+  return (
+    <AnimatePresence>
+      {toast && (
+        <motion.div
+          key={`${toast.fromLabel}->${toast.toLabel}`}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 12, transition: { duration: 0.2, ease: "easeIn" } }}
+          transition={{ type: "spring", stiffness: 380, damping: 34 }}
+          className="pointer-events-none absolute bottom-20 right-5 z-10 flex max-w-xs items-center gap-2.5 rounded-xl border border-white/10 bg-black/80 px-3.5 py-2.5 shadow-2xl backdrop-blur-sm"
+        >
+          <TriangleAlert className="h-4 w-4 shrink-0 text-amber-400" strokeWidth={2} />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-white">{t("watch.playerSwitchedToast")}</p>
+            <p className="truncate text-[11px] text-zinc-400">{toast.fromLabel} → {toast.toLabel}</p>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
 
 function StreakToast({ streak }: { streak: { current: number; best: number } | null | undefined }) {
   return (
@@ -370,7 +400,7 @@ function PlayerSettingsMenu({
   </div>;
 }
 
-export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions, selectedDubId, onSelectDub, sourceSwitching, onSelectLink, onPlaybackFailure, startPositionMs, onProgress, onPlayStateChange, onCaptureThumbnail, title, episodeLabel, onBack, onPrevEpisode, onNextEpisode, onOpenEpisodes, episodesLoading, episodes, currentEpisodeId, onSelectEpisode, streakToast }: VideoPlayerProps) {
+export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions, selectedDubId, onSelectDub, sourceSwitching, onSelectLink, onPlaybackFailure, startPositionMs, onProgress, onPlayStateChange, onCaptureThumbnail, title, episodeLabel, onBack, onPrevEpisode, onNextEpisode, onOpenEpisodes, episodesLoading, episodes, currentEpisodeId, onSelectEpisode, streakToast, playerSwitchToast }: VideoPlayerProps) {
   const { t } = useTranslation();
   // Held in a ref, deliberately not read as a prop from inside the effects below. Both the source
   // setup and the media-element wiring would otherwise have to list it as a dependency, and the
@@ -1581,6 +1611,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
           </div>
         </div>
         <StreakToast streak={streakToast} />
+        <PlayerSwitchToast toast={playerSwitchToast} />
       </div>
     );
   }
@@ -1622,6 +1653,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
           one-off announcement, not part of the persistent chrome, so it shows up (and fades back
           out on its own) whether or not the controls happen to be visible right now. */}
       <StreakToast streak={streakToast} />
+      <PlayerSwitchToast toast={playerSwitchToast} />
 
       {/* Mirrors the Android app's hold-to-fast-forward chip exactly: top-center, a dark rounded
           pill with "2×" then a fast-forward icon, fade+scale in/out. */}

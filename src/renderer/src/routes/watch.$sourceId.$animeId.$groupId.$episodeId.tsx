@@ -22,6 +22,17 @@ import { ACTIVITY_DAYS, buildActivitySeries, computeStreaks } from "@/components
 // own, so this only needs to cover enter+hold, not the full round trip.
 const STREAK_TOAST_HOLD_MS = 2000;
 
+// Longer than the streak toast's hold - this one carries two link labels worth of actual reading,
+// not just a number ticking up.
+const PLAYER_SWITCH_TOAST_HOLD_MS = 4500;
+
+// What PlayerSwitchToast shows for one end of the switch - playerName is the only field every link
+// reliably has; quality is worth adding when it's there since two links from the same player most
+// often differ by quality, not by identity.
+function playerSwitchLabel(link: PlayerLink): string {
+  return link.quality ? `${link.playerName ?? "?"} (${link.quality})` : (link.playerName ?? "?");
+}
+
 export const Route = createFileRoute("/watch/$sourceId/$animeId/$groupId/$episodeId")({
   component: WatchRoute,
 });
@@ -289,6 +300,10 @@ function WatchPage() {
     void selectLink(selected);
   }, [rememberSelection, selectLink, sourceId, animeId, groupId]);
 
+  // A silent auto-recovery (see handlePlaybackFailure below) used to be indistinguishable, from the
+  // outside, from the episode just randomly changing player/quality on its own mid-watch - this is
+  // the only thing that tells the person watching that it was deliberate, not a glitch.
+  const [playerSwitchToast, setPlayerSwitchToast] = useState<{ fromLabel: string; toLabel: string } | null>(null);
   const handlePlaybackFailure = useCallback((failed: PlayerLink, reason: string): boolean => {
     if (downloadedQuery.data) return false;
     failedPlaybackUrlsRef.current.add(failed.url);
@@ -299,9 +314,15 @@ function WatchPage() {
       "player",
       `stream failed (${reason}); falling back ${failed.playerName ?? "?"}/${failed.quality ?? "?"} -> ${fallback.playerName ?? "?"}/${fallback.quality ?? "?"}`,
     );
+    setPlayerSwitchToast({ fromLabel: playerSwitchLabel(failed), toLabel: playerSwitchLabel(fallback) });
     void selectLink(fallback);
     return true;
   }, [downloadedQuery.data, queryClient, sourceId, animeId, groupId, episodeId, selectLink]);
+  useEffect(() => {
+    if (!playerSwitchToast) return;
+    const timer = setTimeout(() => setPlayerSwitchToast(null), PLAYER_SWITCH_TOAST_HOLD_MS);
+    return () => clearTimeout(timer);
+  }, [playerSwitchToast]);
 
   // Same reasoning as linksQuery above: this is only ever read once, for the initial resume-seek
   // (VideoPlayer's `startPositionMs`) - a background refetch pulling back the position *we
@@ -715,6 +736,7 @@ function WatchPage() {
           currentEpisodeId={episodeId}
           onSelectEpisode={goToEpisode}
           streakToast={streakToast}
+          playerSwitchToast={playerSwitchToast}
         />
       )}
     </div>
