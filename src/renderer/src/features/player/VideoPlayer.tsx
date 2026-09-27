@@ -409,10 +409,6 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   // reasoning the comments on `link`, onProgress and onNextEpisode already spell out.
   const playbackFailureRef = useRef(onPlaybackFailure);
   playbackFailureRef.current = onPlaybackFailure;
-  const reportPlaybackFailure = useCallback(
-    (failedLink: PlayerLink, reason: string): boolean => playbackFailureRef.current?.(failedLink, reason) ?? false,
-    [],
-  );
   // Which of the three load paths below ends up owning the <video> element's source - read by the
   // element's own "error" handler, which must stay silent while a library is driving playback and
   // reporting its own (richer) errors.
@@ -488,6 +484,36 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   // freeze what the clock/seek bar *show* at the values they held right before the switch, for as
   // long as one is in flight, instead of tracking the element through its reset.
   const frozenDisplayRef = useRef<{ time: number; duration: number } | null>(null);
+  // A stream failure (hls.js fatal error, dash.js error, the <video> element's own "error" event -
+  // see the three call sites below) asking the parent for a fallback link used to skip straight to
+  // that ask, with none of beginSourceSwitch's own bookkeeping: `link` still changed once the
+  // parent answered, tearing down this stream and setting up the fallback same as any other switch,
+  // but with no pendingSourceSwitchRef/frozenDisplayRef set up to go with it. onLoadedMetadata had
+  // nothing telling it to resume at the failure's position (so a fallback silently restarted the
+  // episode from 0 instead of picking up where the dead stream left off), and the clock/seek bar
+  // just went on displaying the failed stream's last real currentTime forever - not frozen by
+  // design, just never updated again, on a "playing" video that was, from this component's own
+  // point of view, invisible: hls.js/dash.js/<video> were all mid-teardown, so nothing was left to
+  // fire further timeupdate events into this stream's now-abandoned state. Reading straight off the
+  // <video> element here (never through the `currentTime`/`duration` state) keeps this callback as
+  // stable as it already was - those two tick on every frame of playback, and this same identity is
+  // part of the source-setup effect's own dependency array below.
+  const reportPlaybackFailure = useCallback(
+    (failedLink: PlayerLink, reason: string): boolean => {
+      const handled = playbackFailureRef.current?.(failedLink, reason) ?? false;
+      if (handled) {
+        const video = videoRef.current;
+        const position = video && Number.isFinite(video.currentTime) ? video.currentTime : 0;
+        const mediaDuration = video && Number.isFinite(video.duration) ? video.duration : 0;
+        pendingSourceSwitchRef.current = { fromUrl: failedLink.url, position, resume: video ? !video.paused : true };
+        frozenDisplayRef.current = { time: position, duration: mediaDuration };
+        setSwitchingSource(true);
+        armPlaybackTimeout("startup");
+      }
+      return handled;
+    },
+    [armPlaybackTimeout],
+  );
   const [buffered, setBuffered] = useState(0);
   // Seeded from the persisted preference rather than the element's own 1.0 default, so the very
   // first controls render already shows the volume this episode is about to play at.
