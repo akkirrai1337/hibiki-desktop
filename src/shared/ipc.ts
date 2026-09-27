@@ -47,6 +47,11 @@ export const IPC = {
   // remember to refresh what it just changed - which is exactly what went wrong before.
   sourcesChanged: "sources:changed",
 
+  // The profile banner's bytes, written to disk (see main/ipc/profileBanner.ts) rather than kept
+  // in the same localStorage-backed store as the rest of the profile - too big for that.
+  profileSetBanner: "profile:setBanner",
+  profileClearBanner: "profile:clearBanner",
+
   libraryList: "library:list",
   libraryUpsert: "library:upsert",
   libraryRemove: "library:remove",

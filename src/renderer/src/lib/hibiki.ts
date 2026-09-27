@@ -94,6 +94,10 @@ export interface HibikiApi {
     get(sourceId: string, animeId: string): Promise<number | null>;
     set(sourceId: string, animeId: string, rating: number | null): Promise<RatingSyncResult>;
   };
+  profile: {
+    setBanner(bytes: ArrayBuffer, mimeType: string): Promise<string>;
+    clearBanner(): Promise<void>;
+  };
   library: {
     list(): Promise<LibraryEntry[]>;
     upsert(entry: LibraryEntry): Promise<void>;
@@ -222,4 +226,10 @@ export function searchSource(sourceId: string, request: SearchRequest, signal?: 
 // round-trips exactly regardless of platform-specific separators/drive letters.
 export function downloadFileUrl(filePath: string): string {
   return `hibiki-download://local/${encodeURIComponent(filePath)}`;
+}
+
+// Same idea for the profile banner (see main/index.ts's `hibiki-profile` handler), just a bare
+// filename rather than a whole path - there is only ever the one file.
+export function profileBannerUrl(filename: string): string {
+  return `hibiki-profile://local/${encodeURIComponent(filename)}`;
 }

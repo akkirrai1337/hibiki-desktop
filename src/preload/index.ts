@@ -120,6 +120,11 @@ const api = {
     set: (sourceId: string, animeId: string, rating: number | null): Promise<RatingSyncResult> =>
       ipcRenderer.invoke(IPC.ratingSet, sourceId, animeId, rating),
   },
+  profile: {
+    /** Writes the banner's bytes to disk and returns its filename (see profileBannerUrl in lib/hibiki.ts). */
+    setBanner: (bytes: ArrayBuffer, mimeType: string): Promise<string> => ipcRenderer.invoke(IPC.profileSetBanner, bytes, mimeType),
+    clearBanner: (): Promise<void> => ipcRenderer.invoke(IPC.profileClearBanner),
+  },
   library: {
     list: (): Promise<LibraryEntry[]> => ipcRenderer.invoke(IPC.libraryList),
     upsert: (entry: LibraryEntry): Promise<void> => ipcRenderer.invoke(IPC.libraryUpsert, entry),

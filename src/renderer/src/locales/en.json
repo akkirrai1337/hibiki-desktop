@@ -381,6 +381,8 @@
   },
   "profile": {
     "editAvatar": "Change avatar",
+    "editBanner": "Change banner",
+    "removeBanner": "Remove banner",
     "editName": "Change name",
     "statCompletedTitles": "Titles watched",
     "statLibrarySize": "In your library",

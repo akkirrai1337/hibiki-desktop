@@ -7,8 +7,13 @@ import { persist } from "zustand/middleware";
 interface ProfileState {
   name: string | null;
   avatarDataUrl: string | null;
+  // Just the banner's filename (e.g. "banner.gif") - its bytes live on disk, written by
+  // hibiki.profile.setBanner (see main/ipc/profileBanner.ts), since a GIF or video is too big to
+  // keep as a `data:` URL in this store's own localStorage backing the way the avatar is.
+  bannerFilename: string | null;
   setName: (name: string | null) => void;
   setAvatarDataUrl: (avatarDataUrl: string | null) => void;
+  setBannerFilename: (bannerFilename: string | null) => void;
 }
 
 export const useProfileStore = create<ProfileState>()(
@@ -16,8 +21,10 @@ export const useProfileStore = create<ProfileState>()(
     (set) => ({
       name: null,
       avatarDataUrl: null,
+      bannerFilename: null,
       setName: (name) => set({ name }),
       setAvatarDataUrl: (avatarDataUrl) => set({ avatarDataUrl }),
+      setBannerFilename: (bannerFilename) => set({ bannerFilename }),
     }),
     { name: "hibiki-profile" },
   ),

@@ -381,6 +381,8 @@
   },
   "profile": {
     "editAvatar": "Изменить аватар",
+    "editBanner": "Изменить баннер",
+    "removeBanner": "Убрать баннер",
     "editName": "Изменить имя",
     "statCompletedTitles": "Тайтлов просмотрено",
     "statLibrarySize": "В библиотеке",

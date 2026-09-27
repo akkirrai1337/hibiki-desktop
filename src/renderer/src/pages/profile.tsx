@@ -4,8 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { motion } from "motion/react";
-import { Pencil, User, Check, Film, Library, Clock, CheckCircle2, Gauge, Sparkles } from "lucide-react";
-import { hibiki } from "@/lib/hibiki";
+import { Pencil, User, Check, Film, Library, Clock, CheckCircle2, Gauge, Sparkles, X } from "lucide-react";
+import { hibiki, profileBannerUrl } from "@/lib/hibiki";
 import { animeTitle } from "@/components/AnimeCard";
 import { ContinueWatchingRow } from "@/components/ContinueWatchingRow";
 import { useContinueWatching } from "@/lib/continueWatching";
@@ -49,6 +49,8 @@ export function ProfilePage() {
   const setName = useProfileStore((s) => s.setName);
   const avatarDataUrl = useProfileStore((s) => s.avatarDataUrl);
   const setAvatarDataUrl = useProfileStore((s) => s.setAvatarDataUrl);
+  const bannerFilename = useProfileStore((s) => s.bannerFilename);
+  const setBannerFilename = useProfileStore((s) => s.setBannerFilename);
 
   const libraryQuery = useQuery({ queryKey: ["library"], queryFn: () => hibiki.library.list() });
   // Same ["sources"] key index.tsx/library.tsx already query - without this, ContinueWatchingRow
@@ -131,6 +133,8 @@ export function ProfilePage() {
         onNameChange={setName}
         avatarDataUrl={avatarDataUrl}
         onAvatarChange={setAvatarDataUrl}
+        bannerFilename={bannerFilename}
+        onBannerChange={setBannerFilename}
         levelProgress={levelProgress}
         streak={{ current: currentStreak, best: bestStreak, atRisk: streakAtRisk }}
         playStreakOnMount={playStreakOnMount}
@@ -269,16 +273,101 @@ function ProfileSkeleton() {
   );
 }
 
-function ProfileHeader({ name, onNameChange, avatarDataUrl, onAvatarChange, levelProgress, streak, playStreakOnMount }: { name: string; onNameChange: (name: string | null) => void; avatarDataUrl: string | null; onAvatarChange: (dataUrl: string | null) => void; levelProgress: LevelProgress; streak: StreakInfo; playStreakOnMount: boolean }) {
+function ProfileHeader({
+  name,
+  onNameChange,
+  avatarDataUrl,
+  onAvatarChange,
+  bannerFilename,
+  onBannerChange,
+  levelProgress,
+  streak,
+  playStreakOnMount,
+}: {
+  name: string;
+  onNameChange: (name: string | null) => void;
+  avatarDataUrl: string | null;
+  onAvatarChange: (dataUrl: string | null) => void;
+  bannerFilename: string | null;
+  onBannerChange: (filename: string | null) => void;
+  levelProgress: LevelProgress;
+  streak: StreakInfo;
+  playStreakOnMount: boolean;
+}) {
   return (
-    <div className="border-b border-border px-8 pb-8 pt-10">
-      <div className="flex items-center gap-5">
+    <div className="border-b border-border">
+      <BannerPicker filename={bannerFilename} onChange={onBannerChange} />
+      <div className="flex items-center gap-5 px-8 pb-8 pt-6">
         <AvatarPicker avatarDataUrl={avatarDataUrl} onChange={onAvatarChange} />
         <div className="min-w-0 flex-1">
           <NameEditor name={name} onChange={onNameChange} streak={streak} playStreakOnMount={playStreakOnMount} />
           <LevelBar levelProgress={levelProgress} />
         </div>
       </div>
+    </div>
+  );
+}
+
+// A GIF or a short muted/looping video behind the header, in the same spot a streaming profile's
+// cover art would go - never a still image, which the avatar right below already covers.
+function BannerPicker({ filename, onChange }: { filename: string | null; onChange: (filename: string | null) => void }) {
+  const { t } = useTranslation();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  const onPick = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    // The accept attribute already narrows the OS picker to these two; this just guards a file
+    // dragged in some other way, or renamed to slip past that filter.
+    if (!file || (file.type !== "image/gif" && file.type !== "video/mp4")) return;
+    setBusy(true);
+    try {
+      const bytes = await file.arrayBuffer();
+      const savedFilename = await hibiki.profile.setBanner(bytes, file.type);
+      onChange(savedFilename);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onClear = async () => {
+    await hibiki.profile.clearBanner();
+    onChange(null);
+  };
+
+  const isVideo = filename?.toLowerCase().endsWith(".mp4");
+
+  return (
+    <div className="group relative h-36 w-full overflow-hidden bg-text/[.04] sm:h-44">
+      {filename && (
+        isVideo ? (
+          <video key={filename} src={profileBannerUrl(filename)} className="h-full w-full object-cover" autoPlay loop muted playsInline />
+        ) : (
+          <img key={filename} src={profileBannerUrl(filename)} alt="" className="h-full w-full object-cover" />
+        )
+      )}
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={busy}
+        aria-label={t("profile.editBanner")}
+        className="absolute inset-0 flex items-center justify-center bg-black/0 text-text opacity-0 transition-[opacity,background-color] group-hover:bg-black/40 group-hover:opacity-100"
+      >
+        <Pencil className="h-5 w-5" strokeWidth={2} />
+      </button>
+      {filename && (
+        <button
+          type="button"
+          onClick={onClear}
+          aria-label={t("profile.removeBanner")}
+          title={t("profile.removeBanner")}
+          className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg bg-black/50 text-text opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100"
+        >
+          <X className="h-4 w-4" strokeWidth={2.25} />
+        </button>
+      )}
+      <input ref={inputRef} type="file" accept="image/gif,video/mp4" onChange={onPick} className="hidden" />
     </div>
   );
 }

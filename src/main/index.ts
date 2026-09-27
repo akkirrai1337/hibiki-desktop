@@ -13,6 +13,7 @@ import { registerLibraryHandlers } from "./ipc/library";
 import { registerXpEventHandlers } from "./ipc/xpEvents";
 import { registerMarketplaceHandlers, repairMissingResolverDependencies } from "./ipc/marketplace";
 import { DOWNLOADS_DIR, registerDownloadHandlers } from "./ipc/downloads";
+import { PROFILE_DIR, registerProfileBannerHandlers } from "./ipc/profileBanner";
 import { installPlayerHeaderInjector, registerPlayerHeaderOrigin, registerPlayerHeaders, unregisterPlayerHeaders } from "./playerHeaders";
 import { resolveFinalStreamUrl } from "./playerStream";
 import { clearDiscordPresence, setDiscordRpcEnabled, setIdleDiscordPresence, shutdownDiscordRpc, updateDiscordPresence } from "./discordRpc";
@@ -31,8 +32,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // itself was loaded, so playback behaves identically in dev and packaged builds. Must be
 // registered before the app is ready.
 const DOWNLOAD_FILE_SCHEME = "hibiki-download";
+// Serves the profile banner (see ipc/profileBanner.ts) the same way - its own scheme rather than
+// reusing hibiki-download's, so this one can stay scoped to a folder that has nothing to do with
+// downloaded episodes.
+const PROFILE_FILE_SCHEME = "hibiki-profile";
 protocol.registerSchemesAsPrivileged([
   { scheme: DOWNLOAD_FILE_SCHEME, privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, corsEnabled: true } },
+  { scheme: PROFILE_FILE_SCHEME, privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, corsEnabled: true } },
 ]);
 
 // Keep the taskbar identity independent from Electron's development executable name.
@@ -200,6 +206,36 @@ app.whenReady().then(() => {
     }
   });
 
+  // `request.url` is `hibiki-profile://local/<filename>` - just a bare filename (see
+  // profileBannerUrl in the renderer's lib/hibiki.ts), never a path, so there is no `..` to guard
+  // against the way the download scheme above has to.
+  const PROFILE_CONTENT_TYPE: Record<string, string> = { gif: "image/gif", mp4: "video/mp4" };
+  protocol.handle(PROFILE_FILE_SCHEME, async (request) => {
+    const url = new URL(request.url);
+    const filename = decodeURIComponent(url.pathname.startsWith("/") ? url.pathname.slice(1) : url.pathname);
+    const extension = filename.split(".").pop() ?? "";
+    const contentType = PROFILE_CONTENT_TYPE[extension];
+    if (!contentType || filename.includes("/") || filename.includes("\\")) return new Response("Forbidden", { status: 403 });
+    try {
+      const filePath = path.join(PROFILE_DIR, filename);
+      const stat = await fs.stat(filePath);
+      const range = /bytes=(\d+)-(\d*)/.exec(request.headers.get("range") ?? "");
+      if (range) {
+        const start = Number(range[1]);
+        const end = range[2] ? Number(range[2]) : stat.size - 1;
+        const stream = Readable.toWeb(createReadStream(filePath, { start, end })) as ReadableStream;
+        return new Response(stream, {
+          status: 206,
+          headers: { "Content-Type": contentType, "Content-Length": String(end - start + 1), "Content-Range": `bytes ${start}-${end}/${stat.size}`, "Accept-Ranges": "bytes" },
+        });
+      }
+      const stream = Readable.toWeb(createReadStream(filePath)) as ReadableStream;
+      return new Response(stream, { status: 200, headers: { "Content-Type": contentType, "Content-Length": String(stat.size), "Accept-Ranges": "bytes" } });
+    } catch {
+      return new Response("Not found", { status: 404 });
+    }
+  });
+
   const runtime = new ExtensionRuntime(EXTENSIONS_DIR);
   runtime.reload();
   extensionRuntime = runtime;
@@ -213,6 +249,7 @@ app.whenReady().then(() => {
   // being closed and reopened via the dock/taskbar on macOS), so this needs to read whatever the
   // current window is at send-time, not capture a stale reference from registration time.
   registerDownloadHandlers(runtime, () => mainWindow);
+  registerProfileBannerHandlers();
   installPlayerHeaderInjector();
   ipcMain.handle(IPC.playerRegisterHeaders, (_e, url: string, headers: Record<string, string> | null) =>
     registerPlayerHeaders(url, headers),
