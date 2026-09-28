@@ -12,13 +12,12 @@ import { sortLabel } from "@/lib/catalogSort";
 import { SelectDropdown } from "@/components/SelectDropdown";
 import { hibiki, type LogEntry } from "@/lib/hibiki";
 
-// A bold title above its rows - the rows themselves are separate cards (see SettingsRow), matching
-// how the rest of the app groups things (Sources' extension list, Library's grid) rather than one
-// single bordered container with internal dividers, which read as off-style next to everything else.
-function SettingsSection({ title, children }: { title: string; children: React.ReactNode }) {
+// One category's worth of rows, spaced apart - no heading of its own: the category rail's own
+// label already names it, and repeating that text here just duplicated it right above the content
+// it labels.
+function SettingsSection({ children }: { children: React.ReactNode }) {
   return (
     <section className="mb-6 last:mb-0">
-      <h2 className="mb-2 px-1 text-sm font-bold text-text">{title}</h2>
       <div className="space-y-3">{children}</div>
     </section>
   );
@@ -367,7 +366,7 @@ function DiagnosticsSection() {
   };
 
   return (
-    <SettingsSection title={t("settings.diagnostics.title")}>
+    <SettingsSection>
       <SettingsRow icon={<ScrollText className="h-[18px] w-[18px]" strokeWidth={2} />}>
         <p className="text-sm font-semibold text-text">{t("settings.diagnostics.export")}</p>
         <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.diagnostics.exportHint")}</p>
@@ -476,7 +475,7 @@ function BackupSection() {
   };
 
   return (
-    <SettingsSection title={t("settings.data.title")}>
+    <SettingsSection>
       <SettingsRow icon={<DatabaseBackup className="h-[18px] w-[18px]" strokeWidth={2} />}>
         <p className="text-sm font-semibold text-text">{t("settings.data.backup")}</p>
         <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.data.backupHint")}</p>
@@ -554,7 +553,7 @@ function HomeSortSection() {
   if (!source) return null;
   const options = catalogQuery.data?.sortOptions ?? [];
   return (
-    <SettingsSection title={t("settings.home.title")}>
+    <SettingsSection>
       <SettingsRow icon={<ArrowUpDown className="h-[18px] w-[18px]" strokeWidth={2} />}>
         <p className="text-sm font-semibold text-text">{t("settings.home.sort")}</p>
         <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.home.sortHint", { source: source.name })}</p>
@@ -628,7 +627,7 @@ export function SettingsPage() {
     <div className="max-w-xl">
 
       {activeCategory === "appearance" && (
-      <SettingsSection title={t("settings.appearance.title")}>
+      <SettingsSection>
         <SettingsRow icon={theme === "dark" ? <Moon className="h-[18px] w-[18px]" strokeWidth={2} /> : <Sun className="h-[18px] w-[18px]" strokeWidth={2} />}>
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
@@ -696,7 +695,7 @@ export function SettingsPage() {
       )}
 
       {activeCategory === "general" && (
-      <SettingsSection title={t("settings.general")}>
+      <SettingsSection>
         <SettingsRow icon={<Languages className="h-[18px] w-[18px]" strokeWidth={2} />}>
           <p className="mb-2.5 text-sm font-semibold text-text">{t("settings.language")}</p>
           <div className="flex flex-wrap gap-2">
@@ -751,7 +750,7 @@ export function SettingsPage() {
       )}
 
       {activeCategory === "player" && (
-      <SettingsSection title={t("settings.player.title")}>
+      <SettingsSection>
         <SettingsRow icon={<Timer className="h-[18px] w-[18px]" strokeWidth={2} />}>
           <SecondsControl
             label={t("settings.player.autoSkipDelay")}
