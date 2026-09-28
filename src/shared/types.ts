@@ -286,6 +286,9 @@ export interface SourceInfo {
   runtime?: "NODE" | "BROWSER";
   /** Empty for every source that does not declare any - which is all of them until one does. */
   settings: SourceSetting[];
+  /** The source's own homepage, from its manifest - the fallback for a title page's "open on site"
+   * button when the source doesn't supply that specific title's own pageUrl (see AnimeTitle). */
+  website?: string | null;
 }
 
 // A source-declared (id, display title) pair - options come from the source itself (e.g. its own

@@ -68,6 +68,7 @@ interface Manifest {
   capabilities?: string[];
   resolverDependencies?: string[];
   settings?: SourceInfo["settings"];
+  website?: string;
 }
 
 export interface InstalledResolverRequirement {
@@ -245,6 +246,7 @@ export class ExtensionRuntime {
       capabilities: (manifest.capabilities ?? []) as SourceInfo["capabilities"],
       runtime: "NODE",
       settings: manifest.settings ?? [],
+      website: manifest.website ?? null,
     }));
   }
 

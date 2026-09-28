@@ -779,12 +779,15 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
             : <span className="inline-flex items-center gap-2 rounded-xl bg-text/10 px-5 py-3 text-sm font-bold text-muted">{t("detail.noEpisodes")}</span>}
           <LibraryButton category={libraryCategory} onSelect={onSetLibraryCategory} onRemove={onRemoveFromLibrary} />
           {source && <RatingButton source={source} animeId={animeId} />}
-          {/* Only when the source supplied one: an id here is whatever that site identifies titles
-              by, which is often not what its URLs use, so nothing outside the source can build this.
-              Opens in the browser - see the window-open handler in main/index.ts. */}
-          {anime.pageUrl && (
+          {/* This title's own page when the source supplied one (an id here is whatever that site
+              identifies titles by, which is often not what its URLs use, so nothing outside the
+              source can build this) - falling back to the source's own homepage from its manifest
+              so the button is a fixture of every source's page rather than something only some
+              sources happen to show. Opens in the browser - see the window-open handler in
+              main/index.ts. */}
+          {(anime.pageUrl || source?.website) && (
             <a
-              href={anime.pageUrl}
+              href={anime.pageUrl || source!.website!}
               target="_blank"
               rel="noreferrer"
               title={t("detail.openOnSite")}
