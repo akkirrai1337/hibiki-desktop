@@ -578,15 +578,84 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     if (selectedSubtitleId && !subtitleOptions.some((option) => option.id === selectedSubtitleId)) setSelectedSubtitleId(null);
   }, [subtitleOptions, selectedSubtitleId]);
   // The only way to actually turn a <track> on/off once it's mounted - matched by DOM order against
-  // subtitleOptions, which is exactly the order the <track> elements below are rendered in.
+  // subtitleOptions, which is exactly the order the <track> elements below are rendered in. The
+  // selected one goes to "hidden", not "showing" - active enough to load its cues and fire
+  // "cuechange" (see the effect below, which renders them itself), but without the browser's own
+  // built-in subtitle box, which always sits flush against the video's bottom edge with no way to
+  // move or drag it out from under the controls bar sitting right on top of it.
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
     for (let i = 0; i < video.textTracks.length; i++) {
       const option = subtitleOptions[i];
-      video.textTracks[i].mode = option && option.id === selectedSubtitleId ? "showing" : "disabled";
+      video.textTracks[i].mode = option && option.id === selectedSubtitleId ? "hidden" : "disabled";
     }
   }, [selectedSubtitleId, subtitleOptions]);
+  // The lines actually on screen right now, read off the one "hidden" TextTrack above via its own
+  // "cuechange" event rather than polled - a cue's start/end is exact, a rAF/interval poll is not,
+  // and the whole reason this exists instead of just using "showing" is precise native rendering.
+  // A VTT cue's `.text` can carry a handful of simple markup tags (<i>, <b>, <c>, ...) - stripped
+  // rather than rendered, same ceiling Android's own plain-text overlay has (see PlayerSubtitleOverlay
+  // in PlayerScreen.kt).
+  const [activeSubtitleLines, setActiveSubtitleLines] = useState<string[]>([]);
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !selectedSubtitleId) {
+      setActiveSubtitleLines([]);
+      return;
+    }
+    const index = subtitleOptions.findIndex((option) => option.id === selectedSubtitleId);
+    const track = index >= 0 ? video.textTracks[index] : undefined;
+    if (!track) {
+      setActiveSubtitleLines([]);
+      return;
+    }
+    const onCueChange = () => {
+      const cues = track.activeCues;
+      const lines: string[] = [];
+      for (let i = 0; i < (cues?.length ?? 0); i++) {
+        const cue = cues![i];
+        const text = "text" in cue ? String((cue as VTTCue).text) : "";
+        if (text) lines.push(text.replace(/<[^>]+>/g, ""));
+      }
+      setActiveSubtitleLines(lines);
+    };
+    track.addEventListener("cuechange", onCueChange);
+    onCueChange();
+    return () => {
+      track.removeEventListener("cuechange", onCueChange);
+      setActiveSubtitleLines([]);
+    };
+  }, [selectedSubtitleId, subtitleOptions]);
+  const subtitleOffset = usePlayerPrefsStore((s) => s.subtitleOffset);
+  const setSubtitleOffset = usePlayerPrefsStore((s) => s.setSubtitleOffset);
+  // Dragged live in a ref during the gesture (an offset feeding straight back into the same
+  // element's `bottom` on every pointermove would otherwise fight the persisted-store round trip -
+  // zustand's persist middleware writes to localStorage synchronously on every set()), committed to
+  // the real store only once, on pointerup.
+  const subtitleDragRef = useRef<{ pointerId: number; startY: number; startOffset: number } | null>(null);
+  const [draggingSubtitleOffset, setDraggingSubtitleOffset] = useState<number | null>(null);
+  const onSubtitleDragStart = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    subtitleDragRef.current = { pointerId: e.pointerId, startY: e.clientY, startOffset: subtitleOffset };
+    setDraggingSubtitleOffset(subtitleOffset);
+  };
+  const onSubtitleDragMove = (e: React.PointerEvent) => {
+    const drag = subtitleDragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    const containerHeight = containerRef.current?.clientHeight ?? 1;
+    // Screen Y grows downward, `bottom` grows upward - moving the pointer up must increase it.
+    const next = Math.min(containerHeight * 0.85, Math.max(0, drag.startOffset + (drag.startY - e.clientY)));
+    setDraggingSubtitleOffset(next);
+  };
+  const onSubtitleDragEnd = (e: React.PointerEvent) => {
+    const drag = subtitleDragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    subtitleDragRef.current = null;
+    if (draggingSubtitleOffset !== null) setSubtitleOffset(draggingSubtitleOffset);
+    setDraggingSubtitleOffset(null);
+  };
   const [episodeListOpen, setEpisodeListOpen] = useState(false);
   const episodeListRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1867,6 +1936,31 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
           if (file) void addCustomSubtitleFile(file);
         }}
       />
+
+      {/* Rendered by hand from the "hidden" TextTrack's own cues (see the cuechange effect above),
+          not the browser's built-in subtitle box - that one is always flush against the video's
+          bottom edge, which is exactly what put it underneath this app's own controls bar in the
+          first place, and native rendering has no drag handle to fix that with. `bottom` is a
+          player preference (see playerPrefsStore), dragged live via the pointer handlers on the
+          box itself and only committed to the store on release. */}
+      {activeSubtitleLines.length > 0 && (
+        <div className="pointer-events-none absolute inset-x-0 z-10 flex justify-center px-6" style={{ bottom: draggingSubtitleOffset ?? subtitleOffset }}>
+          <div
+            onPointerDown={onSubtitleDragStart}
+            onPointerMove={onSubtitleDragMove}
+            onPointerUp={onSubtitleDragEnd}
+            onPointerCancel={onSubtitleDragEnd}
+            onClick={(e) => e.stopPropagation()}
+            title={t("watch.subtitles.dragHint")}
+            className={cn(
+              "pointer-events-auto max-w-[85%] cursor-grab select-text whitespace-pre-line rounded-md bg-black/75 px-3 py-1.5 text-center text-lg font-medium leading-snug text-white shadow-lg active:cursor-grabbing",
+              draggingSubtitleOffset !== null && "ring-1 ring-white/40",
+            )}
+          >
+            {activeSubtitleLines.join("\n")}
+          </div>
+        </div>
+      )}
 
       {/* Sits outside the controlsVisible-gated top bar below on purpose - a streak update is a
           one-off announcement, not part of the persistent chrome, so it shows up (and fades back

@@ -52,6 +52,12 @@ interface PlayerPrefsState {
   // Whether the time label counts down to the end instead of up from the start. A preference about
   // how someone reads a player, not about one episode, so it outlives both.
   showRemainingTime: boolean;
+  // How far up from the video's bottom edge (in pixels) the subtitle overlay sits - see
+  // VideoPlayer's own draggable subtitle box. Persisted like every other player preference here:
+  // someone who drags it once to clear their window chrome shouldn't have to redo that every
+  // episode. The default clears this app's own controls bar (see the bottom gradient bar in
+  // VideoPlayer.tsx) with a little room to spare.
+  subtitleOffset: number;
   setAutoSkipSegments: (enabled: boolean) => void;
   setAutoPlayNextEpisode: (enabled: boolean) => void;
   setPlaybackSpeed: (speed: PlaybackSpeed) => void;
@@ -60,6 +66,7 @@ interface PlayerPrefsState {
   setWatchedThresholdPercent: (percent: number) => void;
   setVolume: (volume: number, muted: boolean) => void;
   toggleRemainingTime: () => void;
+  setSubtitleOffset: (offset: number) => void;
 }
 
 export const usePlayerPrefsStore = create<PlayerPrefsState>()(
@@ -74,6 +81,7 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       volume: 1,
       muted: false,
       showRemainingTime: false,
+      subtitleOffset: 72,
       setAutoSkipSegments: (autoSkipSegments) => set({ autoSkipSegments }),
       setAutoPlayNextEpisode: (autoPlayNextEpisode) => set({ autoPlayNextEpisode }),
       setPlaybackSpeed: (playbackSpeed) => set({ playbackSpeed }),
@@ -82,6 +90,7 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       setWatchedThresholdPercent: (percent) => set({ watchedThresholdPercent: clampWatchedThreshold(percent) }),
       setVolume: (volume, muted) => set({ volume: Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : 1, muted }),
       toggleRemainingTime: () => set((state) => ({ showRemainingTime: !state.showRemainingTime })),
+      setSubtitleOffset: (offset) => set({ subtitleOffset: Number.isFinite(offset) ? Math.max(0, offset) : 72 }),
     }),
     { name: "hibiki-player-prefs" },
   ),
