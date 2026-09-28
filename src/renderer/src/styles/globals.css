@@ -50,64 +50,39 @@ body,
   height: 100%;
 }
 
-/* Backs the "Interface blur" toggle in Settings (see lib/theme.ts's applyChromeBlur) - a standalone
-   setting, independent of the "app background" gradient picker (applyBackgroundTheme) that used to
-   be the only way to get this: picking a gradient always turned translucency on right along with
-   it, with no way to have one without the other. Both `.bg-app-bg` (each page's own outer
-   background) and `.bg-app-surface` (Sidebar/TitleBar) go translucent while blur is on, so whatever
-   is behind them - a chosen gradient, or just the page's own content scrolling underneath, if no
-   gradient is set - actually shows through both; only `backdrop-filter` blur is Sidebar/TitleBar-
-   only (see the comment below on why). `background-color` still reads through a CSS variable (not a
-   literal Tailwind opacity utility) purely so main/index.ts's default (fully opaque - pixel-
-   identical to before this feature existed) falls out of one shared fallback value instead of a
-   second hardcoded copy. */
 .bg-app-bg {
   background-color: rgb(var(--color-bg));
 }
-/* Theme visibility is declarative, including after a stylesheet hot reload.
-   Do not rely on a previously run JS effect to install a new alpha value. */
-.chrome-blur-active .bg-app-bg {
+/* Theme visibility is declarative, including after a stylesheet hot reload. Do not rely on a
+   previously run JS effect to install a new alpha value. */
+.bg-theme-active .bg-app-bg {
   background-color: rgb(var(--color-bg) / 0.8);
 }
 .bg-app-surface {
-  background-color: rgb(var(--color-surface) / var(--app-surface-alpha, 1));
+  background-color: rgb(var(--color-surface));
 }
 /* Popovers paint the theme themselves, including when portaled outside the app.
    An opaque backing prevents poster artwork from interfering with their text. */
 .bg-app-popover {
   background-color: rgb(var(--color-surface));
 }
-/* Only the Sidebar/TitleBar get `backdrop-filter` blur while interface blur is on - not each page's
-   own `.bg-app-bg` background, even though the original design had both (see lib/theme.ts's
-   APP_BG_ALPHA for why bg-app-bg still gets plain translucency instead, just not this). Every page
-   in PERSISTED_PAGES (see __root.tsx) stays mounted forever and just toggles `invisible`/`absolute`
+/* Only the Sidebar/TitleBar get `backdrop-filter` blur while a background gradient is picked - not
+   each page's own `.bg-app-bg` background, even though the original design had both. Every page in
+   PERSISTED_PAGES (see __root.tsx) stays mounted forever and just toggles `invisible`/`absolute`
    instead of unmounting, and Chromium has to re-composite a `backdrop-filter: blur()` layer that
    size (near-full-viewport) from scratch the moment it goes visible again - confirmed on video as a
    distinct, ugly blur flash for a frame or two on every single page revisit. The Sidebar/TitleBar
    never get toggled this way (they're not part of that visibility-swap at all), so they carry the
    full blur with none of that recompositing cost. `backdrop-filter` only gets DECLARED at all while
-   interface blur is actually turned on (via this `chrome-blur-active` class applyChromeBlur toggles
-   on <html>), not unconditionally with a 0px fallback - a `filter`/`backdrop-filter` value other
-   than `none` establishes a new containing block for any `position: fixed` descendant, even at
+   a gradient is actually picked (via this `bg-theme-active` class applyBackgroundTheme toggles on
+   <html>), not unconditionally with a 0px fallback - a `filter`/`backdrop-filter` value other than
+   `none` establishes a new containing block for any `position: fixed` descendant, even at
    blur(0px), which separately broke the anime detail page's own fixed, full-viewport blurred-poster
    backdrop (see anime.$sourceId.$animeId.tsx) the one time this sat permanently in the ancestor
    chain instead. */
-.chrome-blur-active .bg-app-surface {
-  backdrop-filter: blur(var(--app-surface-blur, 0px));
-}
-
-/* Toggled on <html> only while actively dragging the custom accent-color picker (see
-   CustomAccentInput in routes/settings.tsx). Most accent-colored elements (buttons, switches,
-   badges) carry Tailwind's `transition-colors`, which normally reads as a nice hover fade - but
-   during a drag, --color-accent itself changes many times a second, and each change restarts that
-   same ~150ms transition on every element still easing toward the *previous* value. The visible
-   result is color perpetually "catching up" a beat behind the cursor instead of tracking it live.
-   Zeroing every transition's duration for the drag's duration makes every affected element snap to
-   the new color immediately, the same way it already does once dragging stops and transitions
-   resume normally. */
-.accent-live-preview,
-.accent-live-preview * {
-  transition-duration: 0s !important;
+.bg-theme-active .bg-app-surface {
+  background-color: rgb(var(--color-surface) / 0.66);
+  backdrop-filter: blur(28px);
 }
 
 body {

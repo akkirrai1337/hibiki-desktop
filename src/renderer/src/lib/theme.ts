@@ -86,37 +86,18 @@ export function customBackgroundGradientCss(stops: { from: string; to: string })
   return `linear-gradient(135deg, ${stops.from}, ${stops.to})`;
 }
 
-// Purely the decorative gradient id now - see applyChromeBlur below for the translucency/blur this
-// used to always turn on together with picking one, which is now Settings' own separate toggle.
-// The gradient itself is still painted directly by __root.tsx (from BACKGROUND_THEME_PRESETS), not
-// read back off this CSS var anywhere - kept in sync here anyway so anything that only has access
-// to computed style (not React state) can still tell a theme is selected.
+// Picking a gradient (any id, including "custom") makes the Sidebar/TitleBar and each page's own
+// background translucent + blurred (see .bg-theme-active in globals.css), so the gradient painted
+// behind them in __root.tsx actually shows through instead of being hidden behind fully opaque
+// chrome - there is no separate toggle for this, it is just what "having a background" means. The
+// gradient itself is still painted directly by __root.tsx (from BACKGROUND_THEME_PRESETS or a
+// custom pair), not read back off this CSS var anywhere - kept in sync here anyway so anything
+// that only has access to computed style (not React state) can still tell a theme is selected.
 export function applyBackgroundTheme(id: string | null): void {
   const root = document.documentElement;
   const preset = id ? BACKGROUND_THEME_PRESETS.find((p) => p.id === id) : undefined;
+  root.classList.toggle("bg-theme-active", id !== null);
   root.style.removeProperty("--app-bg-alpha"); // Clear values left by older versions.
   if (preset) root.style.setProperty("--app-theme-gradient", preset.gradient);
   else root.style.removeProperty("--app-theme-gradient");
-}
-
-// How much of whatever is behind the Sidebar/TitleBar (a chosen background gradient, or just the
-// page's own content if none is set) is allowed to bleed through - translucent enough to actually
-// read as "something's back there", blurred enough that text sitting directly on these panels
-// (nav labels, ...) stays legible over whatever colors/artwork happen to be behind it at that
-// point. Independent of applyBackgroundTheme above - a gradient with this off just never shows
-// (the chrome and page stay fully opaque over it), and this with no gradient set instead reveals
-// the page's own content scrolling underneath, blurred - both are intentional, not a broken state.
-const APP_SURFACE_ALPHA = "0.66";
-const APP_SURFACE_BLUR = "28px";
-// Page translucency is defined by .chrome-blur-active .bg-app-bg in globals.css.
-export function applyChromeBlur(enabled: boolean): void {
-  const root = document.documentElement;
-  root.classList.toggle("chrome-blur-active", enabled);
-  if (enabled) {
-    root.style.setProperty("--app-surface-alpha", APP_SURFACE_ALPHA);
-    root.style.setProperty("--app-surface-blur", APP_SURFACE_BLUR);
-  } else {
-    root.style.removeProperty("--app-surface-alpha");
-    root.style.removeProperty("--app-surface-blur");
-  }
 }

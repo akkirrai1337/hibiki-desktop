@@ -569,8 +569,6 @@
       "backgroundThemeCustom": "Свій колір",
       "backgroundThemeCustomFrom": "Початковий колір",
       "backgroundThemeCustomTo": "Кінцевий колір",
-      "chromeBlur": "Розмиття інтерфейсу",
-      "chromeBlurHint": "Напівпрозорі бічна панель і шапка з розмиттям того, що під ними",
       "customColor": "Свій колір"
     },
     "general": "Загальні",

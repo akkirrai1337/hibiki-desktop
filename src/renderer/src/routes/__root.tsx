@@ -3,7 +3,7 @@ import { createRootRoute, Outlet, useRouterState } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query";
 import { useUiStore } from "@/stores/uiStore";
 import { useKnownSourcesStore } from "@/stores/knownSourcesStore";
-import { applyAccentColor, applyBackgroundTheme, applyChromeBlur, BACKGROUND_THEME_PRESETS, CUSTOM_BACKGROUND_THEME_ID, customBackgroundGradientCss } from "@/lib/theme";
+import { applyAccentColor, applyBackgroundTheme, BACKGROUND_THEME_PRESETS, CUSTOM_BACKGROUND_THEME_ID, customBackgroundGradientCss } from "@/lib/theme";
 import { TitleBar } from "@/components/TitleBar";
 import { Sidebar } from "@/components/Sidebar";
 import { SearchSpotlight } from "@/components/SearchSpotlight";
@@ -96,14 +96,12 @@ function RootLayoutContent() {
   useEffect(() => { applyAccentColor(accentColor, theme); }, [accentColor, theme]);
   const backgroundTheme = useUiStore((s) => s.backgroundTheme);
   useEffect(() => { applyBackgroundTheme(backgroundTheme); }, [backgroundTheme, applyBackgroundTheme]);
-  const chromeBlurEnabled = useUiStore((s) => s.chromeBlurEnabled);
-  useEffect(() => { applyChromeBlur(chromeBlurEnabled); }, [chromeBlurEnabled]);
   // Painted as this element's own `background-image`, sitting on top of its `bg-app-bg` background
   // -color (see globals.css) - not a separate fixed layer, since the Sidebar/TitleBar/page
   // backgrounds are just later DOM siblings within this same box: as long as their own backgrounds
-  // are translucent (which applyChromeBlur's CSS variables make them, only while that's actually
-  // turned on), the gradient painted here already shows through them exactly where it should,
-  // `backdrop-filter: blur` and all, with no z-index/stacking of its own to manage.
+  // are translucent (which applyBackgroundTheme's `bg-theme-active` class makes them, only while a
+  // gradient is actually picked), the gradient painted here already shows through them exactly
+  // where it should, `backdrop-filter: blur` and all, with no z-index/stacking of its own to manage.
   const customBackgroundGradient = useUiStore((s) => s.customBackgroundGradient);
   const backgroundGradient = backgroundTheme === CUSTOM_BACKGROUND_THEME_ID
     ? (customBackgroundGradient ? customBackgroundGradientCss(customBackgroundGradient) : undefined)

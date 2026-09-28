@@ -40,18 +40,14 @@ interface UiState {
   // "custom" value happening to match today's default.
   accentColor: string | null;
   // A picked preset id from lib/theme.ts's BACKGROUND_THEME_PRESETS, `"custom"` for the
-  // user-picked pair below, or null for no decorative gradient - see applyBackgroundTheme. Purely
-  // which color shows through the chrome once `chromeBlurEnabled` below actually makes it
-  // translucent; picking one does nothing on its own.
+  // user-picked pair below, or null for no decorative gradient - see applyBackgroundTheme. Picking
+  // one also makes the Sidebar/TitleBar (and each page's own background) translucent + blurred, so
+  // the gradient actually shows through the chrome instead of being hidden behind it.
   backgroundTheme: string | null;
   // The two stops of the "custom" background gradient (see backgroundTheme above) - null until the
   // custom swatch is ever actually opened, same reasoning as accentColor's own null default: no
   // literal color pair is baked in as secretly meaning "hasn't been set yet".
   customBackgroundGradient: { from: string; to: string } | null;
-  // Makes the Sidebar/TitleBar (and each page's own background) translucent + blurred - see
-  // applyChromeBlur. Off by default, same as backgroundTheme being unset used to also mean before
-  // the two were split apart: nobody who never touched either setting should see a visual change.
-  chromeBlurEnabled: boolean;
   // Whether the catalog page fetches its next page itself once the "load more" sentinel scrolls
   // into view (see catalog.tsx), instead of waiting for an explicit button click. Defaults to on -
   // Settings just gives a way back to the manual button for anyone who'd rather not have pages
@@ -83,7 +79,6 @@ interface UiState {
   setAccentColor: (color: string | null) => void;
   setBackgroundTheme: (id: string | null) => void;
   setCustomBackgroundGradient: (gradient: { from: string; to: string }) => void;
-  setChromeBlurEnabled: (enabled: boolean) => void;
   setCatalogAutoLoad: (enabled: boolean) => void;
   setZoomFactor: (factor: number) => void;
   setAutoUpdate: (enabled: boolean) => void;
@@ -110,7 +105,6 @@ export const useUiStore = create<UiState>()(
       accentColor: null,
       backgroundTheme: null,
       customBackgroundGradient: null,
-      chromeBlurEnabled: false,
       catalogAutoLoad: true,
       zoomFactor: 1,
       autoUpdate: false,
@@ -139,7 +133,6 @@ export const useUiStore = create<UiState>()(
       setAccentColor: (accentColor) => set({ accentColor }),
       setBackgroundTheme: (backgroundTheme) => set({ backgroundTheme }),
       setCustomBackgroundGradient: (customBackgroundGradient) => set({ customBackgroundGradient }),
-      setChromeBlurEnabled: (chromeBlurEnabled) => set({ chromeBlurEnabled }),
       setCatalogAutoLoad: (catalogAutoLoad) => set({ catalogAutoLoad }),
       setZoomFactor: (zoomFactor) => set({ zoomFactor: normalizeZoom(zoomFactor) }),
       setAutoUpdate: (autoUpdate) => set({ autoUpdate }),

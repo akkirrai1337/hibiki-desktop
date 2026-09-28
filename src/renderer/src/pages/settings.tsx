@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDownToLine, ArrowUpDown, Ban, Blend, Check, CheckCircle2, ChevronDown, ChevronUp, DatabaseBackup, FileText, FolderOpen, Info, Languages, MessageCircle, Moon, Palette, RefreshCw, RotateCcw, ScrollText, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
+import { ArrowDownToLine, ArrowUpDown, Ban, Check, CheckCircle2, ChevronDown, ChevronUp, DatabaseBackup, FileText, FolderOpen, Info, Languages, MessageCircle, Moon, Palette, RefreshCw, RotateCcw, ScrollText, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Switch } from "@/components/Switch";
 import { SUPPORTED_LOCALES, setLocale } from "@/lib/i18n";
 import { SKIP_TIMER_MAX_SECONDS, SKIP_TIMER_MIN_SECONDS, WATCHED_THRESHOLD_MAX_PERCENT, WATCHED_THRESHOLD_MIN_PERCENT, usePlayerPrefsStore } from "@/stores/playerPrefsStore";
 import { useUiStore } from "@/stores/uiStore";
-import { ACCENT_PRESETS, applyAccentColor, BACKGROUND_THEME_PRESETS, CUSTOM_BACKGROUND_THEME_ID, customBackgroundGradientCss, DEFAULT_ACCENT } from "@/lib/theme";
+import { ACCENT_PRESETS, BACKGROUND_THEME_PRESETS, CUSTOM_BACKGROUND_THEME_ID, customBackgroundGradientCss, DEFAULT_ACCENT } from "@/lib/theme";
 import { sortLabel } from "@/lib/catalogSort";
 import { SelectDropdown } from "@/components/SelectDropdown";
 import { hibiki, type LogEntry } from "@/lib/hibiki";
@@ -211,14 +211,9 @@ function BackgroundThemeSwatch({ gradient, active, onClick, label, icon: Icon = 
   );
 }
 
-// Same overlay-input trick as CustomAccentInput (a real native color <input>, invisible and on top
-// of the swatch it visually stands in for) but kept as its own component rather than generalizing
-// that one - CustomAccentInput's drag handling exists specifically to feed --color-accent live
-// previews through applyAccentColor, documented fragile enough already ("two bugs already got fixed
-// here") that reusing it for an unrelated gradient-stop color risked dragging that same fragility
-// into a second, differently-shaped caller for no real benefit: this one has nothing to live-preview
-// through (a gradient stop only matters once actually committed), so it only needs the plain
-// `change` event, not `input`'s drag-time stream.
+// Same overlay-input trick as CustomAccentInput below - a real native color <input>, invisible and
+// on top of the swatch it visually stands in for, kept as its own component only because it also
+// needs a `label` for the swatch's `title` and CustomAccentInput doesn't.
 function GradientStopSwatch({ value, onCommit, label }: { value: string; onCommit: (color: string) => void; label: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -241,82 +236,31 @@ function GradientStopSwatch({ value, onCommit, label }: { value: string; onCommi
   );
 }
 
-// Dragging inside the native color picker fires the `input` event continuously (tens of times a
-// second) - routing every one of those straight into setAccentColor felt laggy because each call
-// went through the persisted zustand store, which (a) re-renders this whole page and __root.tsx's
-// layout on every single tick and (b) synchronously re-serializes and writes the *entire* store to
-// localStorage every time, since zustand's persist middleware has no built-in throttling. Neither
-// cost is needed while still dragging - only the final color, once - so this applies each tick
-// straight to the CSS variable via applyAccentColor (cheap: two style.setProperty calls, no React
-// re-render at all) for instant visual feedback, and only commits to the real store via onCommit
-// on the native `change` event, which fires once when the picker actually closes.
-//
-// One more thing needed doing on top of that for the live preview to actually feel live: zeroing
-// every transition-colors duration for the drag's duration (the accent-live-preview class, see
-// globals.css) - without it, buttons/switches/badges keep easing toward whatever --color-accent
-// was a moment ago instead of snapping to the latest one, since a plain CSS variable change
-// doesn't itself animate but the elements' own `transition-colors` still does.
-//
-// Two bugs already got fixed here, both worth keeping in mind before touching this again:
-// - `input` firing far more often than the page repaints made requestAnimationFrame-coalescing the
-//   obvious move, but the first attempt cancelled the pending frame on `blur` - and Chromium fires
-//   `blur` on this input the instant its color-picker popup opens (the popup isn't a
-//   focus-following child the way a <select>'s dropdown is), so every scheduled frame kept getting
-//   cancelled again by the *next* input's blur before it ever ran. `applyAccentColor` never fired
-//   once. Fixed by only ever cancelling the pending frame on unmount, never on blur.
-// - The element used to carry `key={value}`, remounting a fresh `<input>` on every commit (a
-//   preset click, or the color picker's own `change`). If the OS/Chromium popup was still open at
-//   that instant (nothing stops the user from picking a preset first, then reopening the custom
-//   picker for a tweak, or the picker itself firing an intermediate `change` while still open for
-//   further adjustment), the popup stayed bound to a DOM node that had just been destroyed - every
-//   drag after that first commit silently went nowhere. Fixed by keeping one stable element for
-//   the component's whole lifetime and syncing its `.value` imperatively instead of remounting.
-function CustomAccentInput({ value, onCommit, theme }: { value: string; onCommit: (color: string) => void; theme: "light" | "dark" }) {
+// Used to stream every drag-time `input` tick straight into --color-accent for a live preview
+// (see GradientStopSwatch's own comment on why that mattered for a color like this one, applied
+// broadly across the whole UI, but not for a single gradient stop). Dropped: the OS color-picker
+// popup's own drag cursor turned laggy and stuttery under that traffic, because every tick forced
+// a style recalculation across every accent-colored element in the app on top of whatever the
+// picker popup itself was already doing to track the pointer. Only the final color, from the
+// native `change` event that fires once the picker closes, is worth the cost now.
+function CustomAccentInput({ value, onCommit }: { value: string; onCommit: (color: string) => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Keeps the swatch in sync when the color changes from elsewhere (a preset click) without ever
-  // recreating the element - see the second bug above for why recreating it is what broke this.
+  // recreating the element - a stable element (not `key={value}`) matters here because the OS/
+  // Chromium picker popup can still be open when a commit happens (a preset click while it's open,
+  // or the picker itself firing an intermediate `change`), and remounting would leave it bound to
+  // a destroyed DOM node.
   useEffect(() => {
     if (inputRef.current) inputRef.current.value = value;
   }, [value]);
 
-  // Native listeners attached by hand (not React's onChange/onInput props) - React normalizes
-  // onChange across input types in ways that don't cleanly separate "still dragging" from "picker
-  // closed" for type="color" specifically, and getting that distinction right is the entire point
-  // here (see the comment above this component).
-  useEffect(() => {
-    const el = inputRef.current;
-    if (!el) return;
-    const root = document.documentElement;
-    let rafHandle: number | null = null;
-
-    const onInput = () => {
-      root.classList.add("accent-live-preview");
-      if (rafHandle !== null) return;
-      rafHandle = requestAnimationFrame(() => {
-        rafHandle = null;
-        applyAccentColor(el.value, theme);
-      });
-    };
-    const onChange = () => {
-      onCommit(el.value);
-      root.classList.remove("accent-live-preview");
-    };
-    el.addEventListener("input", onInput);
-    el.addEventListener("change", onChange);
-    return () => {
-      el.removeEventListener("input", onInput);
-      el.removeEventListener("change", onChange);
-      root.classList.remove("accent-live-preview");
-      // Unmount only - see the first bug above for why this must never also happen on `blur`.
-      if (rafHandle !== null) cancelAnimationFrame(rafHandle);
-    };
-  }, [onCommit, theme]);
   return (
     <input
       ref={inputRef}
       type="color"
       defaultValue={value}
+      onChange={(e) => onCommit(e.target.value)}
       className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
     />
   );
@@ -603,8 +547,6 @@ export function SettingsPage() {
   const setBackgroundTheme = useUiStore((s) => s.setBackgroundTheme);
   const customBackgroundGradient = useUiStore((s) => s.customBackgroundGradient);
   const setCustomBackgroundGradient = useUiStore((s) => s.setCustomBackgroundGradient);
-  const chromeBlurEnabled = useUiStore((s) => s.chromeBlurEnabled);
-  const setChromeBlurEnabled = useUiStore((s) => s.setChromeBlurEnabled);
   const catalogAutoLoad = useUiStore((s) => s.catalogAutoLoad);
   const setCatalogAutoLoad = useUiStore((s) => s.setCatalogAutoLoad);
   return <div className="min-h-full bg-app-bg p-8">
@@ -638,7 +580,7 @@ export function SettingsPage() {
                 native input were the thing visibly clicked. */}
             <label className="relative flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full border border-dashed border-border text-muted transition-colors hover:border-accent/60 hover:text-text" title={t("settings.appearance.customColor")}>
               <Palette className="h-3.5 w-3.5" strokeWidth={2} />
-              <CustomAccentInput value={accentColor ?? DEFAULT_ACCENT} onCommit={setAccentColor} theme={theme} />
+              <CustomAccentInput value={accentColor ?? DEFAULT_ACCENT} onCommit={setAccentColor} />
             </label>
           </div>
         </SettingsRow>
@@ -672,16 +614,6 @@ export function SettingsPage() {
                 />
               </div>
             )}
-          </div>
-        </SettingsRow>
-
-        <SettingsRow icon={<Blend className="h-[18px] w-[18px]" strokeWidth={2} />}>
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-text">{t("settings.appearance.chromeBlur")}</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.appearance.chromeBlurHint")}</p>
-            </div>
-            <Switch checked={chromeBlurEnabled} onChange={setChromeBlurEnabled} />
           </div>
         </SettingsRow>
 
