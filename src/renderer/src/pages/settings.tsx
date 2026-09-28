@@ -35,6 +35,30 @@ function SettingsRow({ icon, children }: { icon: React.ReactNode; children: Reac
   );
 }
 
+// A single bordered card holding several plain on/off settings as compact divided lines instead of
+// each one being its own full SettingsRow card - a page-long run of nothing but a switch (Discord,
+// autoload, auto-update, ...) read as an Android checkbox list once there were enough of them,
+// all that repeated card padding/border adding bulk without adding information density.
+function SettingsGroup({ children }: { children: React.ReactNode }) {
+  return <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-text/[.03]">{children}</div>;
+}
+
+// One line inside a SettingsGroup - `indent` drops the icon and pushes the text in instead, for a
+// toggle that only makes sense as a sub-setting of the one above it (Discord's NSFW toggle under
+// Discord itself), so it reads as nested without needing its own icon slot.
+function SettingsToggleRow({ icon, title, hint, checked, onChange, indent }: { icon?: React.ReactNode; title: string; hint: string; checked: boolean; onChange: (value: boolean) => void; indent?: boolean }) {
+  return (
+    <div className={cn("flex items-center gap-3 px-4 py-3", indent ? "pl-[52px]" : "")}>
+      {!indent && <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-text/[.06] text-muted">{icon}</span>}
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-text">{title}</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-muted">{hint}</p>
+      </div>
+      <Switch checked={checked} onChange={onChange} />
+    </div>
+  );
+}
+
 // Same stepper look as SearchFiltersPanel's YearNumberInput (no-spinner input + a stacked
 // up/down chevron pair, instead of the browser's own spinner arrows) plus a slider for the same
 // value - kept in sync via local text state so a mid-edit "5" or an empty field while typing "12"
@@ -687,43 +711,38 @@ export function SettingsPage() {
           </div>
         </SettingsRow>
 
-        <SettingsRow icon={<MessageCircle className="h-[18px] w-[18px]" strokeWidth={2} />}>
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-text">{t("settings.discord.enabled")}</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.discord.hint")}</p>
-            </div>
-            <Switch checked={discordRpcEnabled} onChange={setDiscordRpcEnabled} />
-          </div>
+        <SettingsGroup>
+          <SettingsToggleRow
+            icon={<MessageCircle className="h-4 w-4" strokeWidth={2} />}
+            title={t("settings.discord.enabled")}
+            hint={t("settings.discord.hint")}
+            checked={discordRpcEnabled}
+            onChange={setDiscordRpcEnabled}
+          />
           {discordRpcEnabled && (
-            <div className="mt-4 flex items-center justify-between gap-3 border-t border-border pt-4">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-text">{t("settings.discord.ignoreNsfw")}</p>
-                <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.discord.ignoreNsfwHint")}</p>
-              </div>
-              <Switch checked={discordIgnoreNsfwSources} onChange={setDiscordIgnoreNsfwSources} />
-            </div>
+            <SettingsToggleRow
+              indent
+              title={t("settings.discord.ignoreNsfw")}
+              hint={t("settings.discord.ignoreNsfwHint")}
+              checked={discordIgnoreNsfwSources}
+              onChange={setDiscordIgnoreNsfwSources}
+            />
           )}
-        </SettingsRow>
-
-        <SettingsRow icon={<ArrowDownToLine className="h-[18px] w-[18px]" strokeWidth={2} />}>
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-text">{t("settings.catalogAutoLoad.enabled")}</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.catalogAutoLoad.hint")}</p>
-            </div>
-            <Switch checked={catalogAutoLoad} onChange={setCatalogAutoLoad} />
-          </div>
-        </SettingsRow>
-        <SettingsRow icon={<RefreshCw className="h-[18px] w-[18px]" strokeWidth={2} />}>
-          <div className="flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-text">{t("settings.autoUpdate")}</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.autoUpdateHint")}</p>
-            </div>
-            <Switch checked={autoUpdate} onChange={setAutoUpdate} />
-          </div>
-        </SettingsRow>
+          <SettingsToggleRow
+            icon={<ArrowDownToLine className="h-4 w-4" strokeWidth={2} />}
+            title={t("settings.catalogAutoLoad.enabled")}
+            hint={t("settings.catalogAutoLoad.hint")}
+            checked={catalogAutoLoad}
+            onChange={setCatalogAutoLoad}
+          />
+          <SettingsToggleRow
+            icon={<RefreshCw className="h-4 w-4" strokeWidth={2} />}
+            title={t("settings.autoUpdate")}
+            hint={t("settings.autoUpdateHint")}
+            checked={autoUpdate}
+            onChange={setAutoUpdate}
+          />
+        </SettingsGroup>
       </SettingsSection>
       )}
 
