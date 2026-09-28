@@ -592,7 +592,6 @@ export function SettingsPage() {
 
   return <div className="flex h-full bg-app-bg">
     <nav className="flex w-56 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border px-3 py-8">
-      <h1 className="mb-4 px-3 text-lg font-semibold text-text">{t("nav.settings")}</h1>
       {categories.map((c) => (
         <SettingsCategoryButton key={c.id} active={activeCategory === c.id} icon={c.icon} label={c.label} onClick={() => setCategory(c.id)} />
       ))}
