@@ -184,7 +184,12 @@
       "translation": "Voiceover",
       "dub": "Dub",
       "player": "Player",
-      "quality": "Quality"
+      "quality": "Quality",
+      "subtitles": "Subtitles"
+    },
+    "subtitles": {
+      "off": "Off",
+      "addFile": "Add subtitle file…"
     },
     "toggleTimeDisplay": "Switch between elapsed and remaining"
   },

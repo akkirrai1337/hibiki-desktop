@@ -184,7 +184,12 @@
       "translation": "Озвучення",
       "dub": "Озвучення",
       "player": "Плеєр",
-      "quality": "Якість"
+      "quality": "Якість",
+      "subtitles": "Субтитри"
+    },
+    "subtitles": {
+      "off": "Вимкнено",
+      "addFile": "Додати файл субтитрів…"
     },
     "toggleTimeDisplay": "Перемкнути на час, що залишився"
   },

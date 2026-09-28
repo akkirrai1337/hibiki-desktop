@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
 import type Hls from "hls.js";
@@ -16,6 +16,7 @@ import {
   Pause,
   PictureInPicture2,
   Play,
+  Plus,
   Settings,
   SkipBack,
   SkipForward,
@@ -28,11 +29,22 @@ import type { Episode, PlayerLink, VideoSegment } from "@shared/types";
 import { pickLinkForDimension, pickLinkForQuality, playerOptions, qualityOptions, translationOptions } from "@/lib/playerLinks";
 import { playbackUrl } from "@/lib/playbackUrl";
 import { isGenericDubTitle } from "@/lib/dubTitle";
+import { subtitleFormatFromUrl, toVtt } from "@/lib/subtitles";
 import { hibiki } from "@/lib/hibiki";
 import { cn } from "@/lib/cn";
 import { log } from "@/lib/log";
 import { PLAYBACK_SPEEDS, usePlayerPrefsStore } from "@/stores/playerPrefsStore";
 import { StreakBadge } from "@/components/StreakBadge";
+
+// One entry in the subtitle picker, and what actually backs a rendered <track> - `url` is always
+// already a playable WebVTT source (a source's own .vtt passed through as-is, or an SRT/ASS
+// conversion's blob URL, see lib/subtitles.ts), never the raw source/file URL.
+interface SubtitleOption {
+  id: string;
+  url: string;
+  label: string;
+  language?: string;
+}
 
 interface VideoPlayerProps {
   // Optional, and that is the point: while the parent is still working out *which* link to play
@@ -254,6 +266,51 @@ function ListPage({ title, options, selected, onSelect, onBack }: { title: strin
   </div>;
 }
 
+// Its own page rather than a plain ListPage: unlike every other picker here, this one needs an
+// "off" entry that isn't just one of the options, plus a trailing action row (add a local file)
+// that doesn't pick anything at all - two shapes ListPage's plain string-in/string-out contract
+// has no room for.
+function SubtitleListPage({
+  title, offLabel, addLabel, options, selectedId, onSelect, onAdd, onBack,
+}: {
+  title: string;
+  offLabel: string;
+  addLabel: string;
+  options: { id: string; label: string }[];
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+  onAdd: () => void;
+  onBack: () => void;
+}) {
+  return <div className="w-56 p-1.5">
+    <button onClick={onBack} className="mb-1 flex w-full items-center gap-1 rounded-lg px-1.5 py-2 text-left text-sm font-semibold text-white transition-colors hover:bg-white/[.06]">
+      <ChevronLeft className="h-4 w-4 shrink-0" strokeWidth={2.5} />
+      {title}
+    </button>
+    <div className="max-h-64 overflow-y-auto">
+      <button onClick={() => onSelect(null)} className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-zinc-200 transition-colors hover:bg-white/[.06]">
+        <span className="truncate">{offLabel}</span>
+        {selectedId === null && <Check className="h-4 w-4 shrink-0 text-accent-text" strokeWidth={2.5} />}
+      </button>
+      {options.map((option) => (
+        <button
+          key={option.id}
+          onClick={() => onSelect(option.id)}
+          className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-zinc-200 transition-colors hover:bg-white/[.06]"
+        >
+          <span className="truncate">{option.label}</span>
+          {selectedId === option.id && <Check className="h-4 w-4 shrink-0 text-accent-text" strokeWidth={2.5} />}
+        </button>
+      ))}
+    </div>
+    <div className="my-1 border-t border-white/[.08]" />
+    <button onClick={onAdd} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-zinc-200 transition-colors hover:bg-white/[.06]">
+      <Plus className="h-4 w-4 shrink-0" strokeWidth={2.5} />
+      <span className="truncate">{addLabel}</span>
+    </button>
+  </div>;
+}
+
 // The episode picker's own panel - a plain scrollable list rather than the settings menu's
 // drill-down, since there's only ever this one page of it. Numbered rows (not just titles) so a
 // title-less episode ("Episode 7" everywhere) is still distinguishable at a glance.
@@ -319,6 +376,7 @@ function PlayerSettingsMenu({
   translationOptions, selectedTranslation, onSelectTranslation,
   playerOptions, selectedPlayerName, onSelectPlayerName,
   qualityOptions, selectedQuality, onSelectQuality, qualityLocked,
+  subtitleOptions, selectedSubtitleId, onSelectSubtitle, onAddSubtitleFile,
   t,
 }: {
   playbackSpeed: number;
@@ -345,9 +403,13 @@ function PlayerSettingsMenu({
   // plain (non-clickable) label reading whatever quality it was downloaded in, instead of the
   // usual "> tap to pick from other resolutions" row, since there's nothing else to switch to.
   qualityLocked: boolean;
+  subtitleOptions: { id: string; label: string }[];
+  selectedSubtitleId: string | null;
+  onSelectSubtitle: (id: string | null) => void;
+  onAddSubtitleFile: () => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
-  const [page, setPage] = useState<"main" | "speed" | "dub" | "translation" | "player" | "quality">("main");
+  const [page, setPage] = useState<"main" | "speed" | "dub" | "translation" | "player" | "quality" | "subtitles">("main");
   const selectedDub = dubOptions.find((d) => d.id === selectedDubId);
 
   if (page === "speed") {
@@ -380,6 +442,18 @@ function PlayerSettingsMenu({
   if (page === "quality") {
     return <ListPage title={t("watch.settings.quality")} options={qualityOptions} selected={selectedQuality} onSelect={(v) => { onSelectQuality(v); setPage("main"); }} onBack={() => setPage("main")} />;
   }
+  if (page === "subtitles") {
+    return <SubtitleListPage
+      title={t("watch.settings.subtitles")}
+      offLabel={t("watch.subtitles.off")}
+      addLabel={t("watch.subtitles.addFile")}
+      options={subtitleOptions}
+      selectedId={selectedSubtitleId}
+      onSelect={(id) => { onSelectSubtitle(id); setPage("main"); }}
+      onAdd={() => { onAddSubtitleFile(); setPage("main"); }}
+      onBack={() => setPage("main")}
+    />;
+  }
 
   // A source with no real per-dub grouping names its one-and-only group "Episodes" - a structural
   // placeholder, not an actual dub name (see isGenericDubTitle) - so with nothing else to pick from
@@ -394,6 +468,11 @@ function PlayerSettingsMenu({
       ? selectedQuality && <MenuRow label={t("watch.settings.quality")} value={selectedQuality} />
       : qualityOptions.length > 1 && <MenuRow label={t("watch.settings.quality")} value={selectedQuality ?? "—"} onClick={() => setPage("quality")} />}
     <MenuRow label={t("watch.settings.speed")} value={`${playbackSpeed}×`} onClick={() => setPage("speed")} />
+    <MenuRow
+      label={t("watch.settings.subtitles")}
+      value={subtitleOptions.find((o) => o.id === selectedSubtitleId)?.label ?? t("watch.subtitles.off")}
+      onClick={() => setPage("subtitles")}
+    />
     <div className="my-1 border-t border-white/[.08]" />
     <ToggleRow label={t("watch.settings.autoSkipSegments")} checked={autoSkipSegments} onChange={onToggleAutoSkip} />
     <ToggleRow label={t("watch.settings.autoPlayNextEpisode")} checked={autoPlayNextEpisode} onChange={onToggleAutoPlay} />
@@ -431,6 +510,83 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   const skipCountdownSeconds = autoSkipSegments ? autoSkipDelaySeconds : skipButtonTimeoutSeconds;
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
+  // --- subtitles ---
+  // A locally picked file (see the settings menu's "add subtitle file" action) stays around
+  // regardless of dub/quality/player switches - unlike a source-supplied track it was never tied to
+  // `link` in the first place, and its `url` is already a converted, ready-to-play blob.
+  const [customSubtitles, setCustomSubtitles] = useState<SubtitleOption[]>([]);
+  const customSubtitlesRef = useRef(customSubtitles);
+  customSubtitlesRef.current = customSubtitles;
+  // Revokes every locally-added subtitle's blob URL once, on the player's actual teardown - not
+  // keyed to `customSubtitles` itself, which would revoke (and break) a URL the moment a *second*
+  // file gets added right after the first.
+  useEffect(() => () => { customSubtitlesRef.current.forEach((subtitle) => URL.revokeObjectURL(subtitle.url)); }, []);
+  const [selectedSubtitleId, setSelectedSubtitleId] = useState<string | null>(null);
+  const subtitleFileInputRef = useRef<HTMLInputElement>(null);
+  const addCustomSubtitleFile = async (file: File) => {
+    try {
+      const format = subtitleFormatFromUrl(file.name);
+      const vtt = toVtt(format, await file.text());
+      const url = URL.createObjectURL(new Blob([vtt], { type: "text/vtt" }));
+      const id = `custom:${crypto.randomUUID()}`;
+      setCustomSubtitles((prev) => [...prev, { id, url, label: file.name.replace(/\.[^./]+$/, "") }]);
+      setSelectedSubtitleId(id);
+    } catch (error) {
+      log.error("player", `failed to load local subtitle "${file.name}":`, error instanceof Error ? error.message : String(error));
+    }
+  };
+  // <track> only ever parses WebVTT - a source (or a WebView extractor, see hibiki-sources)
+  // handing over SRT/ASS needs converting to a blob URL first (see lib/subtitles.ts). Most tracks
+  // are already .vtt and skip the fetch+convert round trip entirely; only the few that aren't pay
+  // for it. Keyed on `link` itself (stable across renders that don't actually change it, same as
+  // every other effect in this component that reads off it) rather than `link?.subtitles`, which
+  // would be a fresh array on every render and re-run this on every keystroke of unrelated state.
+  const [resolvedSourceSubtitles, setResolvedSourceSubtitles] = useState<SubtitleOption[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    const blobUrls: string[] = [];
+    void (async () => {
+      const resolved = await Promise.all((link?.subtitles ?? []).map(async (subtitle) => {
+        const format = subtitleFormatFromUrl(subtitle.url);
+        const label = subtitle.label ?? subtitle.language ?? "?";
+        if (format === "vtt" || format === "unknown") return { id: subtitle.url, url: playbackUrl(subtitle.url), label, language: subtitle.language ?? undefined };
+        try {
+          const response = await fetch(playbackUrl(subtitle.url));
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const url = URL.createObjectURL(new Blob([toVtt(format, await response.text())], { type: "text/vtt" }));
+          blobUrls.push(url);
+          return { id: subtitle.url, url, label, language: subtitle.language ?? undefined };
+        } catch (error) {
+          log.error("player", `subtitle "${label}" failed to load/convert:`, error instanceof Error ? error.message : String(error));
+          return null;
+        }
+      }));
+      if (!cancelled) setResolvedSourceSubtitles(resolved.filter((entry) => entry !== null));
+    })();
+    return () => {
+      cancelled = true;
+      blobUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [link]);
+  // Memoized so the two effects below - one of them syncing native <track> state on every change -
+  // don't refire on every unrelated render just because a fresh array literal compares unequal.
+  const subtitleOptions = useMemo(() => [...resolvedSourceSubtitles, ...customSubtitles], [resolvedSourceSubtitles, customSubtitles]);
+  // A pick stops being valid the moment it's no longer in the list backing it - almost always a
+  // dub/quality/player switch replacing `link`'s own subtitle tracks wholesale. A locally added
+  // file survives this: it lives in `customSubtitles`, untouched by any of that.
+  useEffect(() => {
+    if (selectedSubtitleId && !subtitleOptions.some((option) => option.id === selectedSubtitleId)) setSelectedSubtitleId(null);
+  }, [subtitleOptions, selectedSubtitleId]);
+  // The only way to actually turn a <track> on/off once it's mounted - matched by DOM order against
+  // subtitleOptions, which is exactly the order the <track> elements below are rendered in.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    for (let i = 0; i < video.textTracks.length; i++) {
+      const option = subtitleOptions[i];
+      video.textTracks[i].mode = option && option.id === selectedSubtitleId ? "showing" : "disabled";
+    }
+  }, [selectedSubtitleId, subtitleOptions]);
   const [episodeListOpen, setEpisodeListOpen] = useState(false);
   const episodeListRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1694,10 +1850,23 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       }}
     >
       <video ref={videoRef} crossOrigin="anonymous" autoPlay className="h-full w-full object-contain">
-        {link?.subtitles?.map((track) => (
-          <track key={track.url} kind="subtitles" src={playbackUrl(track.url)} srcLang={track.language ?? undefined} label={track.label ?? track.language ?? "sub"} />
+        {/* Order matches subtitleOptions exactly - the mode-sync effect above matches this element's
+            resulting TextTrack back to its option purely by DOM/textTracks index. */}
+        {subtitleOptions.map((option) => (
+          <track key={option.id} kind="subtitles" src={option.url} srcLang={option.language} label={option.label} />
         ))}
       </video>
+      <input
+        ref={subtitleFileInputRef}
+        type="file"
+        accept=".vtt,.srt,.ass,.ssa,text/vtt"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) void addCustomSubtitleFile(file);
+        }}
+      />
 
       {/* Sits outside the controlsVisible-gated top bar below on purpose - a streak update is a
           one-off announcement, not part of the persistent chrome, so it shows up (and fades back
@@ -2049,6 +2218,10 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
                     selectedQuality={shownQuality}
                     onSelectQuality={selectQuality}
                     qualityLocked={!!offlinePlayback}
+                    subtitleOptions={subtitleOptions}
+                    selectedSubtitleId={selectedSubtitleId}
+                    onSelectSubtitle={setSelectedSubtitleId}
+                    onAddSubtitleFile={() => subtitleFileInputRef.current?.click()}
                     t={t}
                   />
                 </div>
