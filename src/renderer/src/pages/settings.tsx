@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDownToLine, ArrowUpDown, Ban, Check, CheckCircle2, ChevronDown, ChevronUp, DatabaseBackup, FileText, FolderOpen, Info, Languages, MessageCircle, Moon, Palette, RefreshCw, RotateCcw, ScrollText, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
+import { ArrowDownToLine, ArrowUpDown, Ban, Check, CheckCircle2, ChevronDown, ChevronUp, DatabaseBackup, FileText, FolderOpen, Home, Info, Languages, MessageCircle, MonitorPlay, Moon, Palette, RefreshCw, RotateCcw, ScrollText, SlidersHorizontal, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Switch } from "@/components/Switch";
 import { SUPPORTED_LOCALES, setLocale } from "@/lib/i18n";
@@ -263,6 +263,28 @@ function CustomAccentInput({ value, onCommit }: { value: string; onCommit: (colo
       onChange={(e) => onCommit(e.target.value)}
       className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
     />
+  );
+}
+
+// Same active-item language as Sidebar's own NavLink (left accent bar + a soft fill, see
+// components/Sidebar.tsx) - reusing that exact visual instead of inventing a second "selected tab"
+// style keeps this category rail reading as the same kind of navigation the rest of the app already
+// uses, just scoped to this one page instead of the whole app.
+function SettingsCategoryButton({ active, icon: Icon, label, onClick }: { active: boolean; icon: typeof Sun; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-muted transition-colors hover:bg-text/[.05] hover:text-text",
+        active && "text-text",
+      )}
+    >
+      <span className={cn("absolute -left-3 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-accent transition-opacity", active ? "opacity-100" : "opacity-0")} />
+      {active && <span className="absolute inset-0 rounded-lg bg-text/[.08]" />}
+      <span className="relative z-10 shrink-0"><Icon className="h-[17px] w-[17px]" strokeWidth={2} /></span>
+      <span className="relative z-10 truncate">{label}</span>
+    </button>
   );
 }
 
@@ -549,10 +571,36 @@ export function SettingsPage() {
   const setCustomBackgroundGradient = useUiStore((s) => s.setCustomBackgroundGradient);
   const catalogAutoLoad = useUiStore((s) => s.catalogAutoLoad);
   const setCatalogAutoLoad = useUiStore((s) => s.setCatalogAutoLoad);
-  return <div className="min-h-full bg-app-bg p-8">
-    <div className="mx-auto max-w-xl">
-      <h1 className="mb-6 text-xl font-semibold text-text">{t("nav.settings")}</h1>
+  // Same "sources" query HomeSortSection itself reads (shared cache, no extra request) - just to
+  // decide whether that category belongs in the rail at all, the same condition HomeSortSection
+  // already used to silently render nothing for.
+  const sourcesQuery = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });
+  const hasSource = (sourcesQuery.data?.length ?? 0) > 0;
+  const categories = [
+    { id: "appearance" as const, label: t("settings.appearance.title"), icon: Palette },
+    { id: "general" as const, label: t("settings.general"), icon: SlidersHorizontal },
+    { id: "player" as const, label: t("settings.player.title"), icon: MonitorPlay },
+    ...(hasSource ? [{ id: "home" as const, label: t("settings.home.title"), icon: Home }] : []),
+    { id: "data" as const, label: t("settings.data.title"), icon: DatabaseBackup },
+    { id: "diagnostics" as const, label: t("settings.diagnostics.title"), icon: ScrollText },
+  ];
+  const [category, setCategory] = useState<(typeof categories)[number]["id"]>("appearance");
+  // The "Home" tab can disappear (last source just got uninstalled) out from under whichever tab
+  // was open - falls back to the first one rather than rendering an empty pane for a category that
+  // no longer exists in the rail.
+  const activeCategory = categories.some((c) => c.id === category) ? category : categories[0].id;
 
+  return <div className="flex h-full bg-app-bg">
+    <nav className="flex w-56 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border px-3 py-8">
+      <h1 className="mb-4 px-3 text-lg font-semibold text-text">{t("nav.settings")}</h1>
+      {categories.map((c) => (
+        <SettingsCategoryButton key={c.id} active={activeCategory === c.id} icon={c.icon} label={c.label} onClick={() => setCategory(c.id)} />
+      ))}
+    </nav>
+    <div className="min-w-0 flex-1 overflow-y-auto p-8">
+    <div className="mx-auto max-w-xl">
+
+      {activeCategory === "appearance" && (
       <SettingsSection title={t("settings.appearance.title")}>
         <SettingsRow icon={theme === "dark" ? <Moon className="h-[18px] w-[18px]" strokeWidth={2} /> : <Sun className="h-[18px] w-[18px]" strokeWidth={2} />}>
           <div className="flex items-center justify-between gap-3">
@@ -618,7 +666,9 @@ export function SettingsPage() {
         </SettingsRow>
 
       </SettingsSection>
+      )}
 
+      {activeCategory === "general" && (
       <SettingsSection title={t("settings.general")}>
         <SettingsRow icon={<Languages className="h-[18px] w-[18px]" strokeWidth={2} />}>
           <p className="mb-2.5 text-sm font-semibold text-text">{t("settings.language")}</p>
@@ -676,7 +726,9 @@ export function SettingsPage() {
           </div>
         </SettingsRow>
       </SettingsSection>
+      )}
 
+      {activeCategory === "player" && (
       <SettingsSection title={t("settings.player.title")}>
         <SettingsRow icon={<Timer className="h-[18px] w-[18px]" strokeWidth={2} />}>
           <SecondsControl
@@ -703,10 +755,12 @@ export function SettingsPage() {
           />
         </SettingsRow>
       </SettingsSection>
+      )}
 
-      <HomeSortSection />
-      <BackupSection />
-      <DiagnosticsSection />
+      {activeCategory === "home" && <HomeSortSection />}
+      {activeCategory === "data" && <BackupSection />}
+      {activeCategory === "diagnostics" && <DiagnosticsSection />}
+    </div>
     </div>
   </div>;
 }
