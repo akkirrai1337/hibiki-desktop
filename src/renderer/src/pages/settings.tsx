@@ -621,7 +621,11 @@ export function SettingsPage() {
       ))}
     </nav>
     <div className="min-w-0 flex-1 overflow-y-auto p-8">
-    <div className="mx-auto max-w-xl">
+    {/* Not centered (`mx-auto`) - a wide window would then float this column in the middle of
+        whatever's left of the rail, forcing a long mouse trip from the category just clicked over
+        to the settings it opened. Left-aligned right next to the rail instead, same as the rail
+        itself, so the two stay close together regardless of window width. */}
+    <div className="max-w-xl">
 
       {activeCategory === "appearance" && (
       <SettingsSection title={t("settings.appearance.title")}>
