@@ -73,8 +73,8 @@ interface CompiledExtension {
 }
 
 // execute.ts lives for the lifetime of a pooled worker. vm.Script is compiled code and can run in
-// any number of fresh contexts, so keep that expensive, source-independent part while rebuilding
-// the sandbox/provider below for every call (storage and bridge bindings remain call-specific).
+// any number of contexts, so the expensive, source-independent part is kept here (a context is only
+// rebuilt when the script changes on disk - see persistedProviders below).
 // mtime + size makes an installed source update visible without having to restart the workers.
 const compiledExtensions = new Map<string, CompiledExtension>();
 
@@ -88,12 +88,49 @@ function loadCompiledExtension(scriptPath: string): vm.Script {
   return script;
 }
 
+// What the call in flight supplies to the script's host globals. Everything else in a persisted
+// context (the script's own module-scope `var`s) outlives the call, but these are per-call: the
+// storage snapshot is read at dispatch, and the bridge providers belong to the worker's current
+// main-thread link.
+interface CallBindings {
+  providers: ExtensionBridgeProviders;
+  storage?: ExtensionStorageBinding;
+}
+
+interface PersistedProvider {
+  mtimeMs: number;
+  size: number;
+  hasNetFetch: boolean;
+  provider: Record<string, unknown>;
+  bindings: { current: CallBindings };
+}
+
+// A context per (worker, script), kept for the worker's whole life instead of rebuilt every call.
+// Extensions are written against the Rhino/Android model where a Provider instance lives on and
+// module-scope variables persist between calls - animepahe/anikappa keep their solved Cloudflare
+// session in `cachedSession`, and several sources memoise filter definitions and per-title lookups.
+// Rebuilding the context per call silently reset all of that, so every fetch replayed the doomed
+// bare attempt (403) before falling back to a challenge it had already solved a call earlier.
+// mtime + size still invalidates a stale context when an installed source is updated.
+const persistedProviders = new Map<string, PersistedProvider>();
+
 function loadProvider(
   scriptPath: string,
   sourceId: string,
   providers: ExtensionBridgeProviders,
   storage?: ExtensionStorageBinding,
 ): Record<string, unknown> {
+  const stat = fs.statSync(scriptPath);
+  const hasNetFetch = providers.netFetch !== undefined;
+  const persisted = persistedProviders.get(scriptPath);
+  if (persisted && persisted.mtimeMs === stat.mtimeMs && persisted.size === stat.size && persisted.hasNetFetch === hasNetFetch) {
+    persisted.bindings.current = { providers, storage };
+    return persisted.provider;
+  }
+
+  const bindings = { current: { providers, storage } as CallBindings };
+  // Delegating wrappers read `bindings.current` at call time, so a persisted context always talks to
+  // the *current* call's bridge and storage, never the first call's.
   const globals = buildExtensionGlobals({
     logger: {
       log: (m) => console.log(`[${sourceId}]`, m),
@@ -101,10 +138,19 @@ function loadProvider(
       error: (m) => console.error(`[${sourceId}]`, m),
     },
     preferredLanguage: "ru",
-    challenge: providers.challenge ?? notImplementedChallengeProvider,
-    browserFetch: providers.browserFetch ?? notImplementedBrowserFetchProvider,
-    netFetch: providers.netFetch,
-    storage,
+    challenge: { acquire: (...args) => (bindings.current.providers.challenge ?? notImplementedChallengeProvider).acquire(...args) },
+    browserFetch: { fetch: (...args) => (bindings.current.providers.browserFetch ?? notImplementedBrowserFetchProvider).fetch(...args) },
+    netFetch: hasNetFetch
+      ? {
+          fetch: (...args) => bindings.current.providers.netFetch!.fetch(...args),
+          fetchAll: (...args) => bindings.current.providers.netFetch!.fetchAll(...args),
+        }
+      : undefined,
+    storage: {
+      get: (key) => bindings.current.storage?.get(key) ?? null,
+      set: (key, value) => bindings.current.storage?.set(key, value),
+      remove: (key) => bindings.current.storage?.remove(key),
+    },
   });
 
   const sandbox: Record<string, unknown> = { ...globals, Provider: undefined };
@@ -114,6 +160,7 @@ function loadProvider(
 
   const provider = sandbox.Provider as Record<string, unknown> | undefined;
   if (!provider) throw new Error(`Extension ${sourceId} did not define a Provider object`);
+  persistedProviders.set(scriptPath, { mtimeMs: stat.mtimeMs, size: stat.size, hasNetFetch, provider, bindings });
   return provider;
 }
 
