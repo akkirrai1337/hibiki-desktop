@@ -7,7 +7,7 @@ import { hibiki } from "@/lib/hibiki";
 import { useCachedTitleList } from "@/lib/cachedTitleList";
 import { AnimeCard, PosterGrid, PosterGridSkeleton, animeTitle } from "@/components/AnimeCard";
 import { ContinueWatchingFrameRow } from "@/components/ContinueWatchingRow";
-import { ReleaseCalendarRow } from "@/components/ReleaseCalendarRow";
+import { ReleaseCalendarPanel } from "@/components/ReleaseCalendarPanel";
 import { useReleaseCalendar } from "@/lib/useReleaseCalendar";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { HERO_ACTION_CLASS, HeroCarousel, type HeroSlide } from "@/components/Hero";
@@ -90,7 +90,7 @@ export function CatalogPage() {
   // caches per-title lookups under query keys both pages agree on so whichever loads first does
   // the actual work.
   const { hasHistory } = useContinueWatching();
-  const hasUpcoming = useReleaseCalendar().days.length > 0;
+  const releaseDays = useReleaseCalendar().days;
   const heroSlides = useMemo(() => hero.data ?? [], [hero.data]);
   const poolTitles = useMemo(() => pool.data ?? [], [pool.data]);
   const isNew = !hasHistory;
@@ -123,8 +123,8 @@ export function CatalogPage() {
         {!isNew && <Section title={t("catalog.continueWatching")} action={t("catalog.viewHistory")} to="/history">
           <ContinueWatchingFrameRow sourceById={sourceById} />
         </Section>}
-        {hasUpcoming && <Section title={t("calendar.title")} action={t("calendar.openAll")} to="/calendar">
-          <ReleaseCalendarRow />
+        {releaseDays.length > 0 && <Section title={t("calendar.title")} action={t("calendar.openAll")} to="/calendar">
+          <ReleaseCalendarPanel days={releaseDays} />
         </Section>}
         <Section title={isNew ? t("catalog.popularNow") : t("catalog.becauseYouWatched")} action={t("catalog.openCatalog")} to="/catalog">
           {pool.isLoading ? <PosterGridSkeleton count={15} /> : <PosterGrid>{recommended.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</PosterGrid>}

@@ -661,6 +661,7 @@
     "tomorrow": "Tomorrow",
     "episode": "Episode {{number}}",
     "newEpisode": "New episode",
-    "openAll": "Full calendar"
+    "openAll": "Full calendar",
+    "noneOnDay": "Nothing airs on this day"
   }
 }
