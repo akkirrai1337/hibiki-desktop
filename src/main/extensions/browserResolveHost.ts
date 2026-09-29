@@ -48,6 +48,10 @@ function resolverUrlLabel(raw: string): string {
 const MEDIA_URL_PATTERN = /\.(m3u8|mpd|mp4)(\?|#|$)/i;
 const PLAYLIST_URL_PATTERN = /\.m3u8(\?|#|$)/i;
 const PLAYLIST_HEAD_BYTES = 2048;
+// A request literally for ".../master.m3u8": the player already asked for the playlist that lists every
+// rendition, so waiting for more requests to settle can only add renditions it already knows about.
+// buildResult still validates it before anything is returned.
+const MASTER_PLAYLIST_REQUEST_PATTERN = /\/master(?:[-_.][^/?#]*)?\.m3u8(?:[?#]|$)/i;
 // An HLS master playlist lists every rendition, which is exactly what the resolver script spends
 // its time collecting one quality at a time. Finding one means the collecting is already done.
 
@@ -607,6 +611,11 @@ export async function performBrowserResolve(
       if (masters.length > 0) {
         logger.debug("resolve", `master playlist(s) captured on probe ${probe + 1}: ${masters.length}; stopping early`);
         return await buildResult(masters, [], link, win, target, deadline, probes, capturedRequestHeaders);
+      }
+
+      if (networkCaptures.some((capture) => MASTER_PLAYLIST_REQUEST_PATTERN.test(capture.url))) {
+        logger.debug("resolve", `master playlist requested by the page on probe ${probe + 1}; stopping early`);
+        break;
       }
 
       const totalCount = state.captures.length + networkCaptures.length;
