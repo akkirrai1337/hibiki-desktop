@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useMemo, useRef } from "react";
+import { keepPreviousData, useQueries, useQuery } from "@tanstack/react-query";
 import { hibiki } from "@/lib/hibiki";
 import type { AnimeTitle, WatchProgress } from "@shared/types";
 
@@ -58,13 +58,23 @@ function distinctTitles(rows: WatchProgress[]): WatchProgress[] {
  */
 function useCardTitles(rows: WatchProgress[]): Record<string, AnimeTitle | null | undefined> {
   const unique = useMemo(() => distinctTitles(rows), [rows]);
+  const keys = unique.map((row) => `${row.sourceId}:${row.titleId}`);
   const cached = useQuery({
-    queryKey: ["cached-titles", unique.map((row) => `${row.sourceId}:${row.titleId}`).join(",")],
+    queryKey: ["cached-titles", keys.join(",")],
     queryFn: () => hibiki.sources.cachedTitles(unique.map((row) => ({ sourceId: row.sourceId, animeId: row.titleId }))),
     enabled: unique.length > 0,
     staleTime: Infinity,
+    // Removing a title changes the key, and a key with no answer yet used to empty `cachedTitles`
+    // below - which un-created every per-title query and turned the whole row into skeletons until
+    // the new lookup landed (a visible flash and jump on "delete watch data"). Holding the previous
+    // answer keeps the surviving cards on screen; it is only trusted while the new set of titles is a
+    // subset of the one it was fetched for (see `answeredKeys`) - a title that was not in it needs
+    // its own lookup before its query is created, for the reason above.
+    placeholderData: keepPreviousData,
   });
-  const cachedTitles = cached.data;
+  const answeredKeys = useRef<Set<string>>(new Set());
+  if (cached.isSuccess && !cached.isPlaceholderData) answeredKeys.current = new Set(keys);
+  const cachedTitles = cached.isPlaceholderData && !keys.every((key) => answeredKeys.current.has(key)) ? undefined : cached.data;
 
   const queries = useQueries({
     queries: (cachedTitles ? unique : []).map((row) => {

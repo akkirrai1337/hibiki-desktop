@@ -10,6 +10,7 @@ import { usePopoverTheme } from "@/lib/usePopoverTheme";
 import { useKnownSourcesStore } from "@/stores/knownSourcesStore";
 import type { ContinueWatchingSlot } from "@/lib/continueWatching";
 import { hibiki } from "@/lib/hibiki";
+import type { WatchProgress } from "@shared/types";
 
 // The 16:9 card built around a captured frame from the player, shared by the home page's
 // "continue watching" shelf and the full history page - the two used to carry their own
@@ -69,6 +70,13 @@ export function WatchFrameCard({ slot, sourceById, dateLabel, showWatchedBadge, 
   // Both call sites end up invalidating the same two queries; only *what* gets removed differs
   // (a title's whole progress on the home row, one episode's entry in the history feed).
   const onRemoveProgress = async () => {
+    // Whole-title removal only: the history feed removes a single episode's row, and dropping every
+    // row of the title from its cache would take the other episodes with it until the refetch.
+    if (!remove) {
+      // Gone from the row the instant it is chosen, not after the round trip and refetch - the list
+      // used to sit there for a beat and then redraw.
+      queryClient.setQueriesData<WatchProgress[]>({ queryKey: ["recent-progress"] }, (current) => current?.filter((row) => !(row.sourceId === sourceId && row.titleId === titleId)));
+    }
     await (remove ? remove.run() : hibiki.progress.removeForAnime(sourceId, titleId));
     queryClient.invalidateQueries({ queryKey: ["recent-progress"] });
     queryClient.invalidateQueries({ queryKey: ["progress-all", sourceId, titleId] });

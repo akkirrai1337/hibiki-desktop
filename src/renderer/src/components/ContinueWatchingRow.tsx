@@ -11,6 +11,7 @@ import { WatchFrameCard } from "@/components/WatchFrameCard";
 import { usePopoverTheme } from "@/lib/usePopoverTheme";
 import { useKnownSourcesStore } from "@/stores/knownSourcesStore";
 import { hibiki } from "@/lib/hibiki";
+import type { WatchProgress } from "@shared/types";
 
 // Same breakpoint the catalog/"you might like" Grid uses for its own 5→6 column jump (see
 // index.tsx/catalog.tsx) - kept in sync so both read as the same underlying layout rule rather
@@ -77,6 +78,9 @@ export function ContinueWatchingCard({ slot, sourceById, compact }: { slot: Cont
   const remembered = knownSources[sourceId];
   const cardSource: AnimeCardSource | undefined = installedSource ?? (remembered ? { ...remembered, missing: true } : undefined);
   const onRemoveProgress = async () => {
+    // Gone from the row the instant it is chosen, not after the round trip and refetch - the list
+    // used to sit there for a beat and then redraw.
+    queryClient.setQueriesData<WatchProgress[]>({ queryKey: ["recent-progress"] }, (current) => current?.filter((row) => !(row.sourceId === sourceId && row.titleId === titleId)));
     await hibiki.progress.removeForAnime(sourceId, titleId);
     queryClient.invalidateQueries({ queryKey: ["recent-progress"] });
     queryClient.invalidateQueries({ queryKey: ["progress-all", sourceId, titleId] });
