@@ -115,6 +115,7 @@ async function createLoadedWindow(key: string, url: string, forceReload: boolean
   if (previous && !previous.window.isDestroyed()) previous.window.destroy();
 
   const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, images: false } });
+  win.webContents.setAudioMuted(true); // A challenge/fetch page is never meant to be heard.
   win.on("closed", () => {
     if (pool.get(key)?.window === win) pool.delete(key);
   });

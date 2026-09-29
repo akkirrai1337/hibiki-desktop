@@ -193,10 +193,12 @@ function acquireResolverWindow(refererUrl: string | null): { window: BrowserWind
   }
   const any = takeIdleWindow(() => true);
   if (any) return { window: any.window, hasReferer: false };
-  return {
-    window: new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, images: false } }),
-    hasReferer: false,
-  };
+  const window = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, images: false } });
+  // The embed page's own player autoplays while the extractor waits for its stream requests, and a
+  // hidden window still has a working audio output - the episode was audible for the seconds this
+  // takes, before our own player had even started. Nothing here is ever meant to be heard.
+  window.webContents.setAudioMuted(true);
+  return { window, hasReferer: false };
 }
 
 async function releaseResolverWindow(win: BrowserWindow, refererUrl: string | null): Promise<void> {
