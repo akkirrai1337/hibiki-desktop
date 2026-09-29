@@ -28,6 +28,7 @@ import type {
   UpdateDownloadProgress,
   WatchProgress,
   XpEvent,
+  MemorySnapshot,
 } from "@shared/types";
 
 export interface LogEntry {
@@ -157,6 +158,8 @@ export interface HibikiApi {
     export(): Promise<string | null>;
     recent(limit?: number): Promise<LogEntry[]>;
     openFolder(): void;
+    /** Per-process memory; `record` also writes it into the log. */
+    memory(record?: boolean): Promise<MemorySnapshot>;
     append(level: LogEntry["level"], scope: string, message: string): void;
   };
   backup: {

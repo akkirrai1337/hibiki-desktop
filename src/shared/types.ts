@@ -515,3 +515,27 @@ export interface CachedTitleListEntry {
   titles: AnimeTitle[];
   cachedAt: number;
 }
+
+/** One Electron process in a memory snapshot - see main/memoryDiagnostics.ts. */
+export interface MemoryProcess {
+  pid: number;
+  /** Electron's own process type: Browser (main), Tab (a renderer), GPU, Utility, ... */
+  type: string;
+  /** The Chromium service name for utility processes ("Network Service", ...), when it has one. */
+  name: string | null;
+  /** What a renderer is showing. The app's own window and the hidden resolver windows differ here. */
+  url: string | null;
+  /** Working set in MB: resident memory, including pages shared with other processes. */
+  workingSetMb: number;
+}
+
+export interface MemorySnapshot {
+  time: number;
+  processes: MemoryProcess[];
+  /** Sum of the working sets. Shared pages are counted once per process, so it overstates a little. */
+  totalMb: number;
+  /** The main process's own JS heap, separate from its working set above. */
+  mainHeapUsedMb: number;
+  /** Windows the app created that are not the visible main one (hidden resolver/fetch windows). */
+  rendererCount: number;
+}

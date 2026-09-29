@@ -30,6 +30,7 @@ import type {
   WatchProgress,
   RatingSyncResult,
   XpEvent,
+  MemorySnapshot,
 } from "@shared/types";
 
 const api = {
@@ -227,6 +228,7 @@ const api = {
     recent: (limit?: number): Promise<Array<{ time: number; level: string; scope: string; message: string }>> =>
       ipcRenderer.invoke(IPC.logsRecent, limit),
     openFolder: (): void => { ipcRenderer.send(IPC.logsOpenFolder); },
+    memory: (record?: boolean): Promise<MemorySnapshot> => ipcRenderer.invoke(IPC.diagnosticsMemory, record),
     append: (level: "debug" | "info" | "warn" | "error", scope: string, message: string): void => {
       ipcRenderer.send(IPC.logsAppend, level, scope, message);
     },

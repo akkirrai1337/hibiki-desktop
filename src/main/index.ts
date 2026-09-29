@@ -22,6 +22,7 @@ import { DEEP_LINK_SCHEME, findDeepLinkInArgv, parseWatchDeepLink } from "./deep
 import { createBackup, restoreBackup } from "./backup";
 import { initLogger, log, logger, recentEntries, type LogEntry, type LogLevel } from "./logger";
 import { exportLog, openLogFolder } from "./logExport";
+import { collectMemorySnapshot, formatMemorySnapshot } from "./memoryDiagnostics";
 import { checkForUpdate, downloadUpdate, installUpdate } from "./appUpdates";
 import type { AppUpdate, DiscordPresence, UpdateDownloadProgress } from "@shared/types";
 
@@ -409,6 +410,13 @@ app.whenReady().then(() => {
   ipcMain.handle(IPC.logsExport, () => exportLog());
   ipcMain.handle(IPC.logsRecent, (_e, limit?: number): LogEntry[] => recentEntries(limit ?? 300));
   ipcMain.on(IPC.logsOpenFolder, () => openLogFolder());
+  // Per-process memory for Settings > Diagnostics. `record` also writes the snapshot into the log,
+  // so an exported log carries the numbers the user was looking at.
+  ipcMain.handle(IPC.diagnosticsMemory, (_e, record?: boolean) => {
+    const snapshot = collectMemorySnapshot();
+    if (record) log("info", "memory", formatMemorySnapshot(snapshot));
+    return snapshot;
+  });
   // The renderer half of the log: playback errors (hls.js, <video> media errors, a failed
   // resolvePlayerLink) only ever surface there, and those are exactly the lines that make an
   // exported log answer "why didn't this episode play" instead of stopping at "the links loaded".

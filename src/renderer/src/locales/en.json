@@ -633,7 +633,18 @@
       "show": "Show log",
       "hide": "Hide log",
       "empty": "The log is empty.",
-      "exported": "Log saved to {{path}}"
+      "exported": "Log saved to {{path}}",
+      "memory": "Memory",
+      "memoryHint": "How much memory each app process uses. Hidden source windows are used to load episodes and should close on their own.",
+      "memoryShow": "Show usage",
+      "memoryHide": "Hide",
+      "memoryRecord": "Write to log",
+      "memoryRecorded": "Written",
+      "memoryTotal": "Total",
+      "memoryMain": "Main process",
+      "memoryWindow": "App window",
+      "memoryHidden": "Hidden window: {{url}}",
+      "memoryFootnote": "Main process heap: {{heap}} MB. Shared pages are counted in every process, so the total is slightly overstated."
     },
     "autoUpdate": "Auto-update",
     "autoUpdateHint": "Check for updates on launch and install them automatically. The app will close and start the installer."

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDownToLine, ArrowUpDown, Ban, Check, CheckCircle2, ChevronDown, ChevronUp, DatabaseBackup, FileText, FolderOpen, Home, Info, Languages, MessageCircle, MonitorPlay, Moon, Palette, RefreshCw, RotateCcw, ScrollText, SlidersHorizontal, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
+import { MemoryStick, ArrowDownToLine, ArrowUpDown, Ban, Check, CheckCircle2, ChevronDown, ChevronUp, DatabaseBackup, FileText, FolderOpen, Home, Info, Languages, MessageCircle, MonitorPlay, Moon, Palette, RefreshCw, RotateCcw, ScrollText, SlidersHorizontal, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Switch } from "@/components/Switch";
 import { SUPPORTED_LOCALES, setLocale } from "@/lib/i18n";
@@ -11,6 +11,7 @@ import { ACCENT_PRESETS, BACKGROUND_THEME_PRESETS, CUSTOM_BACKGROUND_THEME_ID, c
 import { sortLabel } from "@/lib/catalogSort";
 import { SelectDropdown } from "@/components/SelectDropdown";
 import { hibiki, type LogEntry } from "@/lib/hibiki";
+import type { MemorySnapshot } from "@shared/types";
 
 // One category's worth of rows, spaced apart - no heading of its own: the category rail's own
 // label already names it, and repeating that text here just duplicated it right above the content
@@ -366,6 +367,7 @@ function DiagnosticsSection() {
   };
 
   return (
+    <>
     <SettingsSection>
       <SettingsRow icon={<ScrollText className="h-[18px] w-[18px]" strokeWidth={2} />}>
         <p className="text-sm font-semibold text-text">{t("settings.diagnostics.export")}</p>
@@ -416,6 +418,73 @@ function DiagnosticsSection() {
           <p className={cn("mt-2 select-text text-xs leading-relaxed", status.kind === "error" ? "text-rose-500" : "text-muted")}>
             {status.message}
           </p>
+        )}
+      </SettingsRow>
+    </SettingsSection>
+    <MemoryDiagnostics />
+    </>
+  );
+}
+
+// Where the app's memory actually sits: one row per Electron process, biggest first. Polled only
+// while open, like the log preview above.
+function MemoryDiagnostics() {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const [snapshot, setSnapshot] = useState<MemorySnapshot | null>(null);
+  const [recorded, setRecorded] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const load = () => { hibiki.logs.memory().then((next) => { if (!cancelled) setSnapshot(next); }).catch(() => {}); };
+    load();
+    const timer = setInterval(load, 2000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [open]);
+
+  const processLabel = (process: MemorySnapshot["processes"][number]) => {
+    if (process.type === "Browser") return t("settings.diagnostics.memoryMain");
+    if (process.type === "Tab") return process.url === "app" ? t("settings.diagnostics.memoryWindow") : t("settings.diagnostics.memoryHidden", { url: process.url ?? "?" });
+    if (process.type === "GPU") return "GPU";
+    return process.name ?? process.type;
+  };
+
+  return (
+    <SettingsSection>
+      <SettingsRow icon={<MemoryStick className="h-[18px] w-[18px]" strokeWidth={2} />}>
+        <p className="text-sm font-semibold text-text">{t("settings.diagnostics.memory")}</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.diagnostics.memoryHint")}</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            onClick={() => setOpen((value) => !value)}
+            className="rounded-lg bg-text/[.08] px-3 py-1.5 text-sm font-semibold text-text transition-colors hover:bg-text/[.14]"
+          >
+            {open ? t("settings.diagnostics.memoryHide") : t("settings.diagnostics.memoryShow")}
+          </button>
+          {open && (
+            <button
+              onClick={() => { void hibiki.logs.memory(true).then(() => setRecorded(true)); }}
+              className="rounded-lg px-3 py-1.5 text-sm font-semibold text-muted transition-colors hover:bg-text/[.06]"
+            >
+              {recorded ? t("settings.diagnostics.memoryRecorded") : t("settings.diagnostics.memoryRecord")}
+            </button>
+          )}
+        </div>
+        {open && snapshot && (
+          <div className="mt-3 select-text rounded-lg border border-border bg-text/[.03] p-3 text-xs">
+            <div className="mb-2 flex justify-between font-semibold text-text">
+              <span>{t("settings.diagnostics.memoryTotal")}</span>
+              <span>{Math.round(snapshot.totalMb)} MB</span>
+            </div>
+            {snapshot.processes.map((process) => (
+              <div key={process.pid} className="flex justify-between gap-3 py-0.5 text-muted">
+                <span className="truncate">{processLabel(process)}</span>
+                <span className="shrink-0 tabular-nums">{Math.round(process.workingSetMb)} MB</span>
+              </div>
+            ))}
+            <p className="mt-2 text-[11px] text-muted">{t("settings.diagnostics.memoryFootnote", { heap: snapshot.mainHeapUsedMb })}</p>
+          </div>
         )}
       </SettingsRow>
     </SettingsSection>

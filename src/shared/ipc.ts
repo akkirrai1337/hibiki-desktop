@@ -116,6 +116,7 @@ export const IPC = {
   logsRecent: "logs:recent",
   logsAppend: "logs:append",
   logsOpenFolder: "logs:openFolder",
+  diagnosticsMemory: "diagnostics:memory",
   appGetVersion: "app:getVersion",
   // Pushed main -> renderer once the "Watch" button on a friend's Discord Rich Presence card opens
   // a "hibiki://watch/..." link (see main/deepLink.ts) and this window is ready to act on it.
