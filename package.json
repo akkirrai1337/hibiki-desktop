@@ -1,6 +1,6 @@
 {
   "name": "hibiki-desktop",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "hibiki is a desktop anime client: browse installable sources, search with filters, watch in a built-in player, download episodes for offline viewing, and keep a library with progress and achievements.",
   "private": true,
   "type": "module",
