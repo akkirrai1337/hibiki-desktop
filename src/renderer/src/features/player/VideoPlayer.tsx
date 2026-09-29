@@ -632,33 +632,39 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     };
   }, [selectedSubtitleId, subtitleOptions]);
   const subtitleOffset = usePlayerPrefsStore((s) => s.subtitleOffset);
-  const setSubtitleOffset = usePlayerPrefsStore((s) => s.setSubtitleOffset);
-  // Dragged live in a ref during the gesture (an offset feeding straight back into the same
-  // element's `bottom` on every pointermove would otherwise fight the persisted-store round trip -
-  // zustand's persist middleware writes to localStorage synchronously on every set()), committed to
-  // the real store only once, on pointerup.
-  const subtitleDragRef = useRef<{ pointerId: number; startY: number; startOffset: number } | null>(null);
-  const [draggingSubtitleOffset, setDraggingSubtitleOffset] = useState<number | null>(null);
+  const subtitleOffsetX = usePlayerPrefsStore((s) => s.subtitleOffsetX);
+  const setSubtitlePosition = usePlayerPrefsStore((s) => s.setSubtitlePosition);
+  // Dragged live in component state during the gesture (writing straight to the persisted store on
+  // every pointermove would hit localStorage synchronously each time - zustand's persist has no
+  // throttling), committed to the real store only once, on pointerup.
+  const subtitleDragRef = useRef<{ pointerId: number; startX: number; startY: number; startOffset: number; startOffsetX: number } | null>(null);
+  const [draggingSubtitle, setDraggingSubtitle] = useState<{ y: number; x: number } | null>(null);
   const onSubtitleDragStart = (e: React.PointerEvent) => {
     e.stopPropagation();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    subtitleDragRef.current = { pointerId: e.pointerId, startY: e.clientY, startOffset: subtitleOffset };
-    setDraggingSubtitleOffset(subtitleOffset);
+    subtitleDragRef.current = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, startOffset: subtitleOffset, startOffsetX: subtitleOffsetX };
+    setDraggingSubtitle({ y: subtitleOffset, x: subtitleOffsetX });
   };
   const onSubtitleDragMove = (e: React.PointerEvent) => {
     const drag = subtitleDragRef.current;
     if (!drag || drag.pointerId !== e.pointerId) return;
     const containerHeight = containerRef.current?.clientHeight ?? 1;
+    const containerWidth = containerRef.current?.clientWidth ?? 1;
+    // Half of what's left once the box's own width is taken out - it may reach either edge, never
+    // leave the player.
+    const maxX = Math.max(0, (containerWidth - (e.currentTarget as HTMLElement).offsetWidth) / 2);
     // Screen Y grows downward, `bottom` grows upward - moving the pointer up must increase it.
-    const next = Math.min(containerHeight * 0.85, Math.max(0, drag.startOffset + (drag.startY - e.clientY)));
-    setDraggingSubtitleOffset(next);
+    setDraggingSubtitle({
+      y: Math.min(containerHeight * 0.85, Math.max(0, drag.startOffset + (drag.startY - e.clientY))),
+      x: Math.min(maxX, Math.max(-maxX, drag.startOffsetX + (e.clientX - drag.startX))),
+    });
   };
   const onSubtitleDragEnd = (e: React.PointerEvent) => {
     const drag = subtitleDragRef.current;
     if (!drag || drag.pointerId !== e.pointerId) return;
     subtitleDragRef.current = null;
-    if (draggingSubtitleOffset !== null) setSubtitleOffset(draggingSubtitleOffset);
-    setDraggingSubtitleOffset(null);
+    if (draggingSubtitle) setSubtitlePosition(draggingSubtitle.y, draggingSubtitle.x);
+    setDraggingSubtitle(null);
   };
   const [episodeListOpen, setEpisodeListOpen] = useState(false);
   const episodeListRef = useRef<HTMLDivElement>(null);
@@ -1909,11 +1915,12 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       {/* Rendered by hand from the "hidden" TextTrack's own cues (see the cuechange effect above),
           not the browser's built-in subtitle box - that one is always flush against the video's
           bottom edge, which is exactly what put it underneath this app's own controls bar in the
-          first place, and native rendering has no drag handle to fix that with. `bottom` is a
-          player preference (see playerPrefsStore), dragged live via the pointer handlers on the
+          first place, and native rendering has no drag handle to fix that with. No z-index on purpose:
+          it sits under the controls bar and every other piece of player UI, which come later in the
+          DOM. `bottom` and the horizontal shift are player preferences (see playerPrefsStore), dragged live via the pointer handlers on the
           box itself and only committed to the store on release. */}
       {activeSubtitleLines.length > 0 && (
-        <div className="pointer-events-none absolute inset-x-0 z-10 flex justify-center px-6" style={{ bottom: draggingSubtitleOffset ?? subtitleOffset }}>
+        <div className="pointer-events-none absolute inset-x-0 flex justify-center px-6" style={{ bottom: draggingSubtitle?.y ?? subtitleOffset }}>
           <div
             onPointerDown={onSubtitleDragStart}
             onPointerMove={onSubtitleDragMove}
@@ -1921,9 +1928,10 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
             onPointerCancel={onSubtitleDragEnd}
             onClick={(e) => e.stopPropagation()}
             title={t("watch.subtitles.dragHint")}
+            style={{ transform: `translateX(${draggingSubtitle?.x ?? subtitleOffsetX}px)` }}
             className={cn(
               "pointer-events-auto max-w-[85%] cursor-grab select-text whitespace-pre-line rounded-md bg-black/75 px-3 py-1.5 text-center text-lg font-medium leading-snug text-white shadow-lg active:cursor-grabbing",
-              draggingSubtitleOffset !== null && "ring-1 ring-white/40",
+              draggingSubtitle && "ring-1 ring-white/40",
             )}
           >
             {activeSubtitleLines.join("\n")}

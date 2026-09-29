@@ -58,6 +58,8 @@ interface PlayerPrefsState {
   // episode. The default clears this app's own controls bar (see the bottom gradient bar in
   // VideoPlayer.tsx) with a little room to spare.
   subtitleOffset: number;
+  // Horizontal shift from centre, in pixels (negative = left) - dragged the same way.
+  subtitleOffsetX: number;
   setAutoSkipSegments: (enabled: boolean) => void;
   setAutoPlayNextEpisode: (enabled: boolean) => void;
   setPlaybackSpeed: (speed: PlaybackSpeed) => void;
@@ -66,7 +68,7 @@ interface PlayerPrefsState {
   setWatchedThresholdPercent: (percent: number) => void;
   setVolume: (volume: number, muted: boolean) => void;
   toggleRemainingTime: () => void;
-  setSubtitleOffset: (offset: number) => void;
+  setSubtitlePosition: (offset: number, offsetX: number) => void;
 }
 
 export const usePlayerPrefsStore = create<PlayerPrefsState>()(
@@ -82,6 +84,7 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       muted: false,
       showRemainingTime: false,
       subtitleOffset: 72,
+      subtitleOffsetX: 0,
       setAutoSkipSegments: (autoSkipSegments) => set({ autoSkipSegments }),
       setAutoPlayNextEpisode: (autoPlayNextEpisode) => set({ autoPlayNextEpisode }),
       setPlaybackSpeed: (playbackSpeed) => set({ playbackSpeed }),
@@ -90,7 +93,8 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       setWatchedThresholdPercent: (percent) => set({ watchedThresholdPercent: clampWatchedThreshold(percent) }),
       setVolume: (volume, muted) => set({ volume: Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : 1, muted }),
       toggleRemainingTime: () => set((state) => ({ showRemainingTime: !state.showRemainingTime })),
-      setSubtitleOffset: (offset) => set({ subtitleOffset: Number.isFinite(offset) ? Math.max(0, offset) : 72 }),
+      setSubtitlePosition: (offset, offsetX) =>
+        set({ subtitleOffset: Number.isFinite(offset) ? Math.max(0, offset) : 72, subtitleOffsetX: Number.isFinite(offsetX) ? offsetX : 0 }),
     }),
     { name: "hibiki-player-prefs" },
   ),
