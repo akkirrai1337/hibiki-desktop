@@ -25,7 +25,6 @@ const PERSISTED_PAGES: Record<string, React.LazyExoticComponent<React.ComponentT
   "/": lazy(() => import("@/pages/home").then((module) => ({ default: module.CatalogPage }))),
   "/catalog": lazy(() => import("@/pages/catalog").then((module) => ({ default: module.CatalogBrowsePage }))),
   "/library": lazy(() => import("@/pages/library").then((module) => ({ default: module.LibraryPage }))),
-  "/calendar": lazy(() => import("@/pages/calendar").then((module) => ({ default: module.CalendarPage }))),
   "/history": lazy(() => import("@/pages/history").then((module) => ({ default: module.HistoryPage }))),
   "/downloads": lazy(() => import("@/pages/downloads").then((module) => ({ default: module.DownloadsPage }))),
   "/profile": lazy(() => import("@/pages/profile").then((module) => ({ default: module.ProfilePage }))),

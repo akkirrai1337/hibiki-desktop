@@ -7,8 +7,6 @@ import { hibiki } from "@/lib/hibiki";
 import { useCachedTitleList } from "@/lib/cachedTitleList";
 import { AnimeCard, PosterGrid, PosterGridSkeleton, animeTitle } from "@/components/AnimeCard";
 import { ContinueWatchingFrameRow } from "@/components/ContinueWatchingRow";
-import { ReleaseCalendarPanel } from "@/components/ReleaseCalendarPanel";
-import { useReleaseCalendar } from "@/lib/useReleaseCalendar";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { HERO_ACTION_CLASS, HeroCarousel, type HeroSlide } from "@/components/Hero";
 import { useContinueWatching } from "@/lib/continueWatching";
@@ -90,7 +88,6 @@ export function CatalogPage() {
   // caches per-title lookups under query keys both pages agree on so whichever loads first does
   // the actual work.
   const { hasHistory } = useContinueWatching();
-  const releaseDays = useReleaseCalendar().days;
   const heroSlides = useMemo(() => hero.data ?? [], [hero.data]);
   const poolTitles = useMemo(() => pool.data ?? [], [pool.data]);
   const isNew = !hasHistory;
@@ -122,9 +119,6 @@ export function CatalogPage() {
             where you left off" better than a poster does. */}
         {!isNew && <Section title={t("catalog.continueWatching")} action={t("catalog.viewHistory")} to="/history">
           <ContinueWatchingFrameRow sourceById={sourceById} />
-        </Section>}
-        {releaseDays.length > 0 && <Section title={t("calendar.title")} action={t("calendar.openAll")} to="/calendar">
-          <ReleaseCalendarPanel days={releaseDays} />
         </Section>}
         <Section title={isNew ? t("catalog.popularNow") : t("catalog.becauseYouWatched")} action={t("catalog.openCatalog")} to="/catalog">
           {pool.isLoading ? <PosterGridSkeleton count={15} /> : <PosterGrid>{recommended.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</PosterGrid>}
@@ -160,6 +154,6 @@ function toHeroSlide(anime: AnimeTitle, openLabel: string, sourceIconUrl?: strin
   };
 }
 
-function Section({ title, action, to, children }: { title: string; action: string; to: "/catalog" | "/history" | "/calendar"; children: React.ReactNode }) { return <section><div className="mb-5 flex items-center justify-between"><h2 className="text-2xl font-bold tracking-[-.02em] text-text">{title}</h2><Link to={to} className="text-sm font-semibold text-muted transition-colors hover:text-accent-text">{action} →</Link></div>{children}</section>; }
+function Section({ title, action, to, children }: { title: string; action: string; to: "/catalog" | "/history"; children: React.ReactNode }) { return <section><div className="mb-5 flex items-center justify-between"><h2 className="text-2xl font-bold tracking-[-.02em] text-text">{title}</h2><Link to={to} className="text-sm font-semibold text-muted transition-colors hover:text-accent-text">{action} →</Link></div>{children}</section>; }
 function HeroSkeleton() { return <div className="min-h-[420px] animate-pulse border-b border-white/[.04] bg-white/[.03] px-8 py-16"><div className="h-3 w-40 rounded bg-white/[.08]" /><div className="mt-5 h-12 w-96 rounded bg-white/[.08]" /><div className="mt-5 h-3 w-full max-w-lg rounded bg-white/[.06]" /><div className="mt-2 h-3 w-4/5 max-w-lg rounded bg-white/[.06]" /></div>; }
 function EmptySources() { const { t } = useTranslation(); return <div className="flex min-h-[calc(100vh-76px)] items-center justify-center p-8"><div className="max-w-sm text-center"><div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-text/[.06]"><Radio className="h-6 w-6 text-muted" strokeWidth={1.75} /></div><h1 className="text-xl font-bold text-text">{t("catalog.emptySourcesTitle")}</h1><p className="mt-3 text-sm leading-6 text-muted">{t("catalog.emptySourcesText")}</p><Link to="/sources" className="mt-6 inline-block rounded-xl bg-accent px-4 py-2.5 text-sm font-bold text-accent-fg">{t("catalog.openSources")}</Link></div></div>; }
