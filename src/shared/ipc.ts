@@ -112,6 +112,8 @@ export const IPC = {
   backupCreate: "backup:create",
   backupRestore: "backup:restore",
   appRelaunch: "app:relaunch",
+  appGetHardwareAcceleration: "app:getHardwareAcceleration",
+  appSetHardwareAcceleration: "app:setHardwareAcceleration",
   logsExport: "logs:export",
   logsRecent: "logs:recent",
   logsAppend: "logs:append",

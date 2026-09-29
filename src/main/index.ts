@@ -22,6 +22,7 @@ import { DEEP_LINK_SCHEME, findDeepLinkInArgv, parseWatchDeepLink } from "./deep
 import { createBackup, restoreBackup } from "./backup";
 import { initLogger, log, logger, recentEntries, type LogEntry, type LogLevel } from "./logger";
 import { exportLog, openLogFolder } from "./logExport";
+import { isHardwareAccelerationEnabled, setHardwareAccelerationEnabled } from "./hardwareAcceleration";
 import { collectMemorySnapshot, formatMemorySnapshot } from "./memoryDiagnostics";
 import { checkForUpdate, downloadUpdate, installUpdate } from "./appUpdates";
 import type { AppUpdate, DiscordPresence, UpdateDownloadProgress } from "@shared/types";
@@ -67,6 +68,9 @@ app.on("open-url", (event, url) => {
 // launch outright (rather than, say, opening a second window that shares the file some other way)
 // keeps there being only ever one process touching it, which is what every other path in this app
 // already assumes.
+// Has to run before the app is ready. See hardwareAcceleration.ts.
+if (!isHardwareAccelerationEnabled()) app.disableHardwareAcceleration();
+
 if (!app.requestSingleInstanceLock()) {
   // `quit()` wouldn't cut it here - it starts an async shutdown sequence, so every side effect
   // below (the `whenReady().then(...)` setup among them) would still run once before it took
@@ -412,6 +416,8 @@ app.whenReady().then(() => {
   ipcMain.on(IPC.logsOpenFolder, () => openLogFolder());
   // Per-process memory for Settings > Diagnostics. `record` also writes the snapshot into the log,
   // so an exported log carries the numbers the user was looking at.
+  ipcMain.handle(IPC.appGetHardwareAcceleration, () => isHardwareAccelerationEnabled());
+  ipcMain.handle(IPC.appSetHardwareAcceleration, (_e, enabled: boolean) => setHardwareAccelerationEnabled(enabled === true));
   ipcMain.handle(IPC.diagnosticsMemory, (_e, record?: boolean) => {
     const snapshot = collectMemorySnapshot();
     if (record) log("info", "memory", formatMemorySnapshot(snapshot));

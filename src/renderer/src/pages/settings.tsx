@@ -433,6 +433,10 @@ function MemoryDiagnostics() {
   const [open, setOpen] = useState(false);
   const [snapshot, setSnapshot] = useState<MemorySnapshot | null>(null);
   const [recorded, setRecorded] = useState(false);
+  // undefined while the answer is on its way; `changed` once flipped, since it only applies after a restart.
+  const [acceleration, setAcceleration] = useState<boolean | undefined>(undefined);
+  const [changed, setChanged] = useState(false);
+  useEffect(() => { hibiki.app.getHardwareAcceleration().then(setAcceleration).catch(() => {}); }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -484,6 +488,30 @@ function MemoryDiagnostics() {
               </div>
             ))}
             <p className="mt-2 text-[11px] text-muted">{t("settings.diagnostics.memoryFootnote", { heap: snapshot.mainHeapUsedMb })}</p>
+          </div>
+        )}
+        {acceleration !== undefined && (
+          <div className="mt-4 flex items-start justify-between gap-4 border-t border-border pt-4">
+            <div>
+              <p className="text-sm font-semibold text-text">{t("settings.diagnostics.saveMemory")}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.diagnostics.saveMemoryHint")}</p>
+              {changed && (
+                <button
+                  onClick={() => hibiki.app.relaunch()}
+                  className="mt-2 rounded-lg bg-text/[.08] px-3 py-1.5 text-sm font-semibold text-text transition-colors hover:bg-text/[.14]"
+                >
+                  {t("settings.diagnostics.saveMemoryRestart")}
+                </button>
+              )}
+            </div>
+            <Switch
+              checked={!acceleration}
+              onChange={(saveMemory) => {
+                setAcceleration(!saveMemory);
+                setChanged(true);
+                void hibiki.app.setHardwareAcceleration(!saveMemory);
+              }}
+            />
           </div>
         )}
       </SettingsRow>

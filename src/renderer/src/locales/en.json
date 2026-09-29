@@ -644,7 +644,10 @@
       "memoryMain": "Main process",
       "memoryWindow": "App window",
       "memoryHidden": "Hidden window: {{url}}",
-      "memoryFootnote": "Main process heap: {{heap}} MB. Shared pages are counted in every process, so the total is slightly overstated."
+      "memoryFootnote": "Main process heap: {{heap}} MB. Shared pages are counted in every process, so the total is slightly overstated.",
+      "saveMemory": "Save memory",
+      "saveMemoryHint": "Turns hardware acceleration off: the app uses roughly 250 MB less, but loads the CPU more while scrolling and playing video. Applies after a restart.",
+      "saveMemoryRestart": "Restart now"
     },
     "autoUpdate": "Auto-update",
     "autoUpdateHint": "Check for updates on launch and install them automatically. The app will close and start the installer."

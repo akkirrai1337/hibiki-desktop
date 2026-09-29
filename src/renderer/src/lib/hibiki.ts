@@ -151,6 +151,9 @@ export interface HibikiApi {
   app: {
     getVersion(): Promise<string>;
     relaunch(): void;
+    getHardwareAcceleration(): Promise<boolean>;
+    /** Takes effect on the next start. */
+    setHardwareAcceleration(enabled: boolean): Promise<void>;
     onDeepLinkWatch(callback: (target: DeepLinkWatchTarget) => void): () => void;
   };
   logs: {

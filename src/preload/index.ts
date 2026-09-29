@@ -213,6 +213,8 @@ const api = {
   app: {
     getVersion: (): Promise<string> => ipcRenderer.invoke(IPC.appGetVersion),
     relaunch: (): void => { ipcRenderer.send(IPC.appRelaunch); },
+    getHardwareAcceleration: (): Promise<boolean> => ipcRenderer.invoke(IPC.appGetHardwareAcceleration),
+    setHardwareAcceleration: (enabled: boolean): Promise<void> => ipcRenderer.invoke(IPC.appSetHardwareAcceleration, enabled),
     // A friend's "Watch" button on this app's own Discord Rich Presence card (see discordRpc.ts)
     // opened a "hibiki://watch/..." link, and main finished parsing and routing it here.
     onDeepLinkWatch: (callback: (target: DeepLinkWatchTarget) => void): (() => void) => {
