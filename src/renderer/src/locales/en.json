@@ -651,5 +651,17 @@
     "downloading": "Downloading… {{received}} of {{total}}",
     "willRestart": "The app will close and start the installer.",
     "failed": "Update failed: {{message}}"
+  },
+  "calendar": {
+    "title": "Calendar",
+    "hint": "Upcoming episodes from your library and recently watched titles. Only sources that provide release dates are shown.",
+    "loading": "Loading schedule…",
+    "empty": "No titles with a known release date yet. Add ongoing anime to your library.",
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "episode": "Episode {{number}}",
+    "newEpisode": "New episode",
+    "openAll": "Full calendar",
+    "noneOnDay": "Nothing airs on this day"
   }
 }
