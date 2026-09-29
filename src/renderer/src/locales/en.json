@@ -190,7 +190,7 @@
     },
     "subtitles": {
       "off": "Off",
-      "addFile": "Add subtitle file…",
+      "addFile": "Add file",
       "dragHint": "Drag to reposition"
     },
     "toggleTimeDisplay": "Switch between elapsed and remaining"
