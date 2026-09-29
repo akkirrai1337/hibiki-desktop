@@ -309,6 +309,12 @@ export class ExtensionRuntime {
   // demand, from calls that would have spawned a worker anyway.
   private static readonly WARM_WORKERS = 2;
 
+  // An idle worker holds a whole V8 isolate - about 13 MB each - and used to sit in the pool until
+  // the app quit. Browsing keeps the pool busy, so this only ever reclaims the memory of a pool
+  // nobody has asked anything of for a while; the next call pays one ~200 ms spawn instead.
+  private static readonly IDLE_WORKER_TTL_MS = 2 * 60_000;
+  private readonly idleTimers = new Map<Worker, NodeJS.Timeout>();
+
   /** Starts the expensive worker bundle parsing before the renderer's first source queries arrive.
    * Only workers that have loaded the whole module and posted `ready` enter the idle pool; calls
    * arriving earlier still take the normal fresh-worker path rather than waiting behind warm-up. */
@@ -336,6 +342,7 @@ export class ExtensionRuntime {
       // Dropped now that it is in use again - otherwise every release/acquire cycle would leave
       // another one behind and trip Node's max-listeners warning after ten reuses.
       idle.removeAllListeners("exit");
+      this.clearIdleTimer(idle);
       return { worker: idle, fresh: false };
     }
     // A fresh worker takes its first call through workerData, so it starts executing as soon as it
@@ -357,6 +364,23 @@ export class ExtensionRuntime {
       if (index >= 0) this.idleWorkers.splice(index, 1);
     });
     this.idleWorkers.push(worker);
+    const timer = setTimeout(() => {
+      this.idleTimers.delete(worker);
+      const index = this.idleWorkers.indexOf(worker);
+      if (index < 0) return;
+      this.idleWorkers.splice(index, 1);
+      worker.removeAllListeners("exit");
+      void worker.terminate();
+    }, ExtensionRuntime.IDLE_WORKER_TTL_MS);
+    // A pending timer must not be what keeps the process alive at quit.
+    timer.unref();
+    this.idleTimers.set(worker, timer);
+  }
+
+  private clearIdleTimer(worker: Worker): void {
+    const timer = this.idleTimers.get(worker);
+    if (timer) clearTimeout(timer);
+    this.idleTimers.delete(worker);
   }
 
   private run<T>(
@@ -458,7 +482,10 @@ export class ExtensionRuntime {
 
   /** Tears the pool down - called on app quit, so idle threads don't hold the process open. */
   dispose(): void {
-    for (const worker of this.idleWorkers.splice(0)) void worker.terminate();
+    for (const worker of this.idleWorkers.splice(0)) {
+      this.clearIdleTimer(worker);
+      void worker.terminate();
+    }
     for (const worker of this.warmingWorkers) void worker.terminate();
     this.warmingWorkers.clear();
   }
