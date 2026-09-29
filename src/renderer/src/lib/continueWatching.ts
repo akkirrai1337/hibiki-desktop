@@ -64,20 +64,24 @@ function useCardTitles(rows: WatchProgress[]): Record<string, AnimeTitle | null 
     queryFn: () => hibiki.sources.cachedTitles(unique.map((row) => ({ sourceId: row.sourceId, animeId: row.titleId }))),
     enabled: unique.length > 0,
     staleTime: Infinity,
-    // Removing a title changes the key, and a key with no answer yet used to empty `cachedTitles`
-    // below - which un-created every per-title query and turned the whole row into skeletons until
-    // the new lookup landed (a visible flash and jump on "delete watch data"). Holding the previous
-    // answer keeps the surviving cards on screen; it is only trusted while the new set of titles is a
-    // subset of the one it was fetched for (see `answeredKeys`) - a title that was not in it needs
-    // its own lookup before its query is created, for the reason above.
+    // A key with no answer yet used to empty everything below, un-creating every per-title query and
+    // turning the whole row into skeletons until the new lookup landed - on "delete watch data" that
+    // happened twice, once for the removal and again when the refetch pulled in the next-oldest title.
+    // Holding the previous answer keeps the surviving cards on screen (see `active`).
     placeholderData: keepPreviousData,
   });
+  // Titles the last real (non-placeholder) answer was fetched for.
   const answeredKeys = useRef<Set<string>>(new Set());
   if (cached.isSuccess && !cached.isPlaceholderData) answeredKeys.current = new Set(keys);
-  const cachedTitles = cached.isPlaceholderData && !keys.every((key) => answeredKeys.current.has(key)) ? undefined : cached.data;
+  const cachedTitles = cached.data;
+  // A title's query is only created once a lookup that covers it has answered - initialData is read
+  // once, when a query is first created, so creating it earlier means fetching live instead of using
+  // the cache. Every title the previous answer covered is ready right away; a new one waits for its own
+  // lookup, and until then is the only skeleton in the row.
+  const active = unique.filter((row) => cachedTitles && (!cached.isPlaceholderData || answeredKeys.current.has(`${row.sourceId}:${row.titleId}`)));
 
   const queries = useQueries({
-    queries: (cachedTitles ? unique : []).map((row) => {
+    queries: active.map((row) => {
       const key = `${row.sourceId}:${row.titleId}`;
       return {
         // Same key the detail and watch pages fetch a title's full record under (["anime",
@@ -101,8 +105,9 @@ function useCardTitles(rows: WatchProgress[]): Record<string, AnimeTitle | null 
   });
 
   const result: Record<string, AnimeTitle | null | undefined> = {};
-  unique.forEach((row, index) => {
-    result[`${row.sourceId}:${row.titleId}`] = queries[index]?.data;
+  unique.forEach((row) => {
+    const index = active.indexOf(row);
+    result[`${row.sourceId}:${row.titleId}`] = index >= 0 ? queries[index]?.data : undefined;
   });
   return result;
 }
