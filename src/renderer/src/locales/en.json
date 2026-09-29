@@ -660,6 +660,7 @@
     "today": "Today",
     "tomorrow": "Tomorrow",
     "episode": "Episode {{number}}",
-    "newEpisode": "New episode"
+    "newEpisode": "New episode",
+    "openAll": "Full calendar"
   }
 }

@@ -660,6 +660,7 @@
     "today": "Сегодня",
     "tomorrow": "Завтра",
     "episode": "Серия {{number}}",
-    "newEpisode": "Новая серия"
+    "newEpisode": "Новая серия",
+    "openAll": "Весь календарь"
   }
 }
