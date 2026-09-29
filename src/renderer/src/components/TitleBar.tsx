@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, RotateCw, Minus, Square, Copy, X } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
@@ -20,7 +20,18 @@ export function TitleBar() {
   const router = useRouter();
   const [canGoBack, setCanGoBack] = useState(router.history.canGoBack());
 
-  useEffect(() => router.history.subscribe(() => setCanGoBack(router.history.canGoBack())), [router]);
+  // The router's history can say whether there is somewhere to go back to, but not forward - the
+  // browser deliberately hides that. Its own entry index is enough to work it out: a push discards
+  // everything ahead of it (so the newest index is the furthest one), going back leaves the furthest
+  // index where it was, and there is something ahead whenever the current entry is short of it.
+  const [canGoForward, setCanGoForward] = useState(false);
+  const furthestIndex = useRef(router.history.location.state.__TSR_index ?? 0);
+  useEffect(() => router.history.subscribe(({ location, action }) => {
+    const index = location.state.__TSR_index ?? 0;
+    furthestIndex.current = action.type === "PUSH" ? index : Math.max(furthestIndex.current, index);
+    setCanGoBack(router.history.canGoBack());
+    setCanGoForward(index < furthestIndex.current);
+  }), [router]);
 
   // There's nothing yet to search, and nowhere else to jump "home" to, while onboarding still owns
   // the whole screen (see __root.tsx) - both would just be dead chrome floating over it.
@@ -80,8 +91,9 @@ export function TitleBar() {
         </button>
         <button
           onClick={() => router.history.forward()}
+          disabled={!canGoForward}
           aria-label="Forward"
-          className="app-no-drag flex h-6 w-6 items-center justify-center rounded-full text-muted transition-colors hover:bg-text/10 hover:text-text"
+          className={cn("app-no-drag flex h-6 w-6 items-center justify-center rounded-full transition-colors", canGoForward ? "text-muted hover:bg-text/10 hover:text-text" : "cursor-default text-muted/50")}
         >
           <ChevronRight className="h-4 w-4" strokeWidth={2.5} />
         </button>
