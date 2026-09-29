@@ -22,6 +22,14 @@ export function registerPlayerHeaderOrigin(sessionId: string, url: string): bool
   return headerRegistry.registerOrigin(sessionId, url);
 }
 
+// Only the app's own renderer (hls.js, the <video>/<track> elements) - the hidden resolver and
+// challenge windows share this session too, and their pages must never inherit a playback's headers.
+function isPlayerRequest(details: { resourceType: string; initiator?: string }): boolean {
+  if (details.resourceType !== "xhr" && details.resourceType !== "media") return false;
+  const initiator = details.initiator;
+  return !initiator || initiator === "null" || initiator.startsWith("file:") || /^https?:\/\/localhost(:\d+)?$/.test(initiator);
+}
+
 export function unregisterPlayerHeaders(sessionId: string): void {
   headerRegistry.unregister(sessionId);
 }
@@ -53,6 +61,11 @@ export function installPlayerHeaderInjector(): void {
     const extra = headerRegistry.headersFor(details.url);
     if (extra) {
       callback({ requestHeaders: { ...details.requestHeaders, ...extra } });
+      return;
+    }
+    const playback = isPlayerRequest(details) ? headerRegistry.playbackHeaders() : undefined;
+    if (playback) {
+      callback({ requestHeaders: { ...details.requestHeaders, ...playback } });
       return;
     }
     callback({ requestHeaders: headersForImageRequest(details.resourceType, details.url, details.requestHeaders) });

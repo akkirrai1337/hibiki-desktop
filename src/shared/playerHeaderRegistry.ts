@@ -2,6 +2,7 @@ export interface PlaybackHeaderSession {
   headers: Readonly<Record<string, string>>;
   origins: Set<string>;
   touchedAt: number;
+  registeredAt: number;
 }
 
 function urlOrigin(url: string): string | null {
@@ -31,6 +32,7 @@ export class PlayerHeaderRegistry {
       headers: Object.freeze({ ...headers }),
       origins: new Set([origin]),
       touchedAt: now,
+      registeredAt: now,
     };
     this.sessions.set(sessionId, session);
     this.addOrigin(sessionId, origin);
@@ -76,6 +78,22 @@ export class PlayerHeaderRegistry {
     if (session) session.touchedAt = now;
     this.sweep(now);
     return session?.headers;
+  }
+
+  /** The headers of the playback session that was registered first and is still alive, for a
+   * request to an origin nobody registered. HLS segment hosts are not knowable up front: a repackager
+   * spreads one stream over rotating subdomains (`k9uq6.pressforyes.online`, `72cus.…`) that no
+   * playlist URL, redirect or registration ever mentions, and each answers 403 to a request without
+   * the Referer/Origin the stream was captured with. Oldest, not newest: a subtitle track with headers
+   * of its own registers a session *after* its stream, and must not stand in for it. */
+  playbackHeaders(now = Date.now()): Readonly<Record<string, string>> | undefined {
+    let oldest: PlaybackHeaderSession | undefined;
+    for (const session of this.sessions.values()) {
+      if (!oldest || session.registeredAt < oldest.registeredAt) oldest = session;
+    }
+    if (oldest) oldest.touchedAt = now;
+    this.sweep(now);
+    return oldest?.headers;
   }
 
   followRedirect(fromUrl: string, toUrl: string, now = Date.now()): boolean {

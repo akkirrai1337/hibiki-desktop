@@ -60,3 +60,20 @@ describe("PlayerHeaderRegistry", () => {
     expect(registry.headersFor("https://cdn.test/segment.ts", 500)).toBeUndefined();
   });
 });
+
+describe("PlayerHeaderRegistry.playbackHeaders", () => {
+  it("serves the first-registered session for an origin nobody registered", () => {
+    const registry = new PlayerHeaderRegistry();
+    registry.register("stream", "https://fetch.example/master.m3u8", { Referer: "https://embed.example/" }, 1000);
+    registry.register("sub", "https://subs.example/en.vtt", { Referer: "https://subs.example/" }, 2000);
+    expect(registry.headersFor("https://k9uq6.segments.example/seg-0.jpg", 3000)).toBeUndefined();
+    expect(registry.playbackHeaders(3000)).toEqual({ Referer: "https://embed.example/" });
+  });
+
+  it("has nothing to serve once every session is gone", () => {
+    const registry = new PlayerHeaderRegistry();
+    registry.register("stream", "https://fetch.example/master.m3u8", { Referer: "https://embed.example/" }, 1000);
+    registry.unregister("stream");
+    expect(registry.playbackHeaders(2000)).toBeUndefined();
+  });
+});
