@@ -149,11 +149,18 @@ function SpotlightPanel() {
     void navigate({ to: "/anime/$sourceId/$animeId", params: { sourceId: anime.sourceId, animeId: anime.id } });
   };
 
+  // What is in the field right now, not the debounced `settled` copy the results are built from: Enter
+  // typed right after the last keystroke lands before the debounce has caught up, and opening "all
+  // results" with the stale copy sent an empty query to the search page - which then showed only the
+  // filter results (or nothing), exactly what hovering the list for a moment before Enter happened to
+  // avoid.
   const openAll = () => {
-    if (longEnough) addRecent(settled);
+    const query = value.trim();
+    const queryLongEnough = query.length >= MIN_QUERY_LENGTH;
+    if (queryLongEnough) addRecent(query);
     useSpotlightStore.getState().setReturnTo({ href: router.history.location.href, value });
     close();
-    void navigate({ to: "/search", search: { q: longEnough ? settled : "" } });
+    void navigate({ to: "/search", search: { q: queryLongEnough ? query : "" } });
   };
 
   const onKeyDown = (event: React.KeyboardEvent) => {
@@ -179,6 +186,9 @@ function SpotlightPanel() {
       event.preventDefault();
       const row = effectiveSelected < 0 ? 0 : effectiveSelected;
       if (showingRecent) return setValue(recent[row] ?? "");
+      // Nothing picked and the results on screen are still for an older version of the text: they are not
+      // what was asked for, so "see everything" for what is actually typed.
+      if (defaultSelection && value.trim() !== settled) return openAll();
       if (event.ctrlKey || event.metaKey) return hasAll ? openAll() : undefined;
       if (row === items.length) return openAll();
       const anime = items[row];
