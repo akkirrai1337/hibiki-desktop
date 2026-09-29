@@ -5,6 +5,7 @@ import type Hls from "hls.js";
 import type { MediaPlayerClass } from "dashjs";
 import {
   ArrowLeft,
+  Captions,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -2216,6 +2217,20 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
                 <VolumeIcon className="h-[18px] w-[18px]" strokeWidth={2} />
               </button>
             </div>
+            {/* YouTube's CC button: one click on/off, and "on" is simply the first track in the list -
+                picking a specific one (or adding a file) lives in the settings menu. Hidden while
+                there is nothing to turn on. */}
+            {subtitleOptions.length > 0 && (
+              <button
+                onClick={(e) => { stop(e); setSelectedSubtitleId(selectedSubtitleId ? null : subtitleOptions[0].id); }}
+                title={t("watch.settings.subtitles")}
+                aria-pressed={!!selectedSubtitleId}
+                className={cn("relative flex h-8 w-8 shrink-0 items-center justify-center transition-colors", selectedSubtitleId ? "text-white" : "text-white/80 hover:text-white")}
+              >
+                <Captions className="h-[18px] w-[18px]" strokeWidth={2} />
+                <span className={cn("absolute bottom-0.5 h-[2px] w-4 rounded-full bg-accent transition-opacity", selectedSubtitleId ? "opacity-100" : "opacity-0")} />
+              </button>
+            )}
             {(episodesLoading || !episodes || episodes.length > 1) && (
               <div ref={episodeListRef} className="relative">
                 <button
