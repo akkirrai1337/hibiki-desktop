@@ -66,23 +66,13 @@ body,
 .bg-app-popover {
   background-color: rgb(var(--color-surface));
 }
-/* Only the Sidebar/TitleBar get `backdrop-filter` blur while a background gradient is picked - not
-   each page's own `.bg-app-bg` background, even though the original design had both. Every page in
-   PERSISTED_PAGES (see __root.tsx) stays mounted forever and just toggles `invisible`/`absolute`
-   instead of unmounting, and Chromium has to re-composite a `backdrop-filter: blur()` layer that
-   size (near-full-viewport) from scratch the moment it goes visible again - confirmed on video as a
-   distinct, ugly blur flash for a frame or two on every single page revisit. The Sidebar/TitleBar
-   never get toggled this way (they're not part of that visibility-swap at all), so they carry the
-   full blur with none of that recompositing cost. `backdrop-filter` only gets DECLARED at all while
-   a gradient is actually picked (via this `bg-theme-active` class applyBackgroundTheme toggles on
-   <html>), not unconditionally with a 0px fallback - a `filter`/`backdrop-filter` value other than
-   `none` establishes a new containing block for any `position: fixed` descendant, even at
-   blur(0px), which separately broke the anime detail page's own fixed, full-viewport blurred-poster
-   backdrop (see anime.$sourceId.$animeId.tsx) the one time this sat permanently in the ancestor
-   chain instead. */
+/* Translucent while a background gradient is picked, so the gradient painted on the root shows
+   through. No `backdrop-filter` here: the only thing behind the Sidebar/TitleBar is that same smooth
+   gradient, which a blur leaves looking exactly the same - while costing a full-height GPU layer
+   that Chromium re-blurs on every repaint beneath it. The same goes for the anime detail page's
+   root, which used to blur the gradient across its whole scroll height. */
 .bg-theme-active .bg-app-surface {
   background-color: rgb(var(--color-surface) / 0.66);
-  backdrop-filter: blur(28px);
 }
 
 body {

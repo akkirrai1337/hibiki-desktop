@@ -993,7 +993,11 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         // Which stream this player instance is about to own. A switch that silently kept the old
         // stream, or a torn-down instance still loading, is otherwise invisible in an exported log.
         trace(`creating hls.js; nativeHls=${!HlsEngine.isSupported()}; attach target=${playbackUrlLabel(streamUrl)}`);
-        hls = new HlsEngine();
+        // hls.js's defaults keep every segment it has ever played (backBufferLength is Infinity) and
+        // read ahead up to 10 minutes when the network allows, so a long session's buffered media
+        // grew the renderer's memory for as long as the episode played. Thirty seconds behind the
+        // playhead is plenty for a seek back; sixty ahead keeps playback smooth on a slow source.
+        hls = new HlsEngine({ backBufferLength: 30, maxBufferLength: 40, maxMaxBufferLength: 60, maxBufferSize: 60 * 1000 * 1000 });
         let manifestLoaded = false;
         let firstFragmentLoaded = false;
         let firstFragmentBuffered = false;

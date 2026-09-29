@@ -308,7 +308,7 @@ function AnimeDetailPage() {
   // swapping to it here while keeping the hardcoded text would silently break light mode's
   // contrast the moment a background theme also happens to be on. A flat, theme-independent dark
   // tint keeps that existing contrast intact while still letting the gradient show through it.
-  return <div className={cn("relative isolate min-h-full pb-16", backgroundTheme && "bg-black/70 backdrop-blur-2xl")}>
+  return <div className={cn("relative isolate min-h-full pb-16", backgroundTheme && "bg-black/70")}>
     {/* Skipped entirely once a background theme is active (see the comment on `backgroundTheme`
         above) - the flat tint above takes over instead. */}
     {!backgroundTheme && (
@@ -1008,11 +1008,10 @@ function DownloadDialog({
 // Same click-outside-to-dismiss + spring-in card as sources.tsx's own Modal (AddRepositoryDialog/
 // RemoveRepositoryDialog) - not shared between the two files since it's a handful of lines and each
 // route otherwise has zero coupling to the other. Portaled to document.body, unlike that one -
-// this page's own root div picks up `backdrop-blur-2xl` while a background theme is active (see
-// AnimeDetailPage above), and `backdrop-filter` (like `filter`/`transform`) makes its element a
-// containing block for `position: fixed` descendants - so this dialog was centering itself against
-// the whole scrollable page instead of the actual window, landing wherever that happened to put
-// its midpoint rather than in front of the user. Same fix as SearchFiltersPanel's own portal.
+// an ancestor with `backdrop-filter`/`filter`/`transform` becomes the containing block for
+// `position: fixed` descendants, which once made this dialog centre itself against the whole
+// scrollable page instead of the window. This page no longer applies one, but the portal stays: it
+// keeps the dialog out of the page's own stacking and scroll context. Same as SearchFiltersPanel.
 function Modal({ onDismiss, children }: { onDismiss: () => void; children: React.ReactNode }) {
   return createPortal(
     <motion.div
