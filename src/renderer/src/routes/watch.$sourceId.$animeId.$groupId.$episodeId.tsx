@@ -233,8 +233,13 @@ function WatchPage() {
     unreportedSecondsRef.current = new Set();
   }, [episodeId]);
 
+  // A pick whose player page could not be turned into a stream - shown as an error, never as the
+  // page itself. Cleared by the next pick or episode.
+  const [resolveFailed, setResolveFailed] = useState(false);
+  useEffect(() => { setResolveFailed(false); }, [episodeId]);
   const selectLink = useCallback(async (selected: PlayerLink) => {
     const requestId = ++selectionRequestRef.current;
+    setResolveFailed(false);
     if (selected.type !== "EMBED") {
       setSourceSwitching(false);
       setManualLink(selected);
@@ -261,10 +266,10 @@ function WatchPage() {
       // first. Keep the requested quality when the resolved set actually offers it.
       const next = pickResolvedLink(playable, selected);
       if (!next) {
-        // Nothing direct came out of the resolve, so the embed page itself is what plays. That is
-        // the deliberate last resort, but it looks like a stall rather than a fallback.
-        log.warn("player", `no playable link from ${selected.playerName ?? "?"}, falling back to its embed page`);
-        setManualLink(selected);
+        // Nothing direct came out of the resolve. There is no embed-page fallback: the player only
+        // plays streams of its own, so this pick simply isn't supported right now.
+        log.warn("player", `no playable link from ${selected.playerName ?? "?"}`);
+        setResolveFailed(true);
         return;
       }
 
@@ -285,7 +290,7 @@ function WatchPage() {
         return;
       }
       log.warn("player", `embed resolve failed for ${selected.playerName ?? "?"} after ${Math.round(performance.now() - startedAt)}ms:`, error);
-      setManualLink(selected);
+      setResolveFailed(true);
     } finally {
       if (requestId === selectionRequestRef.current) setSourceSwitching(false);
     }
@@ -459,6 +464,12 @@ function WatchPage() {
     if (preferencePending) return undefined;
     return pickDefaultLink(linksQuery.data);
   }, [downloadedQuery.data, manualLink, preferencePending, linksQuery.data]);
+  // With a stream already playing the message is a passing notice, not a state to stay in.
+  useEffect(() => {
+    if (!resolveFailed || !link) return;
+    const timer = setTimeout(() => setResolveFailed(false), 4000);
+    return () => clearTimeout(timer);
+  }, [resolveFailed, link]);
   // Currently playing a downloaded copy, and this particular neighbor isn't one itself.
   const prevBlockedOffline = !!prevEpisode && !!downloadedQuery.data && !prevDownloaded;
   const nextBlockedOffline = !!nextEpisode && !!downloadedQuery.data && !nextDownloaded;
@@ -719,6 +730,7 @@ function WatchPage() {
           selectedDubId={groupId}
           onSelectDub={selectDub}
           sourceSwitching={sourceSwitching || (!link && preferencePending)}
+          unplayable={!link && !preferencePending && !sourceSwitching && !!linksQuery.data && linksQuery.data.length > 0 || resolveFailed}
           onSelectLink={selectLinkManually}
           onPlaybackFailure={handlePlaybackFailure}
           startPositionMs={progressQuery.data?.positionMs}

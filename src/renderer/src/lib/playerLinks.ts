@@ -18,10 +18,12 @@ export interface PlaybackPreference {
   playerName?: string | null;
 }
 
-/** The starting pick when there is nothing saved to honour: any direct stream over an embed. */
+/** The starting pick when there is nothing saved to honour: a direct stream. An embed is only ever
+ * an unresolved candidate (see resolveEmbedLinks in the main process) - the player has no way to
+ * play a third-party page, so it is never a default and never something to fall back to. */
 export function pickDefaultLink<T extends { type: string }>(links: T[] | undefined): T | undefined {
-  if (!links || links.length === 0) return undefined;
-  return [...links].sort((a, b) => (LINK_TYPE_PRIORITY[a.type] ?? 0) - (LINK_TYPE_PRIORITY[b.type] ?? 0))[0];
+  if (!links) return undefined;
+  return [...links.filter((link) => link.type !== "EMBED")].sort((a, b) => (LINK_TYPE_PRIORITY[a.type] ?? 0) - (LINK_TYPE_PRIORITY[b.type] ?? 0))[0];
 }
 
 /**

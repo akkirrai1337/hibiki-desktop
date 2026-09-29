@@ -65,6 +65,8 @@ describe("pickDefaultLink", () => {
 
   it("returns undefined for an empty or missing list", () => {
     expect(pickDefaultLink([])).toBeUndefined();
+    // Nothing but embeds is nothing playable - never a page to show instead.
+    expect(pickDefaultLink([link({ url: "embed", type: "EMBED" })])).toBeUndefined();
     expect(pickDefaultLink(undefined)).toBeUndefined();
   });
 });

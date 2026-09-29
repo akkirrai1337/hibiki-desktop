@@ -624,13 +624,21 @@ export class ExtensionRuntime {
       // A source-provided direct link needs no resolver at all. Let the renderer adopt the saved
       // choice from the returned list instead of resolving an unrelated EMBED first.
       if (preferredIndex >= 0 && links[preferredIndex].type !== "EMBED") return links;
-      return this.resolveEmbedLinks(links, preferredIndex);
+      return this.withoutUnplayableEmbeds(await this.resolveEmbedLinks(links, preferredIndex));
     });
   }
 
   async resolvePlayerLink(link: PlayerLink): Promise<PlayerLink[]> {
     if (isRetiredPlayerLink(link)) return [];
-    return this.resolveEmbedLinks([link]);
+    return this.withoutUnplayableEmbeds(await this.resolveEmbedLinks([link]));
+  }
+
+  // The app plays only in its own player: a third-party page is never shown in an iframe. An EMBED
+  // link no installed resolver claims can never become a stream, so it is not an option at all
+  // rather than a link that leads to a page. One a resolver does claim stays - it is resolved when
+  // picked, and reported as failed if it can't be.
+  private withoutUnplayableEmbeds(links: PlayerLink[]): PlayerLink[] {
+    return links.filter((link) => link.type !== "EMBED" || this.findResolverForUrl(link.url) !== null);
   }
 
   private findResolverForUrl(url: string): ResolverManifest | null {

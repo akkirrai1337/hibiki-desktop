@@ -70,6 +70,9 @@ interface VideoPlayerProps {
   // Switches to the same episode under another dub - navigation, so the watch route owns it.
   onSelectDub?: (groupId: string) => void;
   sourceSwitching?: boolean;
+  // The episode has links but none this player can play (an unsupported/unresolvable player page) -
+  // said out loud over the still-reachable chrome instead of a spinner that never ends.
+  unplayable?: boolean;
   onSelectLink?: (link: PlayerLink) => void;
   onPlaybackFailure?: (link: PlayerLink, reason: string) => boolean;
   startPositionMs?: number;
@@ -479,7 +482,7 @@ function PlayerSettingsMenu({
   </div>;
 }
 
-export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions, selectedDubId, onSelectDub, sourceSwitching, onSelectLink, onPlaybackFailure, startPositionMs, onProgress, onPlayStateChange, onCaptureThumbnail, title, episodeLabel, onBack, onPrevEpisode, onNextEpisode, onOpenEpisodes, episodesLoading, episodes, currentEpisodeId, onSelectEpisode, streakToast, playerSwitchToast }: VideoPlayerProps) {
+export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions, selectedDubId, onSelectDub, sourceSwitching, unplayable, onSelectLink, onPlaybackFailure, startPositionMs, onProgress, onPlayStateChange, onCaptureThumbnail, title, episodeLabel, onBack, onPrevEpisode, onNextEpisode, onOpenEpisodes, episodesLoading, episodes, currentEpisodeId, onSelectEpisode, streakToast, playerSwitchToast }: VideoPlayerProps) {
   const { t } = useTranslation();
   // Held in a ref, deliberately not read as a prop from inside the effects below. Both the source
   // setup and the media-element wiring would otherwise have to list it as a dependency, and the
@@ -820,13 +823,9 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
 
   // Mirrors the Android app's decision (PlayerScreen.kt): trust the resolved link's own `type`
   // outright rather than sniffing the URL - a source can (and Miruro does) hand back an HLS
-  // stream at a URL with no ".m3u8" in sight. EMBED means the "link" is a third-party player page,
-  // not a media file at all - feeding that straight to <video src> is exactly what threw
-  // MEDIA_ERR_SRC_NOT_SUPPORTED here. Android resolves EMBED links to a real stream URL through
-  // provider-specific WebView extractors first; short of reimplementing that whole per-provider
-  // pipeline, showing the embed page itself (its own player UI, ads and all) is the same fallback
-  // Android's resolver reaches for when it can't extract a direct URL either.
-  const isEmbed = link?.type === "EMBED";
+  // stream at a URL with no ".m3u8" in sight. There is no EMBED playback: a third-party player
+  // page is never loaded into this player (see withoutUnplayableEmbeds in the main process and the
+  // watch route), so `link` is always a stream this player can drive itself.
 
   // Translation/player/quality picking: distinct, non-empty values across every link this episode
   // could play through - PlayerSettingsMenu only shows a picker for whichever of these actually
@@ -907,7 +906,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   // --- source setup (hls.js / direct mp4) ---
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || isEmbed || !link) return;
+    if (!video || !link) return;
 
     let hls: Hls | null = null;
     let dash: MediaPlayerClass | null = null;
@@ -1216,10 +1215,9 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       if (headerSessionId) void hibiki.player.unregisterHeaders(headerSessionId);
       for (const sessionId of subtitleSessionIds) void hibiki.player.unregisterHeaders(sessionId);
     };
-  }, [link, isEmbed, armPlaybackTimeout, playbackRetryKey]);
+  }, [link, armPlaybackTimeout, playbackRetryKey]);
 
   // --- media element event wiring ---
-  const embedRef = useRef<HTMLIFrameElement>(null);
   // Capture while the playback surface still exists, never during unmount.
   // A late capture response must not save pixels from the destination page.
   useEffect(() => {
@@ -1228,9 +1226,9 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     let lastCapture = 0;
     const video = videoRef.current;
     const capture = async () => {
-      const surface = isEmbed ? embedRef.current : video;
+      const surface = video;
       if (cancelled || pending || !onCaptureThumbnail || !surface?.isConnected || document.hidden) return;
-      if (!isEmbed && (!video || video.readyState < 2 || video.seeking)) return;
+      if (!video || video.readyState < 2 || video.seeking) return;
       if (Date.now() - lastCapture < 2000) return;
       const rect = surface.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) return;
@@ -1256,11 +1254,11 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       video?.removeEventListener("seeked", capture);
       video?.removeEventListener("pause", capture);
     };
-  }, [link, isEmbed, onCaptureThumbnail]);
+  }, [link, onCaptureThumbnail]);
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || isEmbed) return;
+    if (!video) return;
     let waitingSince: number | null = null;
     let lastTimeUpdateLogAt = 0;
     let lastLoggedBufferedEnd = -1;
@@ -1420,7 +1418,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     // then have had no error reporting at all: no overlay, no fallback, just a spinner forever.
     const onError = () => {
       observe("error");
-      if (!link || isEmbed || !elementOwnsSourceRef.current) return;
+      if (!link || !elementOwnsSourceRef.current) return;
       log.error("player", "<video> element error:", `code ${video.error?.code}`, video.error?.message ?? "");
       const reason = video.error?.message || "playback failed";
       if (!reportPlaybackFailure(link, reason)) setPlaybackError(reason);
@@ -1455,7 +1453,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       video.removeEventListener("error", onError);
       for (const [event, handler] of mediaEventHandlers) video.removeEventListener(event, handler);
     };
-  }, [link, isEmbed, startPositionMs, onProgress, onPlayStateChange, reportPlaybackFailure, autoPlayNextEpisode, playbackSpeed, onNextEpisode, setStoredVolume, armPlaybackTimeout]);
+  }, [link, startPositionMs, onProgress, onPlayStateChange, reportPlaybackFailure, autoPlayNextEpisode, playbackSpeed, onNextEpisode, setStoredVolume, armPlaybackTimeout]);
 
   // Push the remembered volume onto the element itself. A fresh <video> (new episode, new stream
   // after a player switch) always comes up at 1.0 unmuted, so this has to re-run per `link`, not
@@ -1463,11 +1461,11 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   // off the render loop: the element's own volumechange is what feeds those back.
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || isEmbed) return;
+    if (!video) return;
     const { volume: preferred, muted: preferredMuted } = usePlayerPrefsStore.getState();
     video.volume = preferred;
     video.muted = preferredMuted;
-  }, [link, isEmbed]);
+  }, [link]);
 
   // Applied separately (not just via loadedmetadata above) so changing the speed in the in-player
   // settings menu takes effect immediately on whatever's already playing, not just next episode.
@@ -1848,48 +1846,18 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
 
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
 
-  const finishEmbedSourceSwitch = () => {
-    if (!switchingSource) return;
+  // A pick that turned out unplayable never swaps `link`, so nothing else ends the switch the menu
+  // began (paused, frozen clock, spinner): hand the stream that was already playing back its state.
+  useEffect(() => {
+    if (!unplayable || !switchingSource || !link) return;
+    const video = videoRef.current;
+    const resume = pendingSourceSwitchRef.current?.resume ?? false;
     pendingSourceSwitchRef.current = null;
     frozenDisplayRef.current = null;
     setSwitchingSource(false);
     setBuffering(false);
-  };
-
-  // No custom controls here on purpose - this is the third-party site's own player UI running in
-  // an iframe, not a media element we control (no seek bar/volume/etc. to wire up, same as
-  // Android's BrowserPlaybackSurface fallback).
-  if (isEmbed) {
-    return (
-      <div ref={containerRef} className="relative h-full w-full bg-black">
-        {/* No cross-origin way to mute this page's own audio after the fact (it isn't our <video>
-            element, and a plain iframe exposes nothing like a webview's setAudioMuted) - the one
-            lever this app actually has is never granting unmuted-autoplay permission while muted.
-            Chromium's own autoplay policy then falls back to autoplaying muted by default for any
-            embed whose own player is a standard <video autoplay> (most of them), the same way it
-            would for a bare page loaded without this permission at all. Not airtight - a player
-            that starts audio some other way (Web Audio, requiring a click) can still ignore it -
-            but it is the only honest thing this can do about a page it has no other access into. */}
-        <iframe ref={embedRef} src={link.url} onLoad={finishEmbedSourceSwitch} allow={muted ? "fullscreen" : "autoplay; fullscreen"} allowFullScreen className="h-full w-full border-0" />
-        {(sourceSwitching || switchingSource) && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-[1px]">
-            <Loader2 className="h-12 w-12 animate-spin text-white/80" strokeWidth={2} />
-          </div>
-        )}
-        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center gap-4 bg-gradient-to-b from-black/80 to-transparent px-6 pb-10 pt-5">
-          <button onClick={onBack} className="pointer-events-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20">
-            <ArrowLeft className="h-[18px] w-[18px]" strokeWidth={2} />
-          </button>
-          <div className="min-w-0">
-            <p className="select-text truncate text-base font-bold text-white">{title}</p>
-            <p className="select-text truncate text-xs text-zinc-300">{episodeLabel}</p>
-          </div>
-        </div>
-        <StreakToast streak={streakToast} />
-        <PlayerSwitchToast toast={playerSwitchToast} />
-      </div>
-    );
-  }
+    if (video && resume) video.play().catch((error: unknown) => logPlayRequestFailure("abandoned switch", error)).finally(() => setPlaying(!video.paused));
+  }, [unplayable, switchingSource, link]);
 
   const VolumeIcon = muted || volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
   // What the clock and seek bar actually render - the frozen snapshot while a switch is still
@@ -2081,7 +2049,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60 px-8 text-center">
           <TriangleAlert className="h-10 w-10 text-rose-400" strokeWidth={1.75} />
           <p className="select-text text-sm text-zinc-300">{t("common.loadFailed", { message: playbackError })}</p>
-          {link && !isEmbed && (
+          {link && (
             <button
               type="button"
               onClick={() => {
@@ -2096,6 +2064,11 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
               {t("common.retry")}
             </button>
           )}
+        </div>
+      ) : unplayable ? (
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60 px-8 text-center">
+          <TriangleAlert className="h-10 w-10 text-rose-400" strokeWidth={1.75} />
+          <p className="text-sm text-zinc-300">{t("watch.unsupportedPlayer")}</p>
         </div>
       ) : (sourceSwitching || switchingSource || buffering || !link) && (
         // `!link` is the "still deciding what to play" case - the spinner sits over the chrome
