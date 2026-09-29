@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
-import { Check, Search, Home, LayoutGrid, Bookmark, CalendarDays, Download, Radio, User, Settings } from "lucide-react";
+import { Check, Search, Home, LayoutGrid, Bookmark, Download, Radio, User, Settings } from "lucide-react";
 import { usePopoverTheme } from "@/lib/usePopoverTheme";
 import { useUiStore } from "@/stores/uiStore";
 import { useSpotlightStore } from "@/stores/spotlightStore";
@@ -24,7 +24,6 @@ const navigation = [
   { to: "/catalog", labelKey: "nav.catalog", icon: LayoutGrid },
   { to: "/search", labelKey: "nav.search", icon: Search },
   { to: "/library", labelKey: "library.title", icon: Bookmark },
-  { to: "/calendar", labelKey: "calendar.title", icon: CalendarDays },
   { to: "/downloads", labelKey: "downloads.title", icon: Download },
   { to: "/sources", labelKey: "nav.sources", icon: Radio },
 ] as const;
@@ -113,7 +112,7 @@ function NavLink({
   compact,
   badgeCount = 0,
 }: {
-  to: "/" | "/catalog" | "/search" | "/library" | "/calendar" | "/downloads" | "/sources" | "/settings" | "/profile";
+  to: "/" | "/catalog" | "/search" | "/library" | "/downloads" | "/sources" | "/settings" | "/profile";
   label: string;
   icon: typeof Home;
   compact: boolean;
