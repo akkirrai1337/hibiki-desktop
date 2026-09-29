@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { useRouter, Link } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, RotateCw, Search, Home, Minus, Square, Copy, X } from "lucide-react";
-import { useTranslation } from "react-i18next";
+import { useRouter } from "@tanstack/react-router";
+import { ChevronLeft, ChevronRight, RotateCw, Minus, Square, Copy, X } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
 import { useUiStore } from "@/stores/uiStore";
 import { useSpotlightStore } from "@/stores/spotlightStore";
@@ -18,7 +17,6 @@ import appIcon from "@/assets/app-icon.png";
 // main/index.ts) and this bar sits below it as the app's own: navigation, search, updates. WindowControls
 // only renders on other platforms.
 export function TitleBar() {
-  const { t } = useTranslation();
   const router = useRouter();
   const [canGoBack, setCanGoBack] = useState(router.history.canGoBack());
 
@@ -27,7 +25,6 @@ export function TitleBar() {
   // There's nothing yet to search, and nowhere else to jump "home" to, while onboarding still owns
   // the whole screen (see __root.tsx) - both would just be dead chrome floating over it.
   const onboardingCompleted = useUiStore((s) => s.onboardingCompleted);
-  const spotlightOpen = useSpotlightStore((s) => s.open);
 
   // Quick search over whatever is on screen (see SearchSpotlight): Ctrl/Cmd+K anywhere, or "/" when the
   // cursor is not already in a field. The button next to it is the way to the Search page itself.
@@ -73,11 +70,6 @@ export function TitleBar() {
     <div className="app-drag relative flex h-10 shrink-0 items-center bg-app-surface pl-3" onMouseDown={onBarMouseDown} onDoubleClick={onBarDoubleClick}>
       <div className="flex shrink-0 items-center gap-1">
         <img src={appIcon} alt="" className="mr-1.5 h-6 w-6 rounded-[7px]" />
-        {onboardingCompleted && (
-          <Link to="/" aria-label="Home" className="flex h-6 w-6 items-center justify-center rounded-full text-muted transition-colors hover:bg-text/10 hover:text-text" activeProps={{ className: "!text-accent-text" }}>
-            <Home className="h-[15px] w-[15px]" strokeWidth={2.25} />
-          </Link>
-        )}
         <button
           onClick={() => router.history.back()}
           disabled={!canGoBack}
@@ -86,16 +78,6 @@ export function TitleBar() {
         >
           <ChevronLeft className="h-4 w-4" strokeWidth={2.5} />
         </button>
-        {onboardingCompleted && (
-          <button
-            onClick={() => useSpotlightStore.getState().toggle()}
-            aria-label={t("nav.search")}
-            title={`${t("nav.search")} (Ctrl+K)`}
-            className={cn("app-no-drag flex h-6 w-6 items-center justify-center rounded-full transition-colors hover:bg-text/10 hover:text-text", spotlightOpen ? "text-accent-text" : "text-muted")}
-          >
-            <Search className="h-[15px] w-[15px]" strokeWidth={2.25} />
-          </button>
-        )}
         <button
           onClick={() => router.history.forward()}
           aria-label="Forward"

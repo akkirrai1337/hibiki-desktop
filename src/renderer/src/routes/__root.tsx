@@ -219,13 +219,6 @@ function RootLayoutContent() {
     <div className="min-h-0 flex-1"><Onboarding onComplete={() => setOnboardingCompleted(true)} /></div>
   </div>;
 
-  if (isWatching) return <div className="flex h-screen w-screen flex-col overflow-hidden bg-black" style={{ backgroundImage: backgroundGradient }}>
-    <TitleBar />
-    <AchievementToast />
-    <SearchSpotlight />
-    <div className="min-h-0 flex-1"><Outlet /></div>
-  </div>;
-
   return <div className="flex h-screen w-screen flex-col overflow-hidden bg-app-bg text-text" style={{ backgroundImage: backgroundGradient }}>
     <TitleBar />
     <AchievementToast />
@@ -290,7 +283,9 @@ function RootLayoutContent() {
             page's own div as a second, empty `flex-1` box silently claiming half of `main`'s height
             for content (Outlet renders nothing for a persisted route) that was never going to use it. */}
         {!(pathname in PERSISTED_PAGES) && (
-          <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto" data-scroll-restoration-id="app-main">
+          // The player fills its box itself (own black background, own fullscreen) and must not scroll
+          // inside it; every other param route (anime details) scrolls here as before.
+          <div className={cn("min-h-0 flex-1", isWatching ? "bg-black" : "no-scrollbar overflow-y-auto")} data-scroll-restoration-id="app-main">
             <Outlet />
           </div>
         )}
