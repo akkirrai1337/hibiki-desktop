@@ -57,7 +57,12 @@ function WatchRoute() {
   // Above the key on purpose: leaving the player should stop announcing an episode, but moving to
   // the next one should not blink the presence off and straight back on. This unmounts only when
   // the route itself is left.
-  useEffect(() => () => { hibiki.discord.clearPresence(); }, []);
+  useEffect(() => () => {
+    hibiki.discord.clearPresence();
+    // Fullscreen belongs to a wrapper that outlives the player (so it survives a switch of episode),
+    // which means it no longer ends with the player on its own when the route is left.
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+  }, []);
   return <WatchPage key={`${groupId}/${episodeId}`} />;
 }
 

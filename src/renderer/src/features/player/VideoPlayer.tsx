@@ -761,7 +761,9 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   const [muted, setMuted] = useState(storedMuted);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [volumeHover, setVolumeHover] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  // Initialised from the document: moving to another episode remounts the whole player (see the
+  // keyed WatchPage), and fullscreen outlives that, so a fresh instance can start out inside it.
+  const [isFullscreen, setIsFullscreen] = useState(() => !!document.fullscreenElement);
   const [isPip, setIsPip] = useState(false);
   const [seeking, setSeeking] = useState(false);
   const [hoverRatio, setHoverRatio] = useState<number | null>(null);
@@ -1561,7 +1563,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
 
   // --- fullscreen tracking ---
   useEffect(() => {
-    const onChange = () => setIsFullscreen(document.fullscreenElement === containerRef.current);
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", onChange);
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
@@ -1690,7 +1692,9 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
 
   const toggleFullscreenNow = useCallback(() => {
     if (document.fullscreenElement) document.exitFullscreen();
-    else containerRef.current?.requestFullscreen();
+    // The app's player wrapper rather than the player itself: switching episode remounts the player,
+    // and an element that leaves the document takes fullscreen with it. The wrapper outlives it.
+    else (containerRef.current?.closest<HTMLElement>("[data-player-fullscreen-root]") ?? containerRef.current)?.requestFullscreen();
   }, []);
 
   const togglePip = useCallback((e: React.MouseEvent) => {
@@ -1884,7 +1888,9 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   return (
     <div
       ref={containerRef}
-      className="group/player relative h-full w-full select-none overflow-hidden bg-black"
+      // The cursor goes with the controls (they only ever hide while playing), including over children
+      // that set their own, like the draggable subtitle box.
+      className={cn("group/player relative h-full w-full select-none overflow-hidden bg-black", !controlsVisible && "[&_*]:!cursor-none cursor-none")}
       onMouseMove={wake}
       onPointerDown={onVideoPointerDown}
       onPointerUp={onVideoPointerUp}

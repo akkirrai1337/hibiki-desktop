@@ -285,7 +285,7 @@ function RootLayoutContent() {
         {!(pathname in PERSISTED_PAGES) && (
           // The player fills its box itself (own black background, own fullscreen) and must not scroll
           // inside it; every other param route (anime details) scrolls here as before.
-          <div className={cn("min-h-0 flex-1", isWatching ? "bg-black" : "no-scrollbar overflow-y-auto")} data-scroll-restoration-id="app-main">
+          <div className={cn("min-h-0 flex-1", isWatching ? "bg-black" : "no-scrollbar overflow-y-auto")} data-scroll-restoration-id="app-main" data-player-fullscreen-root={isWatching ? "" : undefined}>
             <Outlet />
           </div>
         )}
