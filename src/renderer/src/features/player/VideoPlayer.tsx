@@ -1204,9 +1204,22 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         elementOwnsSourceRef.current = false;
         dash = DashMediaPlayer().create();
         if (usesStreamProxy()) {
+          // Requests go through the proxy, but each response is reported under its upstream URL (the
+          // final one after redirects, X-Hibiki-Final-Url): dash.js resolves the manifest's relative
+          // segment URLs against that, and against the proxy they would point nowhere.
+          const upstreamByRequest = new Map<string, string>();
           dash.addRequestInterceptor(async (request) => {
-            request.url = streamRequestUrl(sessionId, request.url);
+            const proxied = streamRequestUrl(sessionId, request.url);
+            if (proxied !== request.url) upstreamByRequest.set(proxied, request.url);
+            request.url = proxied;
             return request;
+          });
+          dash.addResponseInterceptor(async (response) => {
+            const headers = (response.headers ?? {}) as Record<string, string>;
+            const upstream = headers["x-hibiki-final-url"] ?? headers["X-Hibiki-Final-Url"] ?? upstreamByRequest.get(response.request.url);
+            upstreamByRequest.delete(response.request.url);
+            if (upstream) response.url = upstream;
+            return response;
           });
         }
         // Same reasoning as hls.js above: dash.js retries transient errors on its own, but a
