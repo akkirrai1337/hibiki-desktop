@@ -76,9 +76,18 @@ export async function acquireChallenge(url: string, cookieNames: string[], force
   const key = `challenge:${new URL(url).origin}`;
   await HibikiBrowser.open({ key, url, clearOrigin: forceRefresh });
   try {
-    const deadline = Date.now() + 45_000;
+    // Same flow as the Kotlin app: give the hidden page a chance to pass by itself, then show it
+    // so a person can tick the box / solve the captcha. The PoC folds both into one wait.
+    const startedAt = Date.now();
+    const deadline = startedAt + 120_000;
+    let shown = false;
     let cookies: Record<string, string> = {};
     while (Date.now() < deadline) {
+      if (!shown && Date.now() - startedAt > 10_000) {
+        shown = true;
+        log?.("challenge: not solved by itself in 10s, showing the page");
+        await HibikiBrowser.show({ key });
+      }
       await new Promise((resolve) => setTimeout(resolve, 750));
       const title = JSON.parse((await HibikiBrowser.eval({ key, js: "document.title" })).value || '""') as string;
       cookies = parseCookies((await HibikiBrowser.cookies({ url })).value);

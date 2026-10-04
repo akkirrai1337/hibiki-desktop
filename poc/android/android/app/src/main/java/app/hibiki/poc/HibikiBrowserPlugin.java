@@ -86,6 +86,21 @@ public class HibikiBrowserPlugin extends Plugin {
         });
     }
 
+    /** Brings a hidden page in front of the app, for a challenge that needs a person (captcha, checkbox). */
+    @PluginMethod
+    public void show(PluginCall call) {
+        String key = call.getString("key");
+        getActivity().runOnUiThread(() -> {
+            WebView view = views.get(key);
+            if (view == null) {
+                call.reject("no hidden page " + key);
+                return;
+            }
+            view.bringToFront();
+            call.resolve();
+        });
+    }
+
     @PluginMethod
     public void cookies(PluginCall call) {
         String value = CookieManager.getInstance().getCookie(call.getString("url"));

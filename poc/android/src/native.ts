@@ -25,6 +25,7 @@ export interface HibikiNetPlugin {
 export interface HibikiBrowserPlugin {
   open(options: { key: string; url: string; headers?: Record<string, string>; clearOrigin?: boolean }): Promise<void>;
   eval(options: { key: string; js: string }): Promise<{ value: string }>;
+  show(options: { key: string }): Promise<void>;
   cookies(options: { url: string }): Promise<{ value: string }>;
   userAgent(): Promise<{ value: string }>;
   close(options: { key: string }): Promise<void>;

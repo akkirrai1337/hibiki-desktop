@@ -253,10 +253,26 @@ $("clearLog").onclick = () => (logEl.textContent = "");
 
 // On the phone the whole bench runs by itself once on launch and reports through console.log,
 // which Capacitor forwards to logcat (tag Capacitor/Console) - no need to drive the UI remotely.
+// Which parts of the bench autorun covers; the player and source chain already passed on device
+// (see the plan), the challenge is the one still being checked.
+const AUTORUN = { chain: false, challengeSources: false };
+
 async function autorun(): Promise<void> {
   await describeEnvironment();
   if (!isNative) return;
   log("autorun: start");
+  if (AUTORUN.chain) await autorunChain();
+  if (AUTORUN.challengeSources) {
+    for (const sourceId of ["animepahe", "anikappa"]) {
+      if (!scriptLoaders.has(sourceId)) continue;
+      await call("latest", [20], sourceId).catch((e) => log(`error: ${String(e)}`));
+    }
+  }
+  await autorunChallenge();
+  log("autorun: done");
+}
+
+async function autorunChain(): Promise<void> {
   $("runAll").click();
   // runAll's own promise is not exposed; wait for the chain to settle, then try the player.
   for (let i = 0; i < 120 && !$<HTMLInputElement>("streamUrl").value; i++) await new Promise((r) => setTimeout(r, 500));
@@ -272,19 +288,16 @@ async function autorun(): Promise<void> {
   } else {
     log("autorun: no direct stream found, player skipped");
   }
-  // 0.4 end to end: both sources sit behind Cloudflare and call challenge() themselves.
   video.pause();
-  for (const sourceId of ["animepahe", "anikappa"]) {
-    if (!scriptLoaders.has(sourceId)) continue;
-    await call("latest", [20], sourceId).catch((e) => log(`error: ${String(e)}`));
-  }
-  // Mechanics of challenge() without depending on Cloudflare deciding to challenge right now:
-  // hidden WebView loads a real Cloudflare-fronted page, its cookies are read and replayed natively.
-  $<HTMLInputElement>("challengeUrl").value = "https://animepahetv.to/";
-  $<HTMLInputElement>("challengeCookies").value = "";
+}
+
+async function autorunChallenge(): Promise<void> {
+  // A page that always answers with a Cloudflare challenge: hidden WebView first, then shown for a
+  // person; whatever cf_clearance it earns is replayed through the native client.
+  $<HTMLInputElement>("challengeUrl").value = "https://www.scrapingcourse.com/cloudflare-challenge";
+  $<HTMLInputElement>("challengeCookies").value = "cf_clearance";
   $("challenge").click();
-  for (let i = 0; i < 120 && !/challenge: (refetch|error)/.test(logEl.textContent ?? ""); i++) await new Promise((r) => setTimeout(r, 500));
-  log("autorun: done");
+  for (let i = 0; i < 300 && !/challenge: (refetch|error)/.test(logEl.textContent ?? ""); i++) await new Promise((r) => setTimeout(r, 500));
 }
 
 void autorun();
