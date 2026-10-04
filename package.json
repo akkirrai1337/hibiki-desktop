@@ -19,6 +19,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "probe": "tsx scripts/probe-source.ts",
+    "android:build": "vite build -c vite.android.config.ts && cap sync android",
+    "android:apk": "npm run android:build && cd android && gradlew assembleDebug",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
