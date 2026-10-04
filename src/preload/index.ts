@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webFrame } from "electron";
 import { IPC } from "@shared/ipc";
+import type { HibikiApi, LogEntry } from "@shared/hibikiApi";
 import type {
   AnimeTitle,
   AppUpdate,
@@ -33,7 +34,7 @@ import type {
   MemorySnapshot,
 } from "@shared/types";
 
-const api = {
+const api: HibikiApi = {
   sources: {
     list: (): Promise<SourceInfo[]> => ipcRenderer.invoke(IPC.sourcesList),
     search: (sourceId: string, request: SearchRequest, requestId?: string): Promise<AnimeTitle[]> =>
@@ -227,7 +228,7 @@ const api = {
   // which main never sees) and reads it back for the Settings preview / "Export log".
   logs: {
     export: (): Promise<string | null> => ipcRenderer.invoke(IPC.logsExport),
-    recent: (limit?: number): Promise<Array<{ time: number; level: string; scope: string; message: string }>> =>
+    recent: (limit?: number): Promise<LogEntry[]> =>
       ipcRenderer.invoke(IPC.logsRecent, limit),
     openFolder: (): void => { ipcRenderer.send(IPC.logsOpenFolder); },
     memory: (record?: boolean): Promise<MemorySnapshot> => ipcRenderer.invoke(IPC.diagnosticsMemory, record),
@@ -274,5 +275,3 @@ const api = {
 };
 
 contextBridge.exposeInMainWorld("hibiki", api);
-
-export type HibikiApi = typeof api;
