@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>hibiki PoC</title>
+    <style>
+      :root { color-scheme: dark; }
+      body { margin: 0; padding: 12px 12px 48px; font: 14px/1.4 system-ui, sans-serif; background: #0b0b0f; color: #e8e8ee; }
+      h2 { font-size: 15px; margin: 18px 0 6px; color: #ff6fa8; }
+      section { border: 1px solid #23232c; border-radius: 10px; padding: 10px; margin-bottom: 10px; background: #121218; }
+      label { display: block; font-size: 12px; color: #9a9aa8; margin-top: 6px; }
+      input, select, textarea { width: 100%; box-sizing: border-box; background: #1a1a22; color: inherit; border: 1px solid #2c2c38; border-radius: 6px; padding: 6px; font: inherit; }
+      textarea { min-height: 60px; font-family: ui-monospace, monospace; font-size: 12px; }
+      button { background: #ff6fa8; color: #120a0f; border: 0; border-radius: 6px; padding: 7px 10px; margin: 6px 6px 0 0; font-weight: 600; }
+      button.secondary { background: #2c2c38; color: inherit; }
+      .row { display: flex; gap: 6px; flex-wrap: wrap; }
+      .row > * { flex: 1 1 140px; }
+      pre { white-space: pre-wrap; word-break: break-all; font-size: 11px; background: #0e0e13; border-radius: 6px; padding: 6px; max-height: 260px; overflow: auto; margin: 6px 0 0; }
+      .ok { color: #7ee2a8; } .bad { color: #ff7b7b; }
+      video { width: 100%; background: #000; border-radius: 8px; margin-top: 6px; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

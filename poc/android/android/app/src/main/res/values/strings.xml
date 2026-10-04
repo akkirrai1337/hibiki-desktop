@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">hibiki PoC</string>
+    <string name="title_activity_main">hibiki PoC</string>
+    <string name="package_name">app.hibiki.poc</string>
+    <string name="custom_url_scheme">app.hibiki.poc</string>
+</resources>
