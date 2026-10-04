@@ -29,6 +29,7 @@ import {
 import type { Episode, PlayerLink, VideoSegment } from "@shared/types";
 import { pickLinkForDimension, pickLinkForQuality, playerOptions, qualityOptions, translationOptions } from "@/lib/playerLinks";
 import { playbackUrl } from "@/lib/playbackUrl";
+import { proxiedHlsLoader, streamRequestUrl, usesStreamProxy } from "@/lib/streamProxy";
 import { isGenericDubTitle } from "@/lib/dubTitle";
 import { subtitleFormatFromUrl, toVtt } from "@/lib/subtitles";
 import { hibiki } from "@/lib/hibiki";
@@ -549,13 +550,25 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   useEffect(() => {
     let cancelled = false;
     const blobUrls: string[] = [];
+    const proxySessions: string[] = [];
+    // On a host with a stream proxy (Android) a subtitle file on another origin is out of reach for
+    // <track> and fetch() alike (CORS), so each track gets its own proxy session carrying its
+    // headers. Desktop loads it directly, as before.
+    const subtitleSource = async (subtitle: { url: string; headers?: Record<string, string> | null }): Promise<string> => {
+      const url = playbackUrl(subtitle.url);
+      if (!usesStreamProxy()) return url;
+      const sessionId = await hibiki.player.registerHeaders(url, subtitle.headers ?? link?.headers ?? null);
+      if (cancelled) void hibiki.player.unregisterHeaders(sessionId);
+      else proxySessions.push(sessionId);
+      return streamRequestUrl(sessionId, url);
+    };
     void (async () => {
       const resolved = await Promise.all((link?.subtitles ?? []).map(async (subtitle) => {
         const format = subtitleFormatFromUrl(subtitle.url);
         const label = subtitle.label ?? subtitle.language ?? "?";
-        if (format === "vtt" || format === "unknown") return { id: subtitle.url, url: playbackUrl(subtitle.url), label, language: subtitle.language ?? undefined };
+        if (format === "vtt" || format === "unknown") return { id: subtitle.url, url: await subtitleSource(subtitle), label, language: subtitle.language ?? undefined };
         try {
-          const response = await fetch(playbackUrl(subtitle.url));
+          const response = await fetch(await subtitleSource(subtitle));
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const url = URL.createObjectURL(new Blob([toVtt(format, await response.text())], { type: "text/vtt" }));
           blobUrls.push(url);
@@ -570,6 +583,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     return () => {
       cancelled = true;
       blobUrls.forEach((url) => URL.revokeObjectURL(url));
+      proxySessions.forEach((sessionId) => void hibiki.player.unregisterHeaders(sessionId));
     };
   }, [link]);
   // Memoized so the two effects below - one of them syncing native <track> state on every change -
@@ -985,7 +999,6 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         // HLS/DASH are large libraries and the catalog never needs them. Import only the engine
         // selected by this stream, keeping both out of the application's startup bundle.
         const { default: HlsEngine } = await import("hls.js");
-        const { proxiedHlsLoader, usesStreamProxy } = await import("@/lib/streamProxy");
         trace(`hls.js import ready in ${Math.round(performance.now() - setupStartedAt)}ms`);
         if (cancelled) return;
         elementOwnsSourceRef.current = !HlsEngine.isSupported();
@@ -1187,7 +1200,6 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         trace("loadSource() and attachMedia() called");
       } else if (isDash) {
         const { MediaPlayer: DashMediaPlayer } = await import("dashjs");
-        const { streamRequestUrl, usesStreamProxy } = await import("@/lib/streamProxy");
         if (cancelled) return;
         elementOwnsSourceRef.current = false;
         dash = DashMediaPlayer().create();
@@ -1217,8 +1229,6 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         });
         dash.initialize(video, streamUrl, true);
       } else {
-        const { streamRequestUrl } = await import("@/lib/streamProxy");
-        if (cancelled) return;
         elementOwnsSourceRef.current = true;
         video.src = streamRequestUrl(sessionId, streamUrl);
       }
