@@ -4,6 +4,7 @@
 // same site share one page instead of tearing each other's down.
 import type { BrowserFetchResult, BrowserPort, ChallengeSession, HarvestedCookie } from "../types";
 import { HibikiBrowser } from "./native";
+import { performBrowserResolve } from "./browserResolve";
 
 const SHOW_AFTER_MS = 8_000;
 const GIVE_UP_AFTER_MS = 120_000;
@@ -225,7 +226,6 @@ async function login(sourceId: string, url: string, successCookieName: string): 
   }
 }
 
-const notYet = (what: string) => Promise.reject(new Error(`${what} is not supported on Android yet`));
 
 export const androidBrowser: BrowserPort = {
   challenge(url, cookieNames, forceRefresh) {
@@ -239,7 +239,7 @@ export const androidBrowser: BrowserPort = {
     return pending;
   },
   browserFetch,
-  resolve: () => notYet("A browser-based player resolver"),
+  resolve: performBrowserResolve,
   login,
   dispose() {
     for (const { key, timer } of pages.values()) {

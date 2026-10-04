@@ -13,6 +13,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(HibikiDbPlugin.class);
         registerPlugin(HibikiSecurePlugin.class);
         registerPlugin(HibikiDownloadsPlugin.class);
+        registerPlugin(HibikiResolverPlugin.class);
         super.onCreate(savedInstanceState);
         // Capacitor builds its own client and starts loading during super.onCreate(). Swap in ours
         // and load again, so every request from the first page on goes through it.

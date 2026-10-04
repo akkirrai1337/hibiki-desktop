@@ -63,7 +63,21 @@ export interface HibikiBrowserPlugin {
   addListener(event: "closed", listener: (event: { key: string }) => void): Promise<PluginListenerHandle>;
 }
 
+export interface HibikiResolverPlugin {
+  open(options: { key: string; bootScript: string; resolverScript: string }): Promise<void>;
+  navigate(options: { key: string; url: string; headers?: Record<string, string>; documentOnly?: boolean }): Promise<void>;
+  setDocumentOnly(options: { key: string; value: boolean }): Promise<void>;
+  evalTop(options: { key: string; js: string }): Promise<{ value: string; url?: string }>;
+  frames(options: { key: string }): Promise<{ frames: Array<{ id: number; url: string; origin: string; main: boolean }> }>;
+  frameCall(options: { key: string; frameId: number; id: string; payload: string }): Promise<{ raw: string }>;
+  takeCaptures(options: { key: string }): Promise<{ captures: Array<{ url: string; headers: Record<string, string> }> }>;
+  userAgent(): Promise<{ value: string }>;
+  cookies(options: { url: string }): Promise<{ value: string }>;
+  close(options: { key: string }): Promise<void>;
+}
+
 export const HibikiNet = registerPlugin<HibikiNetPlugin>("HibikiNet");
+export const HibikiResolver = registerPlugin<HibikiResolverPlugin>("HibikiResolver");
 export const HibikiFiles = registerPlugin<HibikiFilesPlugin>("HibikiFiles");
 export const HibikiDb = registerPlugin<HibikiDbPlugin>("HibikiDb");
 export const HibikiSecure = registerPlugin<HibikiSecurePlugin>("HibikiSecure");
