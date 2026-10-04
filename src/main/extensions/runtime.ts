@@ -1,14 +1,11 @@
-// Main-thread orchestrator for Hibiki's scripted extensions (hibiki-sources/extensions/*.js).
-// `list()` just reads manifest JSON (fast, no network) and stays synchronous; every call that
-// actually runs a script (search/latest/getById/...) is dispatched to a fresh worker_thread (see
-// worker.ts) — extension scripts call a *synchronous* fetch() (matching the Rhino runtime they
-// were written for), which blocks whichever thread runs it. Running that on Electron's main
-// thread freezes the whole app (window, IPC, everything) for the request's duration; a worker
-// keeps the freeze contained to that one call.
+// Orchestrator for Hibiki's scripted extensions (hibiki-sources/extensions/*.js). `list()` just
+// reads manifest JSON (fast, no network) and stays synchronous; every call that actually runs a
+// script (search/latest/getById/...) goes to the platform's extension host, which runs it off the
+// UI thread - extension scripts call a *synchronous* fetch() (matching the Rhino runtime they were
+// written for), which blocks whichever thread runs it. The script's host calls (fetch, challenge,
+// browserFetch) come back to `bridge` below.
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { Worker } from "node:worker_threads";
 import type {
   AnimeTitle,
   PlaybackGroup,
@@ -23,17 +20,16 @@ import type {
   SourceLibraryEntry,
   SourceReview,
 } from "@shared/types";
-import type { ExtensionCall, ExtensionMethod } from "./execute";
-import type { WorkerCallMessage, WorkerReadyMessage, WorkerResultMessage } from "./worker";
+import type { ExtensionMethod } from "./execute";
+import type { BridgeHandler } from "../../platform/types";
+import { getPlatform } from "../../core/platform";
 import { performBrowserFetch, performChallenge } from "./browserFetchHost";
 import { performNetFetch, performNetFetchAll } from "../../core/extensions/netFetch";
 import { loginViaWebview } from "./webLogin";
 import { logger } from "../../core/logger";
 import { performBrowserResolve } from "./browserResolveHost";
-import type { BridgeRequestMessage } from "./syncHostBridge";
 import { ExtensionStorage } from "./extensionStorage";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WORKER_TIMEOUT_MS = 30_000;
 const FILTER_TYPES = ["select", "multi", "tristate", "text", "range"];
 const RESOLVE_TOTAL_TIMEOUT_MS = 45_000;
@@ -250,137 +246,36 @@ export class ExtensionRuntime {
     }));
   }
 
-  // Services one challenge()/browserFetch() request from a worker's extension script (see
-  // syncHostBridge.ts) - runs the real, GUI-capable BrowserWindow work here on the actual main
-  // thread, then wakes the worker back up via its Atomics.wait() flag.
-  private async serviceBridgeRequest(message: BridgeRequestMessage): Promise<void> {
-    let response: { ok: boolean; result?: unknown; error?: string };
-    try {
-      let result: unknown;
-      if (message.bridgeKind === "challenge") {
-        result = await performChallenge(
-          message.payload.url as string,
-          (message.payload.cookieNames as string[]) ?? [],
-          Boolean(message.payload.forceRefresh),
-        );
-      } else if (message.bridgeKind === "netFetchAll") {
-        result = await performNetFetchAll(
-          (message.payload.requests as Array<{ url: string; options?: Record<string, unknown> }>) ?? [],
-        );
-      } else if (message.bridgeKind === "netFetch") {
-        result = await performNetFetch(
-          message.payload.url as string,
-          (message.payload.options as { method?: string; headers?: Record<string, string>; body?: string } | undefined) ?? {},
-        );
-      } else {
-        result = await performBrowserFetch(
-          message.payload.pageUrl as string,
-          message.payload.targetUrl as string,
-          message.payload.options as { method?: string; headers?: Record<string, string>; body?: string } | undefined,
-        );
-      }
-      response = { ok: true, result };
-    } catch (error) {
-      response = { ok: false, error: error instanceof Error ? error.message : String(error) };
+  // Answers one challenge()/browserFetch()/fetch() request from a running extension script (see
+  // syncHostBridge.ts) - the real, GUI-capable work runs here, outside the worker, while the script
+  // waits for the answer.
+  private readonly bridge: BridgeHandler = (kind, payload) => {
+    if (kind === "challenge") {
+      return performChallenge(
+        payload.url as string,
+        (payload.cookieNames as string[]) ?? [],
+        Boolean(payload.forceRefresh),
+      );
+    } else if (kind === "netFetchAll") {
+      return performNetFetchAll(
+        (payload.requests as Array<{ url: string; options?: Record<string, unknown> }>) ?? [],
+      );
+    } else if (kind === "netFetch") {
+      return performNetFetch(
+        payload.url as string,
+        (payload.options as { method?: string; headers?: Record<string, string>; body?: string } | undefined) ?? {},
+      );
     }
-    message.port.postMessage(response);
-    message.port.close();
-    const flag = new Int32Array(message.sab);
-    Atomics.store(flag, 0, 1);
-    Atomics.notify(flag, 0);
-  }
+    return performBrowserFetch(
+      payload.pageUrl as string,
+      payload.targetUrl as string,
+      payload.options as { method?: string; headers?: Record<string, string>; body?: string } | undefined,
+    );
+  };
 
-  // A worker that is done with a call goes back on this list instead of being terminated - see
-  // worker.ts for why (~195ms of bundle parsing per spawn, paid on every search keystroke,
-  // catalog card and resolver attempt). A worker is only ever handed one call at a time, so the
-  // list length is exactly "workers currently idle"; a call that arrives with none idle spawns a
-  // fresh one rather than queueing, since the calls are network-bound and serializing them behind
-  // a fixed pool size would make a multi-source catalog load slower, not faster.
-  private readonly idleWorkers: Worker[] = [];
-  private readonly warmingWorkers = new Set<Worker>();
-  private nextCallId = 1;
-  // Only ever grown back to this on release. Beyond it a worker is terminated: a handful of live
-  // threads is the point, a thread per source the user has ever touched is not.
-  private static readonly MAX_IDLE_WORKERS = 4;
-
-  // Deliberately below MAX_IDLE_WORKERS: warm-up runs while the window is still being created and
-  // the renderer's own bundle is being parsed, so spawning the whole pool up front competes for
-  // CPU on the one load where first paint matters most. The pool still grows to its full size on
-  // demand, from calls that would have spawned a worker anyway.
-  private static readonly WARM_WORKERS = 2;
-
-  // An idle worker holds a whole V8 isolate - about 13 MB each - and used to sit in the pool until
-  // the app quit. Browsing keeps the pool busy, so this only ever reclaims the memory of a pool
-  // nobody has asked anything of for a while; the next call pays one ~200 ms spawn instead.
-  private static readonly IDLE_WORKER_TTL_MS = 2 * 60_000;
-  private readonly idleTimers = new Map<Worker, NodeJS.Timeout>();
-
-  /** Starts the expensive worker bundle parsing before the renderer's first source queries arrive.
-   * Only workers that have loaded the whole module and posted `ready` enter the idle pool; calls
-   * arriving earlier still take the normal fresh-worker path rather than waiting behind warm-up. */
+  /** Starts worker bundle parsing ahead of the renderer's first source queries. */
   warmWorkers(): void {
-    const missing = ExtensionRuntime.WARM_WORKERS - this.idleWorkers.length - this.warmingWorkers.size;
-    for (let i = 0; i < missing; i++) {
-      const worker = new Worker(path.join(__dirname, "extensionWorker.js"));
-      this.warmingWorkers.add(worker);
-      worker.once("message", (_message: WorkerReadyMessage) => {
-        this.warmingWorkers.delete(worker);
-        this.releaseWorker(worker);
-      });
-      worker.once("error", (error) => {
-        this.warmingWorkers.delete(worker);
-        // Terminated, not just forgotten: a warm-up that failed still holds a live thread.
-        void worker.terminate();
-        logger.warn("ext", `worker warm-up failed: ${error instanceof Error ? error.message : String(error)}`);
-      });
-    }
-  }
-
-  private acquireWorker(call: ExtensionCall): { worker: Worker; fresh: boolean } {
-    const idle = this.idleWorkers.pop();
-    if (idle) {
-      // Dropped now that it is in use again - otherwise every release/acquire cycle would leave
-      // another one behind and trip Node's max-listeners warning after ten reuses.
-      idle.removeAllListeners("exit");
-      this.clearIdleTimer(idle);
-      return { worker: idle, fresh: false };
-    }
-    // A fresh worker takes its first call through workerData, so it starts executing as soon as it
-    // has booted rather than waiting for a message to arrive afterwards.
-    return { worker: new Worker(path.join(__dirname, "extensionWorker.js"), { workerData: call }), fresh: true };
-  }
-
-  private releaseWorker(worker: Worker): void {
-    worker.removeAllListeners("message");
-    worker.removeAllListeners("error");
-    if (this.idleWorkers.length >= ExtensionRuntime.MAX_IDLE_WORKERS) {
-      void worker.terminate();
-      return;
-    }
-    // An idle worker that dies on its own (OOM, a native crash) must not stay on the list waiting
-    // to be handed a call it can never answer.
-    worker.once("exit", () => {
-      const index = this.idleWorkers.indexOf(worker);
-      if (index >= 0) this.idleWorkers.splice(index, 1);
-    });
-    this.idleWorkers.push(worker);
-    const timer = setTimeout(() => {
-      this.idleTimers.delete(worker);
-      const index = this.idleWorkers.indexOf(worker);
-      if (index < 0) return;
-      this.idleWorkers.splice(index, 1);
-      worker.removeAllListeners("exit");
-      void worker.terminate();
-    }, ExtensionRuntime.IDLE_WORKER_TTL_MS);
-    // A pending timer must not be what keeps the process alive at quit.
-    timer.unref();
-    this.idleTimers.set(worker, timer);
-  }
-
-  private clearIdleTimer(worker: Worker): void {
-    const timer = this.idleTimers.get(worker);
-    if (timer) clearTimeout(timer);
-    this.idleTimers.delete(worker);
+    getPlatform().extensionHost.warm();
   }
 
   private run<T>(
@@ -395,82 +290,47 @@ export class ExtensionRuntime {
 
     // Read once per call, at dispatch: the script sees a consistent snapshot for its whole run,
     // and a call that writes has its writes applied when it comes back.
-    const call: ExtensionCall = { extensionsDir, sourceId, method, args, storage: this.storage.read(sourceId) };
+    const storage = this.storage.read(sourceId);
 
     const startedAt = Date.now();
     logger.debug("ext", `${sourceId}.${method}() start`);
 
-    return new Promise<T>((resolve, reject) => {
-      const { worker, fresh } = this.acquireWorker(call);
-      const callId = fresh ? 0 : this.nextCallId++;
-      // Guards against resolve()/reject() firing twice: a worker that times out is terminated,
-      // which itself can surface as an "error" event, and a script that throws right after posting
-      // a result would deliver both a result and an error.
-      let settled = false;
+    const controller = new AbortController();
+    const cancel = () => controller.abort();
+    if (options?.requestId) this.cancellations.set(options.requestId, cancel);
+    const clearCancellation = () => {
+      if (options?.requestId && this.cancellations.get(options.requestId) === cancel) {
+        this.cancellations.delete(options.requestId);
+      }
+    };
 
-      const clearCancellation = () => {
-        if (options?.requestId && this.cancellations.get(options.requestId) === cancel) {
-          this.cancellations.delete(options.requestId);
-        }
-      };
-      const cancel = () => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timeout);
-        clearCancellation();
-        void worker.terminate();
-        reject(new Error(`Source "${sourceId}" cancelled calling ${method}()`));
-      };
-
-      const timeout = setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        clearCancellation();
-        // Deliberately terminated, never pooled: this worker is stuck inside a script that hasn't
-        // returned, and handing the next call to it would hang that one too.
-        void worker.terminate();
-        logger.error("ext", `${sourceId}.${method}() timed out after ${timeoutMs}ms`);
-        reject(new Error(`Source "${sourceId}" timed out calling ${method}()`));
-      }, timeoutMs);
-
-      worker.on("message", (message: BridgeRequestMessage | WorkerResultMessage) => {
-        if (message.kind === "bridge") {
-          void this.serviceBridgeRequest(message);
-          return;
-        }
-        // A late result from a call this promise already gave up on (a timeout that fired while
-        // the worker was still working) - the worker was terminated, so this can only be a
-        // straggler already in the queue.
-        if (settled || message.id !== callId) return;
-        settled = true;
-        clearTimeout(timeout);
-        clearCancellation();
-        this.releaseWorker(worker);
-        // Before resolve/reject either way: a call that stored a token and then failed still
-        // stored the token.
-        if (message.storageWrites) this.storage.apply(sourceId, message.storageWrites);
-        if (message.ok) {
-          logger.debug("ext", `${sourceId}.${method}() ok in ${Date.now() - startedAt}ms`);
-          resolve(message.result as T);
-        } else {
+    return getPlatform()
+      .extensionHost.run({ extensionsDir, sourceId, method, args, storage }, this.bridge, { timeoutMs, signal: controller.signal })
+      .then(
+        (message) => {
+          clearCancellation();
+          // Before resolve/reject either way: a call that stored a token and then failed still
+          // stored the token.
+          if (message.storageWrites) this.storage.apply(sourceId, message.storageWrites);
+          if (message.ok) {
+            logger.debug("ext", `${sourceId}.${method}() ok in ${Date.now() - startedAt}ms`);
+            return message.result as T;
+          }
           logger.warn("ext", `${sourceId}.${method}() failed in ${Date.now() - startedAt}ms: ${message.error}`);
-          reject(new Error(message.error));
-        }
-      });
-      worker.once("error", (error: unknown) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timeout);
-        clearCancellation();
-        void worker.terminate();
-        const failure = error instanceof Error ? error : new Error(String(error));
-        logger.error("ext", `${sourceId}.${method}() crashed in ${Date.now() - startedAt}ms: ${failure.message}`);
-        reject(failure);
-      });
-
-      if (!fresh) worker.postMessage({ kind: "call", id: callId, call } satisfies WorkerCallMessage);
-      if (options?.requestId) this.cancellations.set(options.requestId, cancel);
-    });
+          throw new Error(message.error);
+        },
+        (error: unknown) => {
+          clearCancellation();
+          const failure = error instanceof Error ? error : new Error(String(error));
+          if (failure.name === "AbortError") throw new Error(`Source "${sourceId}" cancelled calling ${method}()`);
+          if (failure.name === "TimeoutError") {
+            logger.error("ext", `${sourceId}.${method}() timed out after ${timeoutMs}ms`);
+            throw new Error(`Source "${sourceId}" timed out calling ${method}()`);
+          }
+          logger.error("ext", `${sourceId}.${method}() crashed in ${Date.now() - startedAt}ms: ${failure.message}`);
+          throw failure;
+        },
+      );
   }
 
   cancelRequest(requestId: string): boolean {
@@ -480,14 +340,9 @@ export class ExtensionRuntime {
     return true;
   }
 
-  /** Tears the pool down - called on app quit, so idle threads don't hold the process open. */
+  /** Tears the worker pool down - called on app quit, so idle threads don't hold the process open. */
   dispose(): void {
-    for (const worker of this.idleWorkers.splice(0)) {
-      this.clearIdleTimer(worker);
-      void worker.terminate();
-    }
-    for (const worker of this.warmingWorkers) void worker.terminate();
-    this.warmingWorkers.clear();
+    getPlatform().extensionHost.dispose();
   }
 
   /**

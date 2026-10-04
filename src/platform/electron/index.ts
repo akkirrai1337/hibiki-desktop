@@ -3,6 +3,7 @@ import type { Platform } from "../types";
 import { electronBrowser } from "./browser";
 import { electronDb } from "./db";
 import { electronDownloadTransfer } from "./downloadTransfer";
+import { ElectronExtensionHost } from "./extensionHost";
 import { electronFiles } from "./files";
 import { electronHttp } from "./http";
 import { electronPaths } from "./paths";
@@ -44,5 +45,6 @@ export function createElectronPlatform(getWindow: () => BrowserWindow | null): P
         app.exit();
       },
     },
+    extensionHost: new ElectronExtensionHost(),
   };
 }

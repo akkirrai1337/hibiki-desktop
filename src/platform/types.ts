@@ -223,11 +223,10 @@ export interface Platform {
   player: PlayerPort;
   events: EventsPort;
   app: AppPort;
+  extensionHost: ExtensionHostPort;
 }
 
 // --- Extension workers -------------------------------------------------------------------------
-// Joins Platform when Phase 2.4 splits the worker pool out of runtime.ts. Defined here already so
-// the bridge protocol both platforms speak has one definition.
 
 export type BridgeKind = "netFetch" | "netFetchAll" | "challenge" | "browserFetch";
 
@@ -238,9 +237,10 @@ export interface ExtensionWorkerCall {
   sourceId: string;
   method: string;
   args: unknown[];
-  /** Where the extension's script lives. How its code reaches the worker is the port's business:
-   * Electron's worker reads (and caches) the file itself, Android's is handed the text. */
-  scriptPath: string;
+  /** The directory holding `<sourceId>.js` beside `<sourceId>.manifest.json`. How the code reaches
+   * the worker is the port's business: Electron's worker reads (and caches) the file itself,
+   * Android's is handed the text. */
+  extensionsDir: string;
   /** This source's stored values as of dispatch. */
   storage?: Record<string, string>;
 }
@@ -257,6 +257,11 @@ export interface ExtensionWorkerResult {
  * Runs extension scripts off the UI thread. A script's host calls are synchronous for the script
  * and async for the host: the worker blocks (Atomics.wait on Electron, a held synchronous XHR on
  * Android, where SharedArrayBuffer is unavailable) while `bridge` does the work.
+ *
+ * `run` resolves with whatever the script answered, failure included. It rejects only when there
+ * is no answer: an Error named "TimeoutError" after `timeoutMs`, "AbortError" when `signal` fires,
+ * and any other error when the worker itself crashed. A worker that timed out or was aborted is
+ * discarded, never reused.
  */
 export interface ExtensionHostPort {
   run(call: ExtensionWorkerCall, bridge: BridgeHandler, options: { timeoutMs: number; signal?: AbortSignal }): Promise<ExtensionWorkerResult>;
