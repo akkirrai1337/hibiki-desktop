@@ -153,7 +153,8 @@ function autofill(method: string, outcome: CallOutcome): void {
   }
   if ((method === "getPlayerLinks" || method === "resolve") && Array.isArray(value)) {
     if (method === "getPlayerLinks") lastLinks = value;
-    const direct = (value as typeof lastLinks).find((link) => link.type.startsWith("DIRECT_"));
+    // Resolvers answer with bare HLS/MP4/DASH; desktop's runtime.ts maps those to DIRECT_* afterwards.
+    const direct = (value as typeof lastLinks).find((link) => isDirect(link.type));
     if (direct) fillPlayer(direct);
   }
 }
@@ -161,7 +162,11 @@ function autofill(method: string, outcome: CallOutcome): void {
 function fillPlayer(link: { url: string; type: string; headers?: Record<string, string> | null }): void {
   $<HTMLInputElement>("streamUrl").value = link.url;
   $<HTMLTextAreaElement>("streamHeaders").value = JSON.stringify(link.headers ?? {}, null, 1);
-  $<HTMLSelectElement>("streamKind").value = link.type === "DIRECT_MP4" ? "mp4" : "hls";
+  $<HTMLSelectElement>("streamKind").value = link.type === "DIRECT_MP4" || link.type === "MP4" ? "mp4" : "hls";
+}
+
+function isDirect(type: string): boolean {
+  return type.startsWith("DIRECT_") || type === "HLS" || type === "MP4";
 }
 
 function args(method: string): unknown[] {
@@ -202,7 +207,7 @@ $("runAll").onclick = async () => {
       const outcome = await call(method, args(method));
       if (!outcome.ok) return;
     }
-    if (!lastLinks.some((link) => link.type.startsWith("DIRECT_"))) await resolveFirstEmbed();
+    if (!lastLinks.some((link) => isDirect(link.type))) await resolveFirstEmbed();
   } catch (error) {
     log(`error: ${String(error)}`);
   }
@@ -246,4 +251,28 @@ $("challenge").onclick = async () => {
 $("copyLog").onclick = () => void navigator.clipboard.writeText(logEl.textContent ?? "").then(() => log("log copied"));
 $("clearLog").onclick = () => (logEl.textContent = "");
 
-void describeEnvironment();
+// On the phone the whole bench runs by itself once on launch and reports through console.log,
+// which Capacitor forwards to logcat (tag Capacitor/Console) - no need to drive the UI remotely.
+async function autorun(): Promise<void> {
+  await describeEnvironment();
+  if (!isNative) return;
+  log("autorun: start");
+  $("runAll").click();
+  // runAll's own promise is not exposed; wait for the chain to settle, then try the player.
+  for (let i = 0; i < 120 && !$<HTMLInputElement>("streamUrl").value; i++) await new Promise((r) => setTimeout(r, 500));
+  if ($<HTMLInputElement>("streamUrl").value) {
+    $("play").click();
+    await new Promise((r) => setTimeout(r, 15_000));
+    log(`autorun: player state currentTime=${video.currentTime.toFixed(1)} readyState=${video.readyState} paused=${video.paused}`);
+    if (video.duration > 120) {
+      video.currentTime = video.duration / 2;
+      await new Promise((r) => setTimeout(r, 6_000));
+      log(`autorun: after seek currentTime=${video.currentTime.toFixed(1)} readyState=${video.readyState}`);
+    }
+  } else {
+    log("autorun: no direct stream found, player skipped");
+  }
+  log("autorun: done");
+}
+
+void autorun();
