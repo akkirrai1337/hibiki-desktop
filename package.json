@@ -19,8 +19,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "probe": "tsx scripts/probe-source.ts",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/main/db/migrate.ts"
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
     "@radix-ui/react-context-menu": "^2.2.6",

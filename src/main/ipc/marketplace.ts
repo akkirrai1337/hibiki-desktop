@@ -1,10 +1,8 @@
 import { ipcMain } from "electron";
-import { eq } from "drizzle-orm";
 import { IPC } from "@shared/ipc";
-import type { InstalledVersions, MarketplaceExtension, RepositoryFetchResult, SourceInfo } from "@shared/types";
-import { getDb } from "../db";
-import { sourceRepositories } from "../../core/db/schema";
-import { DEFAULT_REPOSITORY_URL, fetchExtensionFiles, fetchRepositoryIndex, fetchRepositoryResult, isHttpsRepositoryUrl } from "../../core/marketplace";
+import type { InstalledVersions, MarketplaceExtension, SourceInfo } from "@shared/types";
+import { createRepositoriesApi } from "../../core/api/repositories";
+import { fetchExtensionFiles, fetchRepositoryIndex } from "../../core/marketplace";
 import { isRetiredResolver, type ExtensionRuntime } from "../extensions/runtime";
 import { logger } from "../../core/logger";
 
@@ -87,18 +85,6 @@ export async function repairMissingResolverDependencies(runtime: ExtensionRuntim
   return changed;
 }
 
-async function listRepositoryUrls(): Promise<string[]> {
-  const db = getDb();
-  const rows = await db.select().from(sourceRepositories).all();
-  // First run: nothing installed and no repository configured yet — seed the built-in
-  // hibiki-sources repository so the marketplace isn't empty out of the box.
-  if (rows.length === 0) {
-    await db.insert(sourceRepositories).values({ url: DEFAULT_REPOSITORY_URL, addedAt: Date.now() }).run();
-    return [DEFAULT_REPOSITORY_URL];
-  }
-  return rows.map((r) => r.url);
-}
-
 /** Tells the renderer its picture of what's installed is out of date. Sent after every mutation
  * rather than left to each caller, since forgetting one is invisible until someone notices a
  * screen showing an update that has already been applied. */
@@ -107,23 +93,11 @@ function notifyChanged(sender: Electron.WebContents): void {
 }
 
 export function registerMarketplaceHandlers(runtime: ExtensionRuntime): void {
-  ipcMain.handle(IPC.sourcesRepositoriesList, (): Promise<string[]> => listRepositoryUrls());
-
-  ipcMain.handle(IPC.sourcesRepositoriesAdd, async (_e, url: string): Promise<string[]> => {
-    if (!isHttpsRepositoryUrl(url)) throw new Error("Repository URL must use HTTPS");
-    await fetchRepositoryIndex(url); // validates it's actually a repository index before saving
-    await getDb().insert(sourceRepositories).values({ url, addedAt: Date.now() }).onConflictDoNothing().run();
-    return listRepositoryUrls();
-  });
-
-  ipcMain.handle(IPC.sourcesRepositoriesRemove, async (_e, url: string): Promise<string[]> => {
-    await getDb().delete(sourceRepositories).where(eq(sourceRepositories.url, url)).run();
-    return listRepositoryUrls();
-  });
-
-  ipcMain.handle(IPC.sourcesMarketplaceFetch, (_e, urls: string[]): Promise<RepositoryFetchResult[]> =>
-    Promise.all(urls.map(fetchRepositoryResult)),
-  );
+  const { repositories, marketplace } = createRepositoriesApi();
+  ipcMain.handle(IPC.sourcesRepositoriesList, () => repositories.list());
+  ipcMain.handle(IPC.sourcesRepositoriesAdd, (_e, url: string) => repositories.add(url));
+  ipcMain.handle(IPC.sourcesRepositoriesRemove, (_e, url: string) => repositories.remove(url));
+  ipcMain.handle(IPC.sourcesMarketplaceFetch, (_e, urls: string[]) => marketplace(urls));
 
   ipcMain.handle(
     IPC.sourcesInstall,
