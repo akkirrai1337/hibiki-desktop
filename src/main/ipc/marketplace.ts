@@ -4,7 +4,7 @@ import { IPC } from "@shared/ipc";
 import type { InstalledVersions, MarketplaceExtension, RepositoryFetchResult, SourceInfo } from "@shared/types";
 import { getDb } from "../db";
 import { sourceRepositories } from "../db/schema";
-import { DEFAULT_REPOSITORY_URL, fetchExtensionFiles, fetchRepositoryIndex, fetchRepositoryResult, isHttpsRepositoryUrl } from "../marketplace";
+import { DEFAULT_REPOSITORY_URL, fetchExtensionFiles, fetchRepositoryIndex, fetchRepositoryResult, isHttpsRepositoryUrl } from "../../core/marketplace";
 import { isRetiredResolver, type ExtensionRuntime } from "../extensions/runtime";
 import { logger } from "../../core/logger";
 

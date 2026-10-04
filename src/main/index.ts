@@ -18,10 +18,12 @@ import { PROFILE_DIR, registerProfileBannerHandlers } from "./ipc/profileBanner"
 import { installPlayerHeaderInjector, registerPlayerHeaderOrigin, registerPlayerHeaders, unregisterPlayerHeaders } from "./playerHeaders";
 import { resolveFinalStreamUrl } from "./playerStream";
 import { clearDiscordPresence, setDiscordRpcEnabled, setIdleDiscordPresence, shutdownDiscordRpc, updateDiscordPresence } from "./discordRpc";
-import { DEEP_LINK_SCHEME, findDeepLinkInArgv, parseWatchDeepLink } from "./deepLink";
+import { DEEP_LINK_SCHEME, findDeepLinkInArgv, parseWatchDeepLink } from "../core/deepLink";
 import { createBackup, restoreBackup } from "./backup";
 import { log, logger, recentEntries, type LogEntry, type LogLevel } from "../core/logger";
 import { initLogger } from "./logFile";
+import { installPlatform } from "../core/platform";
+import { createElectronPlatform } from "../platform/electron";
 import { exportLog, openLogFolder } from "./logExport";
 import { isHardwareAccelerationEnabled, setHardwareAccelerationEnabled } from "./hardwareAcceleration";
 import { collectMemorySnapshot, formatMemorySnapshot } from "./memoryDiagnostics";
@@ -210,6 +212,9 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  // First, before any handler can run core code. `mainWindow` is read lazily: it does not exist
+  // yet, and the macOS `activate` path can replace it later.
+  installPlatform(createElectronPlatform(() => mainWindow));
   initLogger(app.getPath("userData"));
   // Without these, a rejected promise anywhere in main (a download stream, an IPC handler, the
   // Discord socket) vanishes with nothing but a console line no user ever sees - and those are

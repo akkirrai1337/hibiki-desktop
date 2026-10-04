@@ -1,7 +1,7 @@
 import { Client } from "@xhayper/discord-rpc";
 import { ActivityType } from "discord-api-types/v10";
 import type { DiscordPresence } from "@shared/types";
-import { buildWatchDeepLink } from "./deepLink";
+import { buildWatchDeepLink } from "../core/deepLink";
 
 // Same Application ID as the Android app's own DiscordRpcManager (DISCORD_APPLICATION_ID) - an
 // "Application" isn't platform-locked, it's just a shared identity (name/icon/Rich Presence

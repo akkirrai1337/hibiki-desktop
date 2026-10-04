@@ -6,6 +6,7 @@
 // extensions as separate `<id>.manifest.json`/`<id>.js` files (see extensions/runtime.ts), so
 // installing here just means fetching and writing those two files as-is — no merge step needed.
 import type { MarketplaceExtension, RepositoryFetchResult } from "@shared/types";
+import { getPlatform } from "./platform";
 
 export const DEFAULT_REPOSITORY_URL =
   "https://raw.githubusercontent.com/akkirrai1337/hibiki-sources/main/repository/index.json";
@@ -34,11 +35,12 @@ function stableUrl(url: string): string {
 
 async function getText(url: string, label: string): Promise<string> {
   if (!isHttpsRepositoryUrl(url)) throw new Error(`${label} URL must use HTTPS`);
-  const response = await fetch(stableUrl(url), {
+  const response = await getPlatform().http.request({
+    url: stableUrl(url),
     headers: { "Cache-Control": "no-cache, no-store", Pragma: "no-cache" },
   });
-  if (!response.ok) throw new Error(`${label} request failed: HTTP ${response.status}`);
-  return response.text();
+  if (response.status < 200 || response.status >= 300) throw new Error(`${label} request failed: HTTP ${response.status}`);
+  return response.body;
 }
 
 export async function fetchRepositoryIndex(url: string): Promise<MarketplaceExtension[]> {
