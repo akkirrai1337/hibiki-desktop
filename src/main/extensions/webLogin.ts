@@ -7,7 +7,7 @@
 // mean (a session id, a bearer token buried in one of them, ...) is entirely the source's business,
 // same as the credentials `login()` already hands straight through unopened.
 import { BrowserWindow, session } from "electron";
-import { logger } from "../logger";
+import { logger } from "../../core/logger";
 
 export interface HarvestedCookie {
   name: string;

@@ -4,7 +4,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { app, BrowserWindow, dialog, shell } from "electron";
-import { logFile, logger, renderLog } from "./logger";
+import { logger, renderLog } from "../core/logger";
+import { logFile } from "./logFile";
 
 async function installedSourceSummary(): Promise<string> {
   const dir = path.join(app.getPath("userData"), "extensions");

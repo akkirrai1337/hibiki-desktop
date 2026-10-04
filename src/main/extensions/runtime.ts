@@ -28,7 +28,7 @@ import type { WorkerCallMessage, WorkerReadyMessage, WorkerResultMessage } from 
 import { performBrowserFetch, performChallenge } from "./browserFetchHost";
 import { performNetFetch, performNetFetchAll } from "./netFetchHost";
 import { loginViaWebview } from "./webLogin";
-import { logger } from "../logger";
+import { logger } from "../../core/logger";
 import { performBrowserResolve } from "./browserResolveHost";
 import type { BridgeRequestMessage } from "./syncHostBridge";
 import { ExtensionStorage } from "./extensionStorage";

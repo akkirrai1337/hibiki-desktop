@@ -17,7 +17,7 @@
 // to tell that apart from a genuine failure. Everything below runs on the main thread's normal
 // async stack instead, where undici's global pool keeps connections alive across requests and an
 // AbortSignal gives every request a real deadline.
-import { logger } from "../logger";
+import { logger } from "../../core/logger";
 
 export interface NetFetchOptions {
   method?: string;

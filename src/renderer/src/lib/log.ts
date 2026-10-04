@@ -1,4 +1,4 @@
-// Renderer side of the app log (see main/logger.ts). Everything written here lands in the same
+// Renderer side of the app log (see core/logger.ts). Everything written here lands in the same
 // single stream as main's own lines, in real time order, which is the whole point: an episode that
 // fails to play produces a resolver line in main and a media-error line here, and reading them
 // interleaved is what tells you whether the stream URL was never found or was found and then

@@ -331,7 +331,7 @@ type BackupStatus = { kind: "success" | "error"; message: string };
 // won't load, a source that resolves in ten seconds instead of one) are network-shaped and happen
 // only on the user's machine - by the time anyone describes them, the evidence is gone. Every
 // extension HTTP request, resolver attempt and player error now records a timed line (see
-// main/logger.ts and lib/log.ts); this is the button that gets that out of the app and into a
+// core/logger.ts and lib/log.ts); this is the button that gets that out of the app and into a
 // file worth attaching to a bug report.
 function DiagnosticsSection() {
   const { t } = useTranslation();

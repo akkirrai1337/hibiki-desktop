@@ -5,5 +5,5 @@ import { defineConfig } from "vitest/config";
 // their own entry: `npm run test:main`.
 export default defineConfig({
   resolve: { alias: { "@shared": fileURLToPath(new URL("./src/shared", import.meta.url)) } },
-  test: { include: ["src/main/**/*.test.ts", "src/platform/**/*.test.ts"], environment: "node" },
+  test: { include: ["src/core/**/*.test.ts", "src/main/**/*.test.ts", "src/platform/**/*.test.ts"], environment: "node" },
 });

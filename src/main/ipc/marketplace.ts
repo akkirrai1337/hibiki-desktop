@@ -6,7 +6,7 @@ import { getDb } from "../db";
 import { sourceRepositories } from "../db/schema";
 import { DEFAULT_REPOSITORY_URL, fetchExtensionFiles, fetchRepositoryIndex, fetchRepositoryResult, isHttpsRepositoryUrl } from "../marketplace";
 import { isRetiredResolver, type ExtensionRuntime } from "../extensions/runtime";
-import { logger } from "../logger";
+import { logger } from "../../core/logger";
 
 // A source's resolverDependencies (e.g. YummyAnime needs "kodik", "sibnet", ...) are hidden
 // dependencies, not something the user installs themselves - mirrors the Android app, which

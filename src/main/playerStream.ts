@@ -13,7 +13,7 @@
 // walked. Handing hls.js the final URL means its request never redirects in the first place, which
 // removes the failure rather than retrying through it - and relative segment URLs resolve against
 // that final URL, so they follow the stream to the same host instead of bouncing per segment.
-import { logger } from "./logger";
+import { logger } from "../core/logger";
 
 const MAX_REDIRECT_HOPS = 5;
 const RESOLVE_TIMEOUT_MS = 8000;

@@ -10,7 +10,7 @@ import path from "node:path";
 import { app, shell } from "electron";
 import type { AppUpdate } from "@shared/types";
 import { isTrustedDownloadUrl, selectUpdate, type GitHubRelease } from "@shared/appUpdateSelection";
-import { logger } from "./logger";
+import { logger } from "../core/logger";
 
 const RELEASES_URL = "https://api.github.com/repos/akkirrai1337/hibiki-desktop/releases?per_page=20";
 const CHECK_TIMEOUT_MS = 10_000;

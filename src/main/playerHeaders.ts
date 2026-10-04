@@ -8,7 +8,7 @@ import { session } from "electron";
 import { randomUUID } from "node:crypto";
 import { PlayerHeaderRegistry } from "@shared/playerHeaderRegistry";
 import { headersForImageRequest } from "@shared/imageRequestHeaders";
-import { logger } from "./logger";
+import { logger } from "../core/logger";
 
 const headerRegistry = new PlayerHeaderRegistry();
 

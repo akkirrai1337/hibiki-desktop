@@ -5,7 +5,7 @@ import type { DailyActivity, LibraryEntry, RatingSyncResult, WatchProgress } fro
 import { getDb } from "../db";
 import { library, watchProgress, dailyActivity, titleRatings } from "../db/schema";
 import type { ExtensionRuntime } from "../extensions/runtime";
-import { logger } from "../logger";
+import { logger } from "../../core/logger";
 
 // A day's "date" key is the local calendar day (not UTC), so activity attributes to the day the
 // user actually watched it in their own timezone.

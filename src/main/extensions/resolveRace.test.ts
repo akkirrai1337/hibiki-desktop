@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("./browserFetchHost", () => ({ performBrowserFetch: vi.fn(), performChallenge: vi.fn() }));
 vi.mock("./netFetchHost", () => ({ performNetFetch: vi.fn(), performNetFetchAll: vi.fn() }));
 vi.mock("./browserResolveHost", () => ({ performBrowserResolve: vi.fn() }));
-vi.mock("../logger", () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock("../../core/logger", () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
 import { ExtensionRuntime } from "./runtime";
 import type { PlayerLink } from "@shared/types";

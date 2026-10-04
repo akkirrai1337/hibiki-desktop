@@ -7,7 +7,7 @@
 // WebView + @JavascriptInterface bridge one-to-one, just backed by a hidden BrowserWindow instead.
 import { BrowserWindow } from "electron";
 import type { PlayerLink } from "@shared/types";
-import { logger } from "../logger";
+import { logger } from "../../core/logger";
 
 // Anything that can run JS in a given browsing context and give back its completion value - a
 // plain WebContents (no wrapper iframe was used) or an Electron WebFrameMain for a specific

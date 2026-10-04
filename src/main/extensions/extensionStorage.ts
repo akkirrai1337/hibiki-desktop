@@ -12,7 +12,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { safeStorage } from "electron";
-import { logger } from "../logger";
+import { logger } from "../../core/logger";
 
 /** Marks the encrypted form on disk, so a store written before encryption was available (or on a
  * machine where it never is) still reads back rather than being mistaken for ciphertext. */
