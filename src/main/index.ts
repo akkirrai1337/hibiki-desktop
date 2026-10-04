@@ -14,7 +14,7 @@ import { registerLibraryHandlers } from "./ipc/library";
 import { registerXpEventHandlers } from "./ipc/xpEvents";
 import { registerMarketplaceHandlers, repairMissingResolverDependencies } from "./ipc/marketplace";
 import { DOWNLOADS_DIR, registerDownloadHandlers } from "./ipc/downloads";
-import { PROFILE_DIR, registerProfileBannerHandlers } from "./ipc/profileBanner";
+import { registerProfileBannerHandlers } from "./ipc/profileBanner";
 import { installPlayerHeaderInjector, registerPlayerHeaderOrigin, registerPlayerHeaders, unregisterPlayerHeaders } from "./playerHeaders";
 import { resolveFinalStreamUrl } from "./playerStream";
 import { clearDiscordPresence, setDiscordRpcEnabled, setIdleDiscordPresence, shutdownDiscordRpc, updateDiscordPresence } from "./discordRpc";
@@ -22,7 +22,7 @@ import { DEEP_LINK_SCHEME, findDeepLinkInArgv, parseWatchDeepLink } from "../cor
 import { createBackup, restoreBackup } from "./backup";
 import { log, logger, recentEntries, type LogEntry, type LogLevel } from "../core/logger";
 import { initLogger } from "./logFile";
-import { installPlatform } from "../core/platform";
+import { getPlatform, installPlatform } from "../core/platform";
 import { createElectronPlatform } from "../platform/electron";
 import { exportLog, openLogFolder } from "./logExport";
 import { isHardwareAccelerationEnabled, setHardwareAccelerationEnabled } from "./hardwareAcceleration";
@@ -286,7 +286,7 @@ app.whenReady().then(() => {
     const contentType = PROFILE_CONTENT_TYPE[extension];
     if (!contentType || filename.includes("/") || filename.includes("\\")) return new Response("Forbidden", { status: 403 });
     try {
-      const filePath = path.join(PROFILE_DIR, filename);
+      const filePath = path.join(getPlatform().paths.profile, filename);
       const stat = await fs.stat(filePath);
       const range = /bytes=(\d+)-(\d*)/.exec(request.headers.get("range") ?? "");
       if (range) {
