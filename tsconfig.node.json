@@ -19,5 +19,5 @@
       "@shared/*": ["src/shared/*"]
     }
   },
-  "include": ["src/main", "src/preload", "src/shared", "vite.config.ts", "drizzle.config.ts"]
+  "include": ["src/main", "src/platform", "src/preload", "src/shared", "vite.config.ts", "drizzle.config.ts"]
 }
