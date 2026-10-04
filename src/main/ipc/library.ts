@@ -3,7 +3,7 @@ import { eq, and, gte, desc, sql } from "drizzle-orm";
 import { IPC } from "@shared/ipc";
 import type { DailyActivity, LibraryEntry, RatingSyncResult, WatchProgress } from "@shared/types";
 import { getDb } from "../db";
-import { library, watchProgress, dailyActivity, titleRatings } from "../db/schema";
+import { library, watchProgress, dailyActivity, titleRatings } from "../../core/db/schema";
 import type { ExtensionRuntime } from "../extensions/runtime";
 import { logger } from "../../core/logger";
 

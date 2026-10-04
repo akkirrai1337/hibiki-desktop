@@ -2,7 +2,7 @@ import { ipcMain } from "electron";
 import { IPC } from "@shared/ipc";
 import type { AnimeTitle, PlaybackGroup, PlayerLink, PlayerLinkPreference } from "@shared/types";
 import type { ExtensionRuntime } from "../extensions/runtime";
-import { cacheAnime, cachePlaybackGroups, cacheSourceQuery, getCachedAnime, getCachedAnimeMany, getCachedPlaybackGroups, getCachedPlaybackGroupsEntry, getCachedSourceQuery } from "../offlineCache";
+import { cacheAnime, cachePlaybackGroups, cacheSourceQuery, getCachedAnime, getCachedAnimeMany, getCachedPlaybackGroups, getCachedPlaybackGroupsEntry, getCachedSourceQuery } from "../../core/offlineCache";
 
 export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   ipcMain.handle(IPC.sourcesList, () => runtime.list());

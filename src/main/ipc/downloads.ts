@@ -12,7 +12,7 @@ import {
   getDownloadedEpisode,
   listDownloadedEpisodes,
   recordDownloadedEpisode,
-} from "../offlineCache";
+} from "../../core/offlineCache";
 
 export const DOWNLOADS_DIR = path.join(app.getPath("userData"), "downloads");
 

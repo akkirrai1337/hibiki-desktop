@@ -1,7 +1,9 @@
 import { eq, and, or, notInArray, desc } from "drizzle-orm";
 import type { AnimeTitle, CachedAnimeEntry, CachedPlaybackGroupsEntry, CachedTitleListEntry, DownloadedEpisode, PlaybackGroup } from "@shared/types";
-import { getDb } from "./db";
+import { getPlatform } from "./platform";
 import { cachedAnime, cachedPlaybackGroups, cachedSourceQueries, downloadedEpisodes } from "./db/schema";
+
+const getDb = () => getPlatform().db.get();
 
 /** Strips the parts of an AnimeTitle that are only useful for navigating to *other* titles
  * (related/franchise/similar anime) before it goes into cachedAnime - offline, there's nothing to

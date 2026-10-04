@@ -9,7 +9,7 @@
 // direct electron/node import with one of these ports, and adds what that module turns out to need.
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import type { PlayerLink } from "@shared/types";
-import type * as schema from "../main/db/schema";
+import type * as schema from "../core/db/schema";
 
 export type PlatformKind = "electron" | "android";
 

@@ -3,7 +3,7 @@ import { desc } from "drizzle-orm";
 import { IPC } from "@shared/ipc";
 import type { XpEvent } from "@shared/types";
 import { getDb } from "../db";
-import { xpEvents } from "../db/schema";
+import { xpEvents } from "../../core/db/schema";
 
 // Recent-first, capped - a running history is meant to be skimmed, not paginated through.
 const HISTORY_LIMIT = 100;
