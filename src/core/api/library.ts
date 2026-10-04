@@ -10,7 +10,7 @@ const getDb = () => getPlatform().db.get();
 /** What the library needs from the extension runtime: mirroring changes to a source's account. */
 export interface LibrarySyncRuntime {
   list(): SourceInfo[];
-  isLibrarySyncEnabled(sourceId: string): boolean;
+  isLibrarySyncEnabled(sourceId: string): Promise<boolean>;
   getAccount(sourceId: string): Promise<SourceAccount | null>;
   listLibrary(sourceId: string): Promise<SourceLibraryEntry[]>;
   syncLibraryEntry(sourceId: string, request: { animeId: string; category: string | null; rating?: number | null }): Promise<void>;
@@ -46,10 +46,13 @@ function pushToAccount(
   animeId: string,
   category: string | null,
 ): void {
-  if (!runtime.isLibrarySyncEnabled(sourceId)) return;
   void runtime
-    .syncLibraryEntry(sourceId, { animeId, category })
-    .then(() => logger.debug("sync", `${sourceId}/${animeId} -> ${category ?? "removed"}`))
+    .isLibrarySyncEnabled(sourceId)
+    .then(async (enabled) => {
+      if (!enabled) return;
+      await runtime.syncLibraryEntry(sourceId, { animeId, category });
+      logger.debug("sync", `${sourceId}/${animeId} -> ${category ?? "removed"}`);
+    })
     .catch((error: unknown) => {
       logger.warn("sync", `${sourceId}/${animeId} not synced: ${error instanceof Error ? error.message : String(error)}`);
     });

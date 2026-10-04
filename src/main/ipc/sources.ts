@@ -86,15 +86,15 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   );
   ipcMain.handle(
     IPC.sourceReportPlayback,
-    (_e, sourceId: string, request: Parameters<typeof runtime.reportPlayback>[1]) => {
+    async (_e, sourceId: string, request: Parameters<typeof runtime.reportPlayback>[1]) => {
       // Silently skipped rather than refused when the switch is off: the player calls this on
       // every save and has no business knowing which sources report anything.
-      if (!runtime.isActivitySyncEnabled(sourceId)) return false;
+      if (!(await runtime.isActivitySyncEnabled(sourceId))) return false;
       return runtime.reportPlayback(sourceId, request);
     },
   );
-  ipcMain.handle(IPC.sourcePingOnline, (_e, sourceId: string) => {
-    if (!runtime.isActivitySyncEnabled(sourceId)) return false;
+  ipcMain.handle(IPC.sourcePingOnline, async (_e, sourceId: string) => {
+    if (!(await runtime.isActivitySyncEnabled(sourceId))) return false;
     return runtime.pingOnline(sourceId);
   });
   ipcMain.handle(IPC.sourceListLibrary, (_e, sourceId: string) => runtime.listLibrary(sourceId));

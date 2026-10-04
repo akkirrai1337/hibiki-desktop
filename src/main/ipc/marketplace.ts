@@ -27,7 +27,7 @@ async function installResolverDependencies(dependencyIds: string[], originUrl: s
     if (!resolverExtension) continue;
     try {
       const { manifestJson, jsPayload } = await fetchExtensionFiles(resolverExtension);
-      runtime.installResolver(id, manifestJson, jsPayload);
+      await runtime.installResolver(id, manifestJson, jsPayload);
     } catch (error) {
       console.warn(`Failed to install resolver "${id}":`, error);
     }
@@ -73,7 +73,7 @@ export async function repairMissingResolverDependencies(runtime: ExtensionRuntim
       }
       try {
         const { manifestJson, jsPayload } = await fetchExtensionFiles(extension);
-        runtime.installResolver(id, manifestJson, jsPayload);
+        await runtime.installResolver(id, manifestJson, jsPayload);
         installed[id] = extension.version;
         changed = true;
         logger.info("resolvers", `restored missing dependency ${id}`);
@@ -103,7 +103,7 @@ export function registerMarketplaceHandlers(runtime: ExtensionRuntime): void {
     IPC.sourcesInstall,
     async (event, extension: MarketplaceExtension, originUrl: string): Promise<SourceInfo[]> => {
       const { manifestJson, jsPayload } = await fetchExtensionFiles(extension);
-      runtime.install(extension.id, manifestJson, jsPayload, originUrl);
+      await runtime.install(extension.id, manifestJson, jsPayload, originUrl);
       await installResolverDependencies(extension.resolverDependencies, originUrl, runtime);
       notifyChanged(event.sender);
       return runtime.list();
@@ -116,8 +116,8 @@ export function registerMarketplaceHandlers(runtime: ExtensionRuntime): void {
     resolvers: runtime.installedResolverVersions(),
   }));
 
-  ipcMain.handle(IPC.sourcesUninstall, (event, id: string): SourceInfo[] => {
-    runtime.uninstall(id);
+  ipcMain.handle(IPC.sourcesUninstall, async (event, id: string): Promise<SourceInfo[]> => {
+    await runtime.uninstall(id);
     notifyChanged(event.sender);
     return runtime.list();
   });

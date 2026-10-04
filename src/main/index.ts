@@ -211,7 +211,7 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // First, before any handler can run core code. `mainWindow` is read lazily: it does not exist
   // yet, and the macOS `activate` path can replace it later.
   installPlatform(createElectronPlatform(() => mainWindow));
@@ -306,7 +306,9 @@ app.whenReady().then(() => {
   });
 
   const runtime = new ExtensionRuntime(EXTENSIONS_DIR);
-  runtime.reload();
+  // Before any handler exists: a renderer call must never see an empty source list just because
+  // the manifests were still being read.
+  await runtime.reload();
   extensionRuntime = runtime;
 
   registerSourceHandlers(runtime);

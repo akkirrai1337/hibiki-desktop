@@ -1,11 +1,9 @@
-// Orchestrator for Hibiki's scripted extensions (hibiki-sources/extensions/*.js). `list()` just
-// reads manifest JSON (fast, no network) and stays synchronous; every call that actually runs a
+// Orchestrator for Hibiki's scripted extensions (hibiki-sources/extensions/*.js). `list()` answers
+// from the manifests read by the last reload() and stays synchronous; every call that actually runs a
 // script (search/latest/getById/...) goes to the platform's extension host, which runs it off the
 // UI thread - extension scripts call a *synchronous* fetch() (matching the Rhino runtime they were
 // written for), which blocks whichever thread runs it. The script's host calls (fetch, challenge,
 // browserFetch) come back to `bridge` below.
-import fs from "node:fs";
-import path from "node:path";
 import type {
   AnimeTitle,
   PlaybackGroup,
@@ -28,7 +26,7 @@ import { performNetFetch, performNetFetchAll } from "../../core/extensions/netFe
 import { loginViaWebview } from "./webLogin";
 import { logger } from "../../core/logger";
 import { performBrowserResolve } from "./browserResolveHost";
-import { ExtensionStorage } from "./extensionStorage";
+import { ExtensionStorage } from "../../core/extensions/extensionStorage";
 
 const WORKER_TIMEOUT_MS = 30_000;
 const FILTER_TYPES = ["select", "multi", "tristate", "text", "range"];
@@ -111,6 +109,11 @@ const RETIRED_RESOLVER_IDS = new Set(["cvh", "sibnet"]);
 const RETIRED_PLAYER_NAMES = new Set(["cvh", "sibnet"]);
 const RETIRED_PLAYER_HOSTS = ["yummyani.me", "sibnet.ru"];
 
+function replaceMap<K, V>(target: Map<K, V>, source: Map<K, V>): void {
+  target.clear();
+  for (const [key, value] of source) target.set(key, value);
+}
+
 export function isRetiredResolver(id: string): boolean {
   return RETIRED_RESOLVER_IDS.has(id.toLowerCase());
 }
@@ -153,21 +156,24 @@ export class ExtensionRuntime {
   private readonly resolverHealth = new Map<string, ResolverHealth>();
   private readonly inFlightReads = new Map<string, Promise<unknown>>();
   private readonly cancellations = new Map<string, () => void>();
-  private readonly resolversDir: string;
+  /** Each installed source's `<id>.origin` (the repository it came from), read at reload(). */
+  private readonly origins = new Map<string, string>();
 
-  private readonly storage: ExtensionStorage;
+  // Beside the extensions rather than inside them (platform.paths.extensionStorage): uninstalling a
+  // source should be able to take its stored token with it without the store having to survive a
+  // directory being rewritten.
+  private readonly storage = new ExtensionStorage(() => getPlatform().paths.extensionStorage);
 
-  constructor(private readonly extensionsDir: string) {
-    this.resolversDir = path.join(extensionsDir, "resolvers");
-    // Beside the extensions rather than inside them: uninstalling a source should be able to take
-    // its stored token with it without the store having to survive a directory being rewritten.
-    this.storage = new ExtensionStorage(path.join(path.dirname(extensionsDir), "extension-storage"));
+  constructor(private readonly extensionsDir: string) {}
+
+  private get resolversDir(): string {
+    return getPlatform().files.join(this.extensionsDir, "resolvers");
   }
 
   /** Called when a source is removed - a token for a source that is no longer installed is only a
    * secret waiting to leak. */
-  forgetStorage(sourceId: string): void {
-    this.storage.clear(sourceId);
+  forgetStorage(sourceId: string): Promise<void> {
+    return this.storage.clear(sourceId);
   }
 
   /**
@@ -176,17 +182,17 @@ export class ExtensionRuntime {
    * Only declared keys, never the whole store: a source's session token lives in the same place,
    * and the settings screen has no business reading it - nor does anything else in the renderer.
    */
-  readSettings(sourceId: string): Record<string, string> {
+  async readSettings(sourceId: string): Promise<Record<string, string>> {
     const declared = new Set(this.settingKeysOf(sourceId));
-    const stored = this.storage.read(sourceId);
+    const stored = await this.storage.read(sourceId);
     return Object.fromEntries(Object.entries(stored).filter(([key]) => declared.has(key)));
   }
 
-  writeSetting(sourceId: string, key: string, value: string | null): void {
+  async writeSetting(sourceId: string, key: string, value: string | null): Promise<void> {
     if (!this.settingKeysOf(sourceId).includes(key)) {
       throw new Error(`Source "${sourceId}" declares no setting named "${key}"`);
     }
-    this.storage.apply(sourceId, { [key]: value });
+    await this.storage.apply(sourceId, { [key]: value });
   }
 
   /** ACCOUNT rows are excluded: they stand for the sign-in block, not for a value. */
@@ -195,40 +201,46 @@ export class ExtensionRuntime {
     return (manifest?.settings ?? []).filter((setting) => setting.type !== "ACCOUNT").map((setting) => setting.key);
   }
 
-  reload(): void {
+  async reload(): Promise<void> {
+    const { files } = getPlatform();
+    // Read into fresh maps and swap them in at the end, so a list() or a call arriving while the
+    // files are being read still sees the previous, complete set rather than a half-filled one.
+    const extensions = new Map<string, LoadedExtension>();
+    const origins = new Map<string, string>();
+    for (const file of await files.list(this.extensionsDir)) {
+      if (!file.endsWith(".manifest.json")) continue;
+      const manifestPath = files.join(this.extensionsDir, file);
+      const manifest = JSON.parse(await files.readText(manifestPath)) as Manifest;
+      const scriptPath = manifestPath.replace(/\.manifest\.json$/, ".js");
+      if (!(await files.exists(scriptPath))) continue;
+      extensions.set(manifest.id, { manifest });
+      const originPath = this.originPath(manifest.id);
+      if (await files.exists(originPath)) origins.set(manifest.id, (await files.readText(originPath)).trim());
+    }
+
+    await this.removeRetiredResolverFiles();
+    const resolvers = new Map<string, ResolverManifest>();
+    for (const file of await files.list(this.resolversDir)) {
+      if (!file.endsWith(".manifest.json")) continue;
+      const manifestPath = files.join(this.resolversDir, file);
+      const manifest = JSON.parse(await files.readText(manifestPath)) as ResolverManifest;
+      const scriptPath = manifestPath.replace(/\.manifest\.json$/, ".js");
+      if (!(await files.exists(scriptPath))) continue;
+      if (isRetiredResolver(manifest.id)) continue;
+      resolvers.set(manifest.id, {
+        id: manifest.id,
+        version: manifest.version ?? "0.0.0",
+        hosts: manifest.hosts ?? [],
+        runtime: manifest.runtime,
+      });
+    }
+
     // New source files/settings must not adopt a request that started against the previous loaded
     // extension. The old work may still finish for its original caller, but no new call shares it.
     this.inFlightReads.clear();
-    this.extensions.clear();
-    if (fs.existsSync(this.extensionsDir)) {
-      for (const file of fs.readdirSync(this.extensionsDir)) {
-        if (!file.endsWith(".manifest.json")) continue;
-        const manifestPath = path.join(this.extensionsDir, file);
-        const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8")) as Manifest;
-        const scriptPath = manifestPath.replace(/\.manifest\.json$/, ".js");
-        if (!fs.existsSync(scriptPath)) continue;
-        this.extensions.set(manifest.id, { manifest });
-      }
-    }
-
-    this.removeRetiredResolverFiles();
-    this.resolvers.clear();
-    if (fs.existsSync(this.resolversDir)) {
-      for (const file of fs.readdirSync(this.resolversDir)) {
-        if (!file.endsWith(".manifest.json")) continue;
-        const manifestPath = path.join(this.resolversDir, file);
-        const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8")) as ResolverManifest;
-        const scriptPath = manifestPath.replace(/\.manifest\.json$/, ".js");
-        if (!fs.existsSync(scriptPath)) continue;
-        if (isRetiredResolver(manifest.id)) continue;
-        this.resolvers.set(manifest.id, {
-          id: manifest.id,
-          version: manifest.version ?? "0.0.0",
-          hosts: manifest.hosts ?? [],
-          runtime: manifest.runtime,
-        });
-      }
-    }
+    replaceMap(this.extensions, extensions);
+    replaceMap(this.origins, origins);
+    replaceMap(this.resolvers, resolvers);
   }
 
   list(): SourceInfo[] {
@@ -288,13 +300,12 @@ export class ExtensionRuntime {
     const timeoutMs = options?.timeoutMs ?? WORKER_TIMEOUT_MS;
     if (!options?.extensionsDir && !this.extensions.has(sourceId)) return Promise.reject(new Error(`Unknown source: ${sourceId}`));
 
-    // Read once per call, at dispatch: the script sees a consistent snapshot for its whole run,
-    // and a call that writes has its writes applied when it comes back.
-    const storage = this.storage.read(sourceId);
-
     const startedAt = Date.now();
     logger.debug("ext", `${sourceId}.${method}() start`);
 
+    // Registered before anything is awaited: a search the renderer supersedes a keystroke later
+    // must be cancellable from the moment it exists. A cancel that lands before the worker is
+    // started reaches the host as an already-aborted signal, which it refuses.
     const controller = new AbortController();
     const cancel = () => controller.abort();
     if (options?.requestId) this.cancellations.set(options.requestId, cancel);
@@ -304,14 +315,19 @@ export class ExtensionRuntime {
       }
     };
 
-    return getPlatform()
-      .extensionHost.run({ extensionsDir, sourceId, method, args, storage }, this.bridge, { timeoutMs, signal: controller.signal })
+    // Read once per call, at dispatch: the script sees a consistent snapshot for its whole run,
+    // and a call that writes has its writes applied when it comes back.
+    return this.storage
+      .read(sourceId)
+      .then((storage) =>
+        getPlatform().extensionHost.run({ extensionsDir, sourceId, method, args, storage }, this.bridge, { timeoutMs, signal: controller.signal }),
+      )
       .then(
-        (message) => {
+        async (message) => {
           clearCancellation();
           // Before resolve/reject either way: a call that stored a token and then failed still
           // stored the token.
-          if (message.storageWrites) this.storage.apply(sourceId, message.storageWrites);
+          if (message.storageWrites) await this.storage.apply(sourceId, message.storageWrites);
           if (message.ok) {
             logger.debug("ext", `${sourceId}.${method}() ok in ${Date.now() - startedAt}ms`);
             return message.result as T;
@@ -435,23 +451,23 @@ export class ExtensionRuntime {
    * store, no script and no network. A source that declares nothing, or whose switch is off, must
    * cost nothing at all on a library change.
    */
-  isLibrarySyncEnabled(sourceId: string): boolean {
+  isLibrarySyncEnabled(sourceId: string): Promise<boolean> {
     return this.isSwitchOn(sourceId, "LIBRARY_SYNC");
   }
 
   /** Whether this source reports watching to its account. Asked on every progress save, so it
    * reads the manifest and the source's store and nothing else. */
-  isActivitySyncEnabled(sourceId: string): boolean {
+  isActivitySyncEnabled(sourceId: string): Promise<boolean> {
     return this.isSwitchOn(sourceId, "ACTIVITY_SYNC");
   }
 
   /** A capability the source declares, plus the switch of the same type being on. */
-  private isSwitchOn(sourceId: string, kind: "LIBRARY_SYNC" | "ACTIVITY_SYNC"): boolean {
+  private async isSwitchOn(sourceId: string, kind: "LIBRARY_SYNC" | "ACTIVITY_SYNC"): Promise<boolean> {
     const manifest = this.extensions.get(sourceId)?.manifest;
     if (!manifest || !(manifest.capabilities ?? []).includes(kind)) return false;
     const row = (manifest.settings ?? []).find((setting) => setting.type === kind);
     if (!row) return false;
-    const stored = this.storage.read(sourceId)[row.key];
+    const stored = (await this.storage.read(sourceId))[row.key];
     return stored === undefined ? row.default === true : stored === "true";
   }
 
@@ -794,12 +810,11 @@ export class ExtensionRuntime {
   }
 
   private originPath(id: string): string {
-    return path.join(this.extensionsDir, `${id}.origin`);
+    return getPlatform().files.join(this.extensionsDir, `${id}.origin`);
   }
 
   originOf(id: string): string | null {
-    const file = this.originPath(id);
-    return fs.existsSync(file) ? fs.readFileSync(file, "utf-8").trim() : null;
+    return this.origins.get(id) ?? null;
   }
 
   /**
@@ -808,7 +823,7 @@ export class ExtensionRuntime {
    * trusted code published under an id like "animego" the moment anyone reinstalls/updates it.
    * Mirrors the Android app's ScriptExtensionRepository.install origin guard.
    */
-  install(id: string, manifestJson: string, jsPayload: string, originUrl: string): void {
+  async install(id: string, manifestJson: string, jsPayload: string, originUrl: string): Promise<void> {
     let manifest: { id?: string };
     try {
       manifest = JSON.parse(manifestJson);
@@ -822,17 +837,18 @@ export class ExtensionRuntime {
       throw new Error(`"${id}" is already installed from a different repository and can't be overwritten`);
     }
 
-    fs.mkdirSync(this.extensionsDir, { recursive: true });
-    fs.writeFileSync(path.join(this.extensionsDir, `${id}.manifest.json`), manifestJson);
-    fs.writeFileSync(path.join(this.extensionsDir, `${id}.js`), jsPayload);
-    fs.writeFileSync(this.originPath(id), originUrl);
-    this.reload();
+    const { files } = getPlatform();
+    await files.mkdir(this.extensionsDir);
+    await files.writeText(files.join(this.extensionsDir, `${id}.manifest.json`), manifestJson);
+    await files.writeText(files.join(this.extensionsDir, `${id}.js`), jsPayload);
+    await files.writeText(this.originPath(id), originUrl);
+    await this.reload();
   }
 
   /** Installs a player resolver (best-effort dependency of a source, see marketplace.ts) - unlike
    * install(), there's no origin-trust guard here: resolvers aren't user-facing or user-chosen,
    * and a source can freely redeclare/update its own resolverDependencies. */
-  installResolver(id: string, manifestJson: string, jsPayload: string): void {
+  async installResolver(id: string, manifestJson: string, jsPayload: string): Promise<void> {
     if (isRetiredResolver(id)) {
       logger.info("resolvers", `skipping retired resolver ${id}`);
       return;
@@ -845,27 +861,29 @@ export class ExtensionRuntime {
     }
     if (manifest.id !== id) throw new Error(`Resolver manifest id "${manifest.id}" doesn't match "${id}"`);
 
-    fs.mkdirSync(this.resolversDir, { recursive: true });
-    fs.writeFileSync(path.join(this.resolversDir, `${id}.manifest.json`), manifestJson);
-    fs.writeFileSync(path.join(this.resolversDir, `${id}.js`), jsPayload);
-    this.reload();
+    const { files } = getPlatform();
+    await files.mkdir(this.resolversDir);
+    await files.writeText(files.join(this.resolversDir, `${id}.manifest.json`), manifestJson);
+    await files.writeText(files.join(this.resolversDir, `${id}.js`), jsPayload);
+    await this.reload();
   }
 
-  private removeRetiredResolverFiles(): void {
+  private async removeRetiredResolverFiles(): Promise<void> {
+    const { files } = getPlatform();
     for (const id of RETIRED_RESOLVER_IDS) {
       for (const suffix of [".manifest.json", ".js"]) {
-        fs.rmSync(path.join(this.resolversDir, `${id}${suffix}`), { force: true });
+        await files.remove(files.join(this.resolversDir, `${id}${suffix}`));
       }
     }
   }
 
-  uninstall(id: string): void {
+  async uninstall(id: string): Promise<void> {
     // A stored token for a source that is no longer installed is a secret nobody is watching.
-    this.forgetStorage(id);
+    await this.forgetStorage(id);
+    const { files } = getPlatform();
     for (const suffix of [".manifest.json", ".js", ".origin"]) {
-      const file = path.join(this.extensionsDir, `${id}${suffix}`);
-      if (fs.existsSync(file)) fs.unlinkSync(file);
+      await files.remove(files.join(this.extensionsDir, `${id}${suffix}`));
     }
-    this.reload();
+    await this.reload();
   }
 }
