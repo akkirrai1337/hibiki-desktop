@@ -26,23 +26,15 @@ export class AndroidEvents implements EventsPort {
   }
 }
 
-// Playback goes through the native stream proxy (StreamProxy.java), which adds the session's
-// headers and follows redirects itself. Wiring the renderer's player to playableUrl() is a later
-// step of the plan; until then only header-free, CORS-friendly streams play.
+// Playback goes through the native stream proxy (StreamProxy.java): every request of a session
+// carries its headers - whatever the origin, so registerHeaderOrigin has nothing to add - and the
+// proxy follows redirects itself, so there is nothing to pre-resolve either.
 function createPlayer(): PlayerPort {
-  let nextId = 0;
-  const sessions = new Map<string, Promise<string>>();
   return {
-    registerHeaders(_url, headers) {
-      const id = `p${nextId++}`;
-      sessions.set(id, HibikiNet.registerStream({ headers: headers ?? {} }).then((r) => r.sid));
-      return id;
-    },
+    registerHeaders: async (_url, headers) => (await HibikiNet.registerStream({ headers: headers ?? {} })).sid,
     registerHeaderOrigin: () => true,
-    unregisterHeaders: (sessionId) => {
-      sessions.delete(sessionId);
-    },
-    playableUrl: (_sessionId, url) => url,
+    unregisterHeaders: (sid) => void HibikiNet.unregisterStream({ sid }),
+    playableUrl: (sid, url) => `/_hibiki/stream?sid=${encodeURIComponent(sid)}&u=${encodeURIComponent(url)}`,
     resolveFinalUrl: async (url) => url,
   };
 }

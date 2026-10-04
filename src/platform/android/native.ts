@@ -14,6 +14,7 @@ export interface HibikiNetPlugin {
   }): Promise<{ status: number; url: string; headers: Record<string, string[]>; body: string }>;
   cancel(options: { id: string }): Promise<void>;
   registerStream(options: { headers: Record<string, string> }): Promise<{ sid: string }>;
+  unregisterStream(options: { sid: string }): Promise<void>;
   bridgeResolve(options: { id: string; body: string }): Promise<void>;
 }
 

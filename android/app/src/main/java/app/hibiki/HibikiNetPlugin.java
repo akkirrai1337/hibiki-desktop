@@ -103,6 +103,12 @@ public class HibikiNetPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void unregisterStream(PluginCall call) {
+        StreamProxy.unregister(call.getString("sid", ""));
+        call.resolve();
+    }
+
+    @PluginMethod
     public void bridgeResolve(PluginCall call) {
         BridgeQueue.complete(call.getString("id"), call.getString("body", ""));
         call.resolve();

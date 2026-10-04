@@ -124,6 +124,10 @@ export interface HibikiApi {
     registerHeaderOrigin(sessionId: string, url: string): Promise<boolean>;
     unregisterHeaders(sessionId: string): Promise<void>;
     resolveStreamUrl(url: string, headers: Record<string, string> | null | undefined): Promise<string>;
+    /** Only on hosts that play through a stream proxy (Android): the URL the player should request
+     * for `url` under a session from registerHeaders. Absent on desktop, where headers are injected
+     * at the session level and URLs are loaded as they are. */
+    streamUrl?(sessionId: string, url: string): string;
     captureFrame(rect: { x: number; y: number; width: number; height: number }): Promise<string | null>;
   };
   discord: {

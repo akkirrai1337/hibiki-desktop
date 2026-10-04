@@ -30,6 +30,10 @@ final class StreamProxy {
         return sid;
     }
 
+    static void unregister(String sid) {
+        sessions.remove(sid);
+    }
+
     static WebResourceResponse handle(WebResourceRequest request) {
         Uri url = request.getUrl();
         String upstream = url.getQueryParameter("u");

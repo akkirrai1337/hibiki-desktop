@@ -985,6 +985,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         // HLS/DASH are large libraries and the catalog never needs them. Import only the engine
         // selected by this stream, keeping both out of the application's startup bundle.
         const { default: HlsEngine } = await import("hls.js");
+        const { proxiedHlsLoader, usesStreamProxy } = await import("@/lib/streamProxy");
         trace(`hls.js import ready in ${Math.round(performance.now() - setupStartedAt)}ms`);
         if (cancelled) return;
         elementOwnsSourceRef.current = !HlsEngine.isSupported();
@@ -999,7 +1000,15 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         // read ahead up to 10 minutes when the network allows, so a long session's buffered media
         // grew the renderer's memory for as long as the episode played. Thirty seconds behind the
         // playhead is plenty for a seek back; sixty ahead keeps playback smooth on a slow source.
-        hls = new HlsEngine({ backBufferLength: 30, maxBufferLength: 40, maxMaxBufferLength: 60, maxBufferSize: 60 * 1000 * 1000 });
+        hls = new HlsEngine({
+          backBufferLength: 30,
+          maxBufferLength: 40,
+          maxMaxBufferLength: 60,
+          maxBufferSize: 60 * 1000 * 1000,
+          // A host with a stream proxy (Android) gets every request routed through it; desktop keeps
+          // hls.js's own loader.
+          ...(usesStreamProxy() ? { loader: proxiedHlsLoader(HlsEngine.DefaultConfig.loader, sessionId) } : {}),
+        });
         let manifestLoaded = false;
         let firstFragmentLoaded = false;
         let firstFragmentBuffered = false;
@@ -1178,9 +1187,16 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         trace("loadSource() and attachMedia() called");
       } else if (isDash) {
         const { MediaPlayer: DashMediaPlayer } = await import("dashjs");
+        const { streamRequestUrl, usesStreamProxy } = await import("@/lib/streamProxy");
         if (cancelled) return;
         elementOwnsSourceRef.current = false;
         dash = DashMediaPlayer().create();
+        if (usesStreamProxy()) {
+          dash.addRequestInterceptor(async (request) => {
+            request.url = streamRequestUrl(sessionId, request.url);
+            return request;
+          });
+        }
         // Same reasoning as hls.js above: dash.js retries transient errors on its own, but a
         // manifest that's simply dead keeps re-erroring forever with nothing surfaced unless
         // this caps it and gives up into the visible error overlay.
@@ -1201,8 +1217,10 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         });
         dash.initialize(video, streamUrl, true);
       } else {
+        const { streamRequestUrl } = await import("@/lib/streamProxy");
+        if (cancelled) return;
         elementOwnsSourceRef.current = true;
-        video.src = streamUrl;
+        video.src = streamRequestUrl(sessionId, streamUrl);
       }
     }).catch((error) => {
       if (cancelled) return;

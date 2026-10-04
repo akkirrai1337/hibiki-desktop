@@ -191,9 +191,9 @@ export interface BrowserPort {
  * Android routes the player through a native proxy, so URLs are rewritten.
  */
 export interface PlayerPort {
-  /** Returns a session id; every request the player makes for `url` (and, once registered, other
+  /** Resolves a session id; every request the player makes for `url` (and, once registered, other
    * origins of the same stream) carries `headers`. */
-  registerHeaders(url: string, headers: Record<string, string> | null | undefined): string;
+  registerHeaders(url: string, headers: Record<string, string> | null | undefined): Promise<string>;
   registerHeaderOrigin(sessionId: string, url: string): boolean;
   unregisterHeaders(sessionId: string): void;
   /** The URL the player should actually load for `url` under `sessionId`. */

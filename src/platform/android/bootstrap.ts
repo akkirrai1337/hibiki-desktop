@@ -32,11 +32,12 @@ export async function installAndroidHibiki(): Promise<void> {
     sources: { ...core.sources, onChanged: (callback) => events.on(IPC.sourcesChanged, () => callback()) },
     downloads: { ...core.downloads, onProgress: (callback) => events.on(IPC.downloadsProgress, (progress) => callback(progress as DownloadProgress)) },
     player: {
-      registerHeaders: async (url, headers) => platform.player.registerHeaders(url, headers),
+      registerHeaders: (url, headers) => platform.player.registerHeaders(url, headers),
       registerHeaderOrigin: async (sessionId, url) => platform.player.registerHeaderOrigin(sessionId, url),
       unregisterHeaders: async (sessionId) => platform.player.unregisterHeaders(sessionId),
       resolveStreamUrl: (url, headers) => platform.player.resolveFinalUrl(url, headers),
       captureFrame: async () => null,
+      streamUrl: (sessionId, url) => platform.player.playableUrl(sessionId, url),
     },
     // Desktop-only surfaces: present so the renderer's calls are harmless, hidden from the UI by
     // platform.capabilities as the mobile layout lands.
