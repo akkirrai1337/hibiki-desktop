@@ -1,6 +1,0 @@
-{
-  "appId": "app.hibiki.poc",
-  "appName": "hibiki PoC",
-  "webDir": "dist",
-  "android": { "webContentsDebuggingEnabled": true }
-}
