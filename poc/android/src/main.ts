@@ -272,6 +272,18 @@ async function autorun(): Promise<void> {
   } else {
     log("autorun: no direct stream found, player skipped");
   }
+  // 0.4 end to end: both sources sit behind Cloudflare and call challenge() themselves.
+  video.pause();
+  for (const sourceId of ["animepahe", "anikappa"]) {
+    if (!scriptLoaders.has(sourceId)) continue;
+    await call("latest", [20], sourceId).catch((e) => log(`error: ${String(e)}`));
+  }
+  // Mechanics of challenge() without depending on Cloudflare deciding to challenge right now:
+  // hidden WebView loads a real Cloudflare-fronted page, its cookies are read and replayed natively.
+  $<HTMLInputElement>("challengeUrl").value = "https://animepahetv.to/";
+  $<HTMLInputElement>("challengeCookies").value = "";
+  $("challenge").click();
+  for (let i = 0; i < 120 && !/challenge: (refetch|error)/.test(logEl.textContent ?? ""); i++) await new Promise((r) => setTimeout(r, 500));
   log("autorun: done");
 }
 

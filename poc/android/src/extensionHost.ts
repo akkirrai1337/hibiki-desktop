@@ -155,8 +155,8 @@ export function runExtensionCall(
   return new Promise<CallOutcome>((resolve) => {
     const timeout = setTimeout(() => {
       worker.terminate();
-      resolve({ ok: false, error: "timed out after 60s", ms: performance.now() - startedAt, bridgeCalls: 0, bridgeMs: 0 });
-    }, 60_000);
+      resolve({ ok: false, error: "timed out after 120s", ms: performance.now() - startedAt, bridgeCalls: 0, bridgeMs: 0 });
+    }, 120_000);
 
     worker.onerror = (event) => {
       clearTimeout(timeout);

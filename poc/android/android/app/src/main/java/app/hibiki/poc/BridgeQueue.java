@@ -27,7 +27,7 @@ final class BridgeQueue {
         Map<String, String> headers = new HashMap<>();
         headers.put("Cache-Control", "no-store");
         try {
-            String body = future.get(90, TimeUnit.SECONDS);
+            String body = future.get(120, TimeUnit.SECONDS);
             return new WebResourceResponse("application/json", "utf-8", 200, "OK", headers,
                 new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception e) {
