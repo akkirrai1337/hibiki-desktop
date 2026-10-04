@@ -37,7 +37,7 @@ function normalizeRequest(options?: FetchOptions): { method: string; headers: Re
 
 // Last-resort path, used only when there is no host to bridge to (unit tests, tooling running
 // execute.ts directly). Inside the app every fetch goes through the NetFetchProvider instead -
-// see netFetchHost.ts for why: sync-fetch spawns a child process of the *Electron binary* per
+// see core/extensions/netFetch.ts for why: sync-fetch spawns a child process of the *Electron binary* per
 // request, with no timeout of any kind, so a stalled connect hangs until the worker is killed.
 // Loaded on demand, like Cheerio in jsoupShim.ts: inside the app this path never runs, and its
 // dependency tree would otherwise be parsed on every worker start for nothing.

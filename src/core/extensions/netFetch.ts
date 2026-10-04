@@ -1,5 +1,8 @@
-// Main-thread HTTP for extension scripts' synchronous `fetch()` global (see globals.ts), reached
-// from the worker over the existing Atomics bridge (syncHostBridge.ts).
+// Host-side HTTP for extension scripts' synchronous `fetch()` global (see globals.ts), reached
+// from the worker over the synchronous bridge (syncHostBridge.ts on desktop). The transport itself
+// is platform.http - Node's fetch on desktop, a native client on Android - and everything that
+// decides how a request is made (default headers, retries, the short GET cache, batching) lives
+// here, so both platforms treat extension traffic the same way.
 //
 // What this replaces, and why: `fetch()` in an extension has to *return* its response, not a
 // Promise - the scripts are ports of Rhino code and are written straight through. That was
@@ -17,7 +20,8 @@
 // to tell that apart from a genuine failure. Everything below runs on the main thread's normal
 // async stack instead, where undici's global pool keeps connections alive across requests and an
 // AbortSignal gives every request a real deadline.
-import { logger } from "../../core/logger";
+import { logger } from "../logger";
+import { getPlatform } from "../platform";
 
 export interface NetFetchOptions {
   method?: string;
@@ -126,33 +130,22 @@ function isRetryable(error: unknown): boolean {
 }
 
 async function performOnce(url: string, options: NetFetchOptions, headers: Record<string, string>): Promise<NetFetchResult> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    const response = await fetch(url, {
-      method: (options.method ?? "GET").toUpperCase(),
-      headers,
-      body: options.body,
-      redirect: "follow",
-      signal: controller.signal,
-    });
-    const body = await response.text();
-    const responseHeaders: Record<string, string> = {};
-    response.headers.forEach((value, key) => {
-      responseHeaders[key.toLowerCase()] = value;
-    });
-    // node-fetch (what sync-fetch used) exposed multiple Set-Cookie headers joined by ", ";
-    // undici folds them into `getSetCookie()` and leaves the plain header value as only the last
-    // one. kodik.js reads headers["set-cookie"] and keeps everything up to the first ";", so it
-    // works either way - but joining them back keeps any extension that looks at more than the
-    // first cookie seeing the same shape it did before.
-    const setCookies = typeof response.headers.getSetCookie === "function" ? response.headers.getSetCookie() : [];
-    if (setCookies.length > 0) responseHeaders["set-cookie"] = setCookies.join(", ");
-
-    return { status: response.status, ok: response.status >= 200 && response.status < 300, body, headers: responseHeaders };
-  } finally {
-    clearTimeout(timer);
-  }
+  const response = await getPlatform().http.request({
+    url,
+    method: (options.method ?? "GET").toUpperCase(),
+    headers,
+    body: options.body,
+    redirect: "follow",
+    timeoutMs: REQUEST_TIMEOUT_MS,
+  });
+  // One string per header, as extensions have always seen them. node-fetch (what sync-fetch used)
+  // exposed multiple Set-Cookie headers joined by ", "; the transport keeps them apart, and
+  // kodik.js reads headers["set-cookie"] and keeps everything up to the first ";", so it works
+  // either way - but joining them back keeps any extension that looks at more than the first
+  // cookie seeing the same shape it did before.
+  const responseHeaders: Record<string, string> = {};
+  for (const [name, values] of Object.entries(response.headers)) responseHeaders[name] = values.join(", ");
+  return { status: response.status, ok: response.status >= 200 && response.status < 300, body: response.body, headers: responseHeaders };
 }
 
 async function fetchUncached(url: string, options: NetFetchOptions, headers: Record<string, string>): Promise<NetFetchResult> {

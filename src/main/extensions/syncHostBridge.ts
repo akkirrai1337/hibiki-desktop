@@ -41,7 +41,7 @@ function callHostSync<TResponse>(bridgeKind: BridgeRequestMessage["bridgeKind"],
   return response.result as TResponse;
 }
 
-// Every plain fetch() an extension makes goes through here now - see netFetchHost.ts for why
+// Every plain fetch() an extension makes goes through here now - see core/extensions/netFetch.ts for why
 // that beats the per-request child process the `sync-fetch` package used to spawn.
 export const hostNetFetchProvider: NetFetchProvider = {
   fetch(url, options) {

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 // runtime.ts pulls in Electron-only hosts at import time; the race logic under test needs none of
 // them, so they are stubbed out rather than dragging a BrowserWindow into a unit test.
 vi.mock("./browserFetchHost", () => ({ performBrowserFetch: vi.fn(), performChallenge: vi.fn() }));
-vi.mock("./netFetchHost", () => ({ performNetFetch: vi.fn(), performNetFetchAll: vi.fn() }));
+vi.mock("../../core/extensions/netFetch", () => ({ performNetFetch: vi.fn(), performNetFetchAll: vi.fn() }));
 vi.mock("./browserResolveHost", () => ({ performBrowserResolve: vi.fn() }));
 vi.mock("../../core/logger", () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 

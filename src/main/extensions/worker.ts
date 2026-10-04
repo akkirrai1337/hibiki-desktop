@@ -20,7 +20,7 @@ import { createCallStorage } from "@shared/extensionCallStorage";
 import { hostBrowserFetchProvider, hostChallengeProvider, hostNetFetchProvider } from "./syncHostBridge";
 
 // Only still needed for globals.ts's sync-fetch *fallback* - the normal path bridges plain fetch()
-// to the main thread instead (see netFetchHost.ts). Kept anyway, because without it that fallback
+// to the main thread instead (see core/extensions/netFetch.ts). Kept anyway, because without it that fallback
 // doesn't merely run slowly, it hangs: sync-fetch blocks on execFileSync(process.execPath, ...),
 // which inside Electron is the Electron binary, and without this variable that child tries to boot
 // as a second GUI app instead of as plain Node, so it never writes the output being waited on.

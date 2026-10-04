@@ -26,7 +26,7 @@ import type {
 import type { ExtensionCall, ExtensionMethod } from "./execute";
 import type { WorkerCallMessage, WorkerReadyMessage, WorkerResultMessage } from "./worker";
 import { performBrowserFetch, performChallenge } from "./browserFetchHost";
-import { performNetFetch, performNetFetchAll } from "./netFetchHost";
+import { performNetFetch, performNetFetchAll } from "../../core/extensions/netFetch";
 import { loginViaWebview } from "./webLogin";
 import { logger } from "../../core/logger";
 import { performBrowserResolve } from "./browserResolveHost";

@@ -2,7 +2,7 @@ import type { HttpPort, HttpRequest, HttpResponse } from "../types";
 import { headerRecord } from "./headers";
 
 /** Node's fetch (undici): no CORS, no cookie jar, any header allowed - the transport
- * main/extensions/netFetchHost.ts already uses. */
+ * the extension fetch host has always used. */
 export const electronHttp: HttpPort = {
   async request(request: HttpRequest): Promise<HttpResponse> {
     const controller = new AbortController();

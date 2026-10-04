@@ -28,7 +28,7 @@ export interface BrowserFetchResult {
 }
 
 /** Plain HTTP for extension scripts' `fetch()` global. Implemented on the main thread (see
- * netFetchHost.ts) and reached synchronously from the worker over the Atomics bridge - the
+ * core/extensions/netFetch.ts) and reached synchronously from the worker over the Atomics bridge - the
  * fallback below is what runs when there is no host to bridge to (unit tests, tooling). */
 export interface NetFetchRequest {
   url: string;
