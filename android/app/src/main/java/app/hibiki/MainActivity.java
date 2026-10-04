@@ -1,4 +1,4 @@
-package app.hibiki.poc;
+package app.hibiki;
 
 import android.os.Bundle;
 import com.getcapacitor.BridgeActivity;
@@ -9,9 +9,13 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         registerPlugin(HibikiNetPlugin.class);
         registerPlugin(HibikiBrowserPlugin.class);
+        registerPlugin(HibikiFilesPlugin.class);
+        registerPlugin(HibikiDbPlugin.class);
+        registerPlugin(HibikiSecurePlugin.class);
+        registerPlugin(HibikiDownloadsPlugin.class);
         super.onCreate(savedInstanceState);
         // Capacitor builds its own client and starts loading during super.onCreate(). Swap in ours
-        // and load again, so index.html itself is served through it (it carries the COOP/COEP headers).
+        // and load again, so every request from the first page on goes through it.
         bridge.setWebViewClient(new HibikiWebViewClient(bridge));
         bridge.reload();
     }

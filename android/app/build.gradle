@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "app.hibiki.poc"
+    namespace = "app.hibiki"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "app.hibiki.poc"
+        applicationId "app.hibiki"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

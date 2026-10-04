@@ -1,4 +1,4 @@
-package app.hibiki.poc;
+package app.hibiki;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;

@@ -1,4 +1,4 @@
-package app.hibiki.poc;
+package app.hibiki;
 
 import android.net.Uri;
 import android.webkit.WebResourceRequest;
@@ -6,14 +6,12 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeWebViewClient;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
- * Three jobs on top of Capacitor's client:
- *  - adds COOP/COEP to the app's own responses, so the page is crossOriginIsolated and can use SharedArrayBuffer;
+ * Two jobs on top of Capacitor's client:
  *  - serves /_hibiki/stream (the header-injecting stream proxy for the player);
- *  - serves /_hibiki/bridge/&lt;id&gt; (the synchronous-XHR fallback transport for extension workers).
+ *  - serves /_hibiki/bridge/&lt;id&gt; (how extension workers make synchronous host calls: Android
+ *    WebView never becomes crossOriginIsolated, so SharedArrayBuffer/Atomics are not available).
  * Runs on WebView's IO threads, so blocking here (network, waiting on the bridge) is allowed.
  */
 public class HibikiWebViewClient extends BridgeWebViewClient {
@@ -33,14 +31,6 @@ public class HibikiWebViewClient extends BridgeWebViewClient {
         if (local && path.startsWith("/_hibiki/stream")) return StreamProxy.handle(request);
         if (local && path.startsWith("/_hibiki/bridge/")) return BridgeQueue.await(path.substring("/_hibiki/bridge/".length()));
 
-        WebResourceResponse response = super.shouldInterceptRequest(view, request);
-        if (response != null && local) {
-            Map<String, String> headers = new HashMap<>();
-            if (response.getResponseHeaders() != null) headers.putAll(response.getResponseHeaders());
-            headers.put("Cross-Origin-Opener-Policy", "same-origin");
-            headers.put("Cross-Origin-Embedder-Policy", "credentialless");
-            response.setResponseHeaders(headers);
-        }
-        return response;
+        return super.shouldInterceptRequest(view, request);
     }
 }

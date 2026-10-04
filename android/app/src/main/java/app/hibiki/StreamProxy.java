@@ -1,4 +1,4 @@
-package app.hibiki.poc;
+package app.hibiki;
 
 import android.net.Uri;
 import android.util.Log;

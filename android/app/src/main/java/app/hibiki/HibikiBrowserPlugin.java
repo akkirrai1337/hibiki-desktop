@@ -1,4 +1,4 @@
-package app.hibiki.poc;
+package app.hibiki;
 
 import android.annotation.SuppressLint;
 import android.view.ViewGroup;

@@ -1,0 +1,6 @@
+{
+  "appId": "app.hibiki",
+  "appName": "hibiki",
+  "webDir": "dist-android",
+  "android": { "webContentsDebuggingEnabled": true }
+}

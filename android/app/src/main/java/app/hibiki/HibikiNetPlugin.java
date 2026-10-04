@@ -1,4 +1,4 @@
-package app.hibiki.poc;
+package app.hibiki;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -6,11 +6,14 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import java.io.InterruptedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import okhttp3.Call;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -18,11 +21,19 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.internal.http.HttpMethod;
 
+/**
+ * HttpPort for Android: OkHttp with no cookie jar, any header allowed, bodies decompressed - the
+ * transport rules src/platform/contract/http.contract.ts pins for every platform. Failures carry a
+ * code (TIMEOUT, CANCELED, NETWORK) so the JS side can name them the way Node's fetch does.
+ */
 @CapacitorPlugin(name = "HibikiNet")
 public class HibikiNetPlugin extends Plugin {
 
+    private final Map<String, Call> inFlight = new ConcurrentHashMap<>();
+
     @PluginMethod
     public void request(PluginCall call) {
+        String id = call.getString("id", "");
         String url = call.getString("url");
         String method = call.getString("method", "GET").toUpperCase();
         Map<String, String> headers = toMap(call.getObject("headers", new JSObject()));
@@ -53,7 +64,9 @@ public class HibikiNetPlugin extends Plugin {
                 }
                 builder.method(method, requestBody);
 
-                try (Response response = client.newCall(builder.build()).execute()) {
+                Call httpCall = client.newCall(builder.build());
+                if (!id.isEmpty()) inFlight.put(id, httpCall);
+                try (Response response = httpCall.execute()) {
                     JSObject responseHeaders = new JSObject();
                     for (String name : response.headers().names()) {
                         responseHeaders.put(name, new JSArray(response.headers(name)));
@@ -66,9 +79,20 @@ public class HibikiNetPlugin extends Plugin {
                     call.resolve(result);
                 }
             } catch (Exception e) {
-                call.reject(e.getMessage() == null ? String.valueOf(e) : e.getMessage(), e);
+                String message = e.getMessage() == null ? String.valueOf(e) : e.getMessage();
+                String code = "Canceled".equalsIgnoreCase(message) ? "CANCELED" : e instanceof InterruptedIOException ? "TIMEOUT" : "NETWORK";
+                call.reject(message, code, e);
+            } finally {
+                if (!id.isEmpty()) inFlight.remove(id);
             }
         });
+    }
+
+    @PluginMethod
+    public void cancel(PluginCall call) {
+        Call httpCall = inFlight.remove(call.getString("id", ""));
+        if (httpCall != null) httpCall.cancel();
+        call.resolve();
     }
 
     @PluginMethod
