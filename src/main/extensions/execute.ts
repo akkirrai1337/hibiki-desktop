@@ -8,6 +8,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { buildExtensionGlobals } from "./globals";
 import type { ExtensionMethod } from "../../core/extensions/methods";
+import { invokeProvider } from "../../core/extensions/dispatch";
 import type { ExtensionStorageBinding } from "@shared/extensionCallStorage";
 import { notImplementedBrowserFetchProvider, notImplementedChallengeProvider } from "./browserBridge";
 import type { BrowserFetchProvider, ChallengeProvider, NetFetchProvider } from "./browserBridge";
@@ -138,10 +139,6 @@ function loadProvider(
   return provider;
 }
 
-function tagSource<T extends { id: string }>(sourceId: string, item: T): T & { sourceId: string } {
-  return { ...item, sourceId };
-}
-
 export function executeExtensionCall(
   call: ExtensionCall,
   providers: ExtensionBridgeProviders = {},
@@ -150,74 +147,5 @@ export function executeExtensionCall(
   const scriptPath = findScriptPath(call.extensionsDir, call.sourceId);
   const provider = loadProvider(scriptPath, call.sourceId, providers, storage);
 
-  switch (call.method) {
-    case "search": {
-      const fn = provider.search as (json: string) => Array<{ id: string }>;
-      const results = fn.call(provider, JSON.stringify(call.args[0]));
-      return results.map((r) => tagSource(call.sourceId, r));
-    }
-    case "latest": {
-      const fn = provider.latest as (limit: number) => Array<{ id: string }>;
-      const results = fn.call(provider, call.args[0] as number);
-      return results.map((r) => tagSource(call.sourceId, r));
-    }
-    case "getById": {
-      const fn = provider.getById as (id: string) => { id: string };
-      return tagSource(call.sourceId, fn.call(provider, call.args[0] as string));
-    }
-    case "getPlaybackGroups": {
-      const fn = provider.getPlaybackGroups as (titleId: string) => unknown[];
-      return fn.call(provider, call.args[0] as string) ?? [];
-    }
-    case "getPlayerLinks": {
-      const fn = provider.getPlayerLinks as (titleId: string, groupId: string, episodeId: string) => unknown[];
-      return (
-        fn.call(provider, call.args[0] as string, call.args[1] as string, call.args[2] as string) ?? []
-      );
-    }
-    case "getSettings": {
-      const fn = provider.getSettings as (() => unknown) | undefined;
-      return fn ? (fn.call(provider) ?? {}) : {};
-    }
-    case "resolve": {
-      // Player resolvers (extensions/extractors/*.js in hibiki-sources) expose Provider.resolve
-      // instead of the catalog methods above - they turn one EMBED PlayerLink (a third-party
-      // player page) into real DIRECT_HLS/DIRECT_MP4 candidates, so their result isn't tagged
-      // with a source id the way search/getById results are.
-      const fn = provider.resolve as (json: string) => unknown[];
-      return fn.call(provider, call.args[0] as string) ?? [];
-    }
-    // One shape for all of these: the argument, if any, is a JSON string, and so is the answer's
-    // payload - the same convention search/resolve already use, and the one Rhino needs, since it
-    // cannot hand a real object across the boundary either.
-    case "login":
-    case "loginWeb":
-    case "logout":
-    case "getAccount":
-    case "listComments":
-    case "postComment":
-    case "voteComment":
-    case "listReviews":
-    case "postReview":
-    case "syncLibraryEntry":
-    case "listLibrary":
-    case "reportPlayback":
-    case "pingOnline": {
-      const fn = provider[call.method] as ((json?: string) => unknown) | undefined;
-      if (typeof fn !== "function") {
-        throw new Error(`Source "${call.sourceId}" declares ${call.method} but does not implement it`);
-      }
-      const argument = call.args.length > 0 ? JSON.stringify(call.args[0]) : undefined;
-      return fn.call(provider, argument) ?? null;
-    }
-    case "browserScript": {
-      // BROWSER-runtime resolvers (extractors/alloha.js and similar) expose this instead of
-      // resolve() - it's a plain string of JS meant to run *inside* the embed page's own browser
-      // context (see browserResolveHost.ts), not something this sandbox executes itself.
-      const fn = provider.browserScript as (json: string) => string;
-      return fn.call(provider, call.args[0] as string);
-    }
-    default:
-      throw new Error(`Unknown extension method: ${call.method satisfies never}`);
-  }
+  return invokeProvider(provider, call.sourceId, call.method, call.args);
 }
