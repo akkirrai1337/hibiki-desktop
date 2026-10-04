@@ -18,15 +18,12 @@ import type {
   SourceLibraryEntry,
   SourceReview,
 } from "@shared/types";
-import type { ExtensionMethod } from "./execute";
+import type { ExtensionMethod } from "./methods";
 import type { BridgeHandler } from "../../platform/types";
-import { getPlatform } from "../../core/platform";
-import { performBrowserFetch, performChallenge } from "./browserFetchHost";
-import { performNetFetch, performNetFetchAll } from "../../core/extensions/netFetch";
-import { loginViaWebview } from "./webLogin";
-import { logger } from "../../core/logger";
-import { performBrowserResolve } from "./browserResolveHost";
-import { ExtensionStorage } from "../../core/extensions/extensionStorage";
+import { getPlatform } from "../platform";
+import { performNetFetch, performNetFetchAll } from "./netFetch";
+import { logger } from "../logger";
+import { ExtensionStorage } from "./extensionStorage";
 
 const WORKER_TIMEOUT_MS = 30_000;
 const FILTER_TYPES = ["select", "multi", "tristate", "text", "range"];
@@ -87,7 +84,7 @@ interface ResolverManifest {
   // Most resolvers are plain HTTP (Provider.resolve(linkJson), runs on this app's existing
   // sandboxed-worker infra - see execute.ts). A "BROWSER" runtime resolver instead exposes
   // Provider.browserScript(linkJson), which runs inside a real browser engine (see
-  // browserResolveHost.ts) via runBrowserResolver() below.
+  // BrowserPort.resolve) via runBrowserResolver() below.
   runtime?: "NODE" | "BROWSER";
 }
 
@@ -263,7 +260,7 @@ export class ExtensionRuntime {
   // waits for the answer.
   private readonly bridge: BridgeHandler = (kind, payload) => {
     if (kind === "challenge") {
-      return performChallenge(
+      return getPlatform().browser.challenge(
         payload.url as string,
         (payload.cookieNames as string[]) ?? [],
         Boolean(payload.forceRefresh),
@@ -278,7 +275,7 @@ export class ExtensionRuntime {
         (payload.options as { method?: string; headers?: Record<string, string>; body?: string } | undefined) ?? {},
       );
     }
-    return performBrowserFetch(
+    return getPlatform().browser.browserFetch(
       payload.pageUrl as string,
       payload.targetUrl as string,
       payload.options as { method?: string; headers?: Record<string, string>; body?: string } | undefined,
@@ -404,14 +401,14 @@ export class ExtensionRuntime {
   }
 
   /** The ACCOUNT row's own `webLoginUrl`/`webLoginSuccessCookie` - a real sign-in window instead
-   * of a login+password pair (see main/extensions/webLogin.ts for what that actually opens). */
+   * of a login+password pair (see BrowserPort.login for what that actually opens). */
   async loginWeb(sourceId: string): Promise<SourceAccount> {
     const manifest = this.extensions.get(sourceId)?.manifest;
     const row = (manifest?.settings ?? []).find((setting) => setting.type === "ACCOUNT");
     if (!row?.webLoginUrl || !row.webLoginSuccessCookie) {
       throw new Error(`Source "${sourceId}" does not declare a web login`);
     }
-    const cookies = await loginViaWebview(sourceId, row.webLoginUrl, row.webLoginSuccessCookie);
+    const cookies = await getPlatform().browser.login(sourceId, row.webLoginUrl, row.webLoginSuccessCookie);
     return this.run("loginWeb", sourceId, [cookies]);
   }
 
@@ -594,7 +591,7 @@ export class ExtensionRuntime {
   // instead of Provider.resolve() - the script text itself is plain, portable JS (fetched cheaply
   // via the same sandboxed worker as every other extension call), but *running* it has to happen
   // inside a real page in a real browser context, which is Electron-main-only territory (see
-  // browserResolveHost.ts, same reasoning as challenge()/browserFetch() elsewhere in this app).
+  // BrowserPort.resolve, same reasoning as challenge()/browserFetch() elsewhere in this app).
   private async runBrowserResolver(resolverId: string, link: PlayerLink, deadline: number): Promise<Array<PlayerLink & { type: string }>> {
     const resolveStartedAt = Date.now();
     logger.info("resolve", `${resolverId} browser resolver: loading extractor script`);
@@ -605,7 +602,7 @@ export class ExtensionRuntime {
     const { script, parentUrl } = parseBrowserResolverPayload(result);
     logger.info("resolve", `${resolverId} extractor script ready in ${Date.now() - resolveStartedAt}ms (${script.length} chars); starting hidden-browser resolve`);
     const browserStartedAt = Date.now();
-    const streams = await performBrowserResolve(link, script, Math.max(1, deadline - Date.now()), parentUrl);
+    const streams = await getPlatform().browser.resolve(link, script, Math.max(1, deadline - Date.now()), parentUrl);
     logger.info("resolve", `${resolverId} hidden-browser resolve finished in ${Date.now() - browserStartedAt}ms: ${streams.length} stream(s)`);
     return streams as unknown as Array<PlayerLink & { type: string }>;
   }

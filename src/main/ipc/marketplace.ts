@@ -3,7 +3,7 @@ import { IPC } from "@shared/ipc";
 import type { InstalledVersions, MarketplaceExtension, SourceInfo } from "@shared/types";
 import { createRepositoriesApi } from "../../core/api/repositories";
 import { fetchExtensionFiles, fetchRepositoryIndex } from "../../core/marketplace";
-import { isRetiredResolver, type ExtensionRuntime } from "../extensions/runtime";
+import { isRetiredResolver, type ExtensionRuntime } from "../../core/extensions/runtime";
 import { logger } from "../../core/logger";
 
 // A source's resolverDependencies (e.g. YummyAnime needs "kodik", "sibnet", ...) are hidden

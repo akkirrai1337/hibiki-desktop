@@ -4,7 +4,7 @@ import path from "node:path";
 import { app, ipcMain, type BrowserWindow } from "electron";
 import { IPC } from "@shared/ipc";
 import type { DownloadProgress, DownloadRequest, PlayerLink } from "@shared/types";
-import type { ExtensionRuntime } from "../extensions/runtime";
+import type { ExtensionRuntime } from "../../core/extensions/runtime";
 import {
   cacheAnime,
   cachePlaybackGroups,

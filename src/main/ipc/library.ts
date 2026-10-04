@@ -2,7 +2,7 @@ import { ipcMain } from "electron";
 import { IPC } from "@shared/ipc";
 import type { LibraryEntry, WatchProgress } from "@shared/types";
 import { createLibraryApi } from "../../core/api/library";
-import type { ExtensionRuntime } from "../extensions/runtime";
+import type { ExtensionRuntime } from "../../core/extensions/runtime";
 
 export function registerLibraryHandlers(runtime: ExtensionRuntime): void {
   const { ratings, library, progress } = createLibraryApi(runtime);

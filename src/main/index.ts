@@ -5,7 +5,7 @@ import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, ipcMain, Menu, protocol, shell } from "electron";
 import { IPC } from "@shared/ipc";
-import { ExtensionRuntime } from "./extensions/runtime";
+import { ExtensionRuntime } from "../core/extensions/runtime";
 import { destroyAllPooledWindows } from "./extensions/browserFetchHost";
 import { destroyIdleResolverWindows } from "./extensions/browserResolveHost";
 import { destroyAllLoginWindows } from "./extensions/webLogin";
