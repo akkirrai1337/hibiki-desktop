@@ -59,6 +59,8 @@ export interface HibikiBrowserPlugin {
   cookies(options: { url: string }): Promise<{ value: string }>;
   userAgent(): Promise<{ value: string }>;
   close(options: { key: string }): Promise<void>;
+  /** A shown page the user dismissed with Back. */
+  addListener(event: "closed", listener: (event: { key: string }) => void): Promise<PluginListenerHandle>;
 }
 
 export const HibikiNet = registerPlugin<HibikiNetPlugin>("HibikiNet");

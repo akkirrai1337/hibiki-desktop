@@ -6,6 +6,7 @@ import android.webkit.CookieManager;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import androidx.activity.OnBackPressedCallback;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -25,6 +26,8 @@ import java.util.Map;
 public class HibikiBrowserPlugin extends Plugin {
 
     private final Map<String, WebView> views = new HashMap<>();
+    /** Pages currently shown to the user: Back dismisses them (and reports "closed") instead of leaving the app. */
+    private final Map<String, OnBackPressedCallback> backHandlers = new HashMap<>();
 
     @SuppressLint("SetJavaScriptEnabled")
     @PluginMethod
@@ -35,8 +38,7 @@ public class HibikiBrowserPlugin extends Plugin {
         boolean clearOrigin = call.getBoolean("clearOrigin", false);
         getActivity().runOnUiThread(() -> {
             try {
-                WebView existing = views.remove(key);
-                if (existing != null) destroy(existing);
+                dismiss(key);
 
                 CookieManager cookies = CookieManager.getInstance();
                 if (clearOrigin) expireCookies(cookies, url);
@@ -86,7 +88,7 @@ public class HibikiBrowserPlugin extends Plugin {
         });
     }
 
-    /** Brings a hidden page in front of the app, for a challenge that needs a person (captcha, checkbox). */
+    /** Brings a hidden page in front of the app, for a page that needs a person (captcha, sign-in). */
     @PluginMethod
     public void show(PluginCall call) {
         String key = call.getString("key");
@@ -97,6 +99,23 @@ public class HibikiBrowserPlugin extends Plugin {
                 return;
             }
             view.bringToFront();
+            if (!backHandlers.containsKey(key)) {
+                OnBackPressedCallback back = new OnBackPressedCallback(true) {
+                    @Override
+                    public void handleOnBackPressed() {
+                        if (view.canGoBack()) {
+                            view.goBack();
+                            return;
+                        }
+                        dismiss(key);
+                        JSObject event = new JSObject();
+                        event.put("key", key);
+                        notifyListeners("closed", event);
+                    }
+                };
+                backHandlers.put(key, back);
+                getActivity().getOnBackPressedDispatcher().addCallback(back);
+            }
             call.resolve();
         });
     }
@@ -120,10 +139,17 @@ public class HibikiBrowserPlugin extends Plugin {
     public void close(PluginCall call) {
         String key = call.getString("key");
         getActivity().runOnUiThread(() -> {
-            WebView view = views.remove(key);
-            if (view != null) destroy(view);
+            dismiss(key);
             call.resolve();
         });
+    }
+
+    /** UI thread only. */
+    private void dismiss(String key) {
+        OnBackPressedCallback back = backHandlers.remove(key);
+        if (back != null) back.remove();
+        WebView view = views.remove(key);
+        if (view != null) destroy(view);
     }
 
     private static void destroy(WebView view) {
