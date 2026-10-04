@@ -4,9 +4,6 @@
 // streams on both platforms. The difference is only in how the script reaches the embed frame: see
 // HibikiResolverPlugin.java (document-start scripts + a message channel per frame, since Android
 // WebView cannot evaluate inside a child frame the way Electron's WebFrameMain can).
-//
-// Not ported yet: desktop's pool of idle resolver windows (a second episode from the same source
-// reusing the referring page). It only saves time; each resolve here starts a fresh WebView.
 import type { PlayerLink } from "@shared/types";
 import { logger } from "../../core/logger";
 import type { ResolvedStream } from "../types";
@@ -176,7 +173,7 @@ let nextPageId = 0;
 let nextRequestId = 0;
 
 class ResolverPage {
-  readonly key = `resolve:${Date.now().toString(36)}${(nextPageId++).toString(36)}`;
+  constructor(readonly key = `resolve:${Date.now().toString(36)}${(nextPageId++).toString(36)}`) {}
 
   async frames(): Promise<Array<{ id: number; url: string; origin: string; main: boolean }>> {
     return (await HibikiResolver.frames({ key: this.key })).frames;
@@ -215,6 +212,90 @@ class ResolverPage {
   }
 }
 
+// Every resolve used to start a fresh WebView - a whole renderer per embed, paid again for each mirror
+// the fallback chain tries. As on desktop, pages are kept for a while and handed to the next resolve,
+// remembered *together with the referring page they show*, so a second episode from the same source
+// skips that page load and only injects a new iframe.
+const IDLE_TTL_MS = 5 * 60_000;
+const RESET_TIMEOUT_MS = 2_000;
+const MAX_IDLE_PAGES = 2;
+
+interface IdlePage {
+  page: ResolverPage;
+  /** The referring page loaded in it, or null for a page holding nothing reusable. */
+  refererUrl: string | null;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+const idlePages: IdlePage[] = [];
+
+function takeIdlePage(match: (entry: IdlePage) => boolean): IdlePage | null {
+  for (let i = idlePages.length - 1; i >= 0; i--) {
+    const entry = idlePages[i];
+    if (!match(entry)) continue;
+    idlePages.splice(i, 1);
+    clearTimeout(entry.timer);
+    return entry;
+  }
+  return null;
+}
+
+/** A page ready for this resolver's script, plus whether it already holds `refererUrl`. */
+async function acquirePage(refererUrl: string | null, script: string): Promise<{ page: ResolverPage; hasReferer: boolean }> {
+  const reusable = (refererUrl ? takeIdlePage((entry) => entry.refererUrl === refererUrl) : null) ?? takeIdlePage(() => true);
+  if (reusable) {
+    try {
+      await HibikiResolver.setResolverScript({ key: reusable.page.key, resolverScript: resolverDefinition(script) });
+      return { page: reusable.page, hasReferer: refererUrl !== null && reusable.refererUrl === refererUrl };
+    } catch {
+      await HibikiResolver.close({ key: reusable.page.key }).catch(() => {});
+    }
+  }
+  const page = new ResolverPage();
+  await HibikiResolver.open({ key: page.key, bootScript: BOOT_SCRIPT, resolverScript: resolverDefinition(script) });
+  return { page, hasReferer: false };
+}
+
+async function releasePage(page: ResolverPage, refererUrl: string | null): Promise<void> {
+  if (idlePages.length >= MAX_IDLE_PAGES) {
+    await HibikiResolver.close({ key: page.key }).catch(() => {});
+    return;
+  }
+  try {
+    // An embed that broke out of its frame has navigated the page somewhere else entirely; what is
+    // showing decides what this page may be pooled as, not what it was asked to load.
+    const showing = (await withTimeout(page.evalTop("location.href"), RESET_TIMEOUT_MS, "reset timed out")).url;
+    const held = refererUrl && showing && originOf(showing) === originOf(refererUrl) ? refererUrl : null;
+    if (held) {
+      // The embed goes now, not at the next resolve: an idle page must not keep somebody's player
+      // loading and playing in it.
+      await withTimeout(page.evalTop(`(function () { if (document.body) document.body.innerHTML = ""; return true; })();`), RESET_TIMEOUT_MS, "reset timed out");
+    } else {
+      await HibikiResolver.navigate({ key: page.key, url: "about:blank" });
+    }
+    const entry: IdlePage = {
+      page,
+      refererUrl: held,
+      timer: setTimeout(() => {
+        const index = idlePages.indexOf(entry);
+        if (index >= 0) idlePages.splice(index, 1);
+        void HibikiResolver.close({ key: page.key }).catch(() => {});
+      }, IDLE_TTL_MS),
+    };
+    idlePages.push(entry);
+  } catch {
+    await HibikiResolver.close({ key: page.key }).catch(() => {});
+  }
+}
+
+/** Releases every idle resolver page. */
+export function disposeResolverPages(): void {
+  for (const entry of idlePages.splice(0)) {
+    clearTimeout(entry.timer);
+    void HibikiResolver.close({ key: entry.page.key }).catch(() => {});
+  }
+}
+
 export async function performBrowserResolve(link: PlayerLink, script: string, timeoutMs = TIMEOUT_MS, parentUrl?: string | null): Promise<ResolvedStream[]> {
   const deadline = Date.now() + Math.min(TIMEOUT_MS, timeoutMs);
   const resolveStartedAt = Date.now();
@@ -228,9 +309,11 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
     // Keep the source-provided referrer for malformed/non-HTTP resolver context URLs.
   }
 
-  const page = new ResolverPage();
-  await HibikiResolver.open({ key: page.key, bootScript: BOOT_SCRIPT, resolverScript: resolverDefinition(script) });
-  logger.info("resolve", `browser pipeline started for ${link.playerName ?? "?"}: target=${resolverUrlLabel(link.url)}, window=navigation required`);
+  const { page, hasReferer } = await acquirePage(refererUrl, script);
+  logger.info("resolve", `browser pipeline started for ${link.playerName ?? "?"}: target=${resolverUrlLabel(link.url)}, window=${hasReferer ? "pooled with referer" : "navigation required"}`);
+  // The referring page this page may be pooled under afterwards: set only once the embed is actually
+  // running as a child frame of it.
+  let heldRefererUrl: string | null = null;
   const networkCaptures: Capture[] = [];
   const capturedRequestHeaders = new Map<string, Record<string, string>>();
   let currentQuality: string | null = null;
@@ -281,7 +364,7 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
   try {
     let target: number;
     const refererStartedAt = Date.now();
-    const refererReady = refererUrl ? await loadRefererDocument(refererUrl) : false;
+    const refererReady = refererUrl ? hasReferer || (await loadRefererDocument(refererUrl)) : false;
     const refererMs = Date.now() - refererStartedAt;
     if (refererUrl && refererReady) {
       // A real iframe on the referring page, not a top-level load: the target server sees a
@@ -305,8 +388,13 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
       // too; the embed is the first child frame that has committed a real page (desktop waits for
       // the frame's own navigation for the same reason).
       const child = await page.waitFrame(before, (candidate) => !candidate.main && /^https?:/i.test(candidate.url), Math.max(0, Math.min(8_000, deadline - Date.now())));
-      logger.debug("resolve", `embed ready: referer ${refererMs}ms, frame ${Date.now() - embedStartedAt}ms; target=${resolverUrlLabel(link.url)}`);
-      target = child ?? (await loadTopLevel());
+      logger.debug("resolve", `embed ready: referer ${refererMs}ms${hasReferer ? " (pooled)" : ""}, frame ${Date.now() - embedStartedAt}ms; target=${resolverUrlLabel(link.url)}`);
+      if (child !== null) {
+        target = child;
+        heldRefererUrl = refererUrl;
+      } else {
+        target = await loadTopLevel();
+      }
     } else {
       target = await loadTopLevel();
     }
@@ -375,7 +463,7 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
     logger.info("resolve", `browser probing finished after ${Date.now() - resolveStartedAt}ms: page=${finalState.captures.length}, network=${networkCaptures.length}; validating candidates`);
     return await buildResult(finalState.captures, networkCaptures, link, page, target, deadline, probes, capturedRequestHeaders);
   } finally {
-    await HibikiResolver.close({ key: page.key }).catch(() => {});
+    void releasePage(page, heldRefererUrl);
   }
 }
 

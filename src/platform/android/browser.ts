@@ -4,7 +4,7 @@
 // same site share one page instead of tearing each other's down.
 import type { BrowserFetchResult, BrowserPort, ChallengeSession, HarvestedCookie } from "../types";
 import { HibikiBrowser } from "./native";
-import { performBrowserResolve } from "./browserResolve";
+import { disposeResolverPages, performBrowserResolve } from "./browserResolve";
 
 const SHOW_AFTER_MS = 8_000;
 const GIVE_UP_AFTER_MS = 120_000;
@@ -247,5 +247,6 @@ export const androidBrowser: BrowserPort = {
       void HibikiBrowser.close({ key });
     }
     pages.clear();
+    disposeResolverPages();
   },
 };

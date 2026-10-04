@@ -65,6 +65,7 @@ export interface HibikiBrowserPlugin {
 
 export interface HibikiResolverPlugin {
   open(options: { key: string; bootScript: string; resolverScript: string }): Promise<void>;
+  setResolverScript(options: { key: string; resolverScript: string }): Promise<void>;
   navigate(options: { key: string; url: string; headers?: Record<string, string>; documentOnly?: boolean }): Promise<void>;
   setDocumentOnly(options: { key: string; value: boolean }): Promise<void>;
   evalTop(options: { key: string; js: string }): Promise<{ value: string; url?: string }>;

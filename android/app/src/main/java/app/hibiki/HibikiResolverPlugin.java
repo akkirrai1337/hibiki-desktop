@@ -69,6 +69,8 @@ public class HibikiResolverPlugin extends Plugin {
     private static final class Page {
         WebView view;
         final List<ScriptHandler> scripts = new ArrayList<>();
+        /** The resolver script's own handle, swapped when a pooled page serves another resolver. */
+        ScriptHandler resolverScript;
         final List<Frame> frames = Collections.synchronizedList(new ArrayList<>());
         final List<JSObject> captures = Collections.synchronizedList(new ArrayList<>());
         final Map<String, PluginCall> pending = new HashMap<>();
@@ -128,7 +130,7 @@ public class HibikiResolverPlugin extends Plugin {
                 page.scripts.add(WebViewCompat.addDocumentStartJavaScript(view, bootScript, everywhere));
                 // Separate from the boot script: a resolver script that does not parse must not take
                 // the bridge down with it (the boot script then falls back to running it with eval).
-                page.scripts.add(WebViewCompat.addDocumentStartJavaScript(view, resolverScript, everywhere));
+                page.resolverScript = WebViewCompat.addDocumentStartJavaScript(view, resolverScript, everywhere);
 
                 ViewGroup parent = (ViewGroup) bridge.getWebView().getParent();
                 parent.addView(view, 0, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -161,6 +163,25 @@ public class HibikiResolverPlugin extends Plugin {
         } catch (Exception ignored) {
             // Not ours, or malformed: frames run third-party code that may post anything.
         }
+    }
+
+    /** Replaces the resolver script for documents loaded from now on - a pooled page reused by another resolver. */
+    @SuppressLint("RequiresFeature")
+    @PluginMethod
+    public void setResolverScript(PluginCall call) {
+        String key = call.getString("key");
+        String resolverScript = call.getString("resolverScript", "");
+        getActivity().runOnUiThread(() -> {
+            Page page = pages.get(key);
+            if (page == null) {
+                call.reject("no resolver page " + key);
+                return;
+            }
+            if (page.resolverScript != null) page.resolverScript.remove();
+            page.resolverScript = WebViewCompat.addDocumentStartJavaScript(page.view, resolverScript, Collections.singleton("*"));
+            page.captures.clear();
+            call.resolve();
+        });
     }
 
     @PluginMethod
@@ -309,6 +330,7 @@ public class HibikiResolverPlugin extends Plugin {
     private void destroy(Page page) {
         if (page == null) return;
         for (ScriptHandler script : page.scripts) script.remove();
+        if (page.resolverScript != null) page.resolverScript.remove();
         for (PluginCall pending : page.pending.values()) {
             pending.reject("resolver page closed");
         }
