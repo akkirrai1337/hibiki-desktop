@@ -110,6 +110,10 @@ export interface FetchToFileRequest {
   /** Whether to append to an existing file - decided per response, since a resumed download only
    * appends when the server honoured the Range request. */
   append: boolean | ((response: { status: number; headers: Record<string, string[]> }) => boolean);
+  /** Write nothing until the whole body has arrived, so an abort mid-transfer leaves the file as it
+   * was. For small pieces (HLS segments) that are retried whole on resume; a large progressive
+   * download streams instead and tracks its own resume point. */
+  buffered?: boolean;
   signal?: AbortSignal;
   onProgress?: (receivedBytes: number, totalBytes: number | null) => void;
 }

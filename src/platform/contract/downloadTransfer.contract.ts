@@ -40,6 +40,19 @@ export function describeDownloadTransferContract(name: string, transfer: Downloa
       expect(await files.readText(target)).toBe("0123456789abcdefghij");
     });
 
+    it("leaves the file untouched when a buffered transfer is aborted midway", async () => {
+      const target = files.join(dir(), "segments.ts");
+      await files.writeText(target, "SEG1");
+      const controller = new AbortController();
+      const pending = transfer.fetchToFile({ url: `${server.url}/slow-body`, filePath: target, append: true, buffered: true, signal: controller.signal });
+      setTimeout(() => controller.abort(), 300);
+      await expect(pending).rejects.toThrow();
+      expect(await files.readText(target)).toBe("SEG1");
+
+      await transfer.fetchToFile({ url: `${server.url}/bytes`, filePath: target, append: true, buffered: true });
+      expect(await files.readText(target)).toBe("SEG10123456789abcdefghij");
+    });
+
     it("throws on an error status without creating the file", async () => {
       const target = files.join(dir(), "error.bin");
       await expect(transfer.fetchToFile({ url: `${server.url}/status?code=404`, filePath: target, append: false })).rejects.toThrow("HTTP 404");

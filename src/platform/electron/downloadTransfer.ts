@@ -13,6 +13,18 @@ export const electronDownloadTransfer: DownloadTransferPort = {
     const contentLength = Number(response.headers.get("content-length") ?? 0);
     const totalBytes = contentLength > 0 ? contentLength : null;
 
+    if (request.buffered) {
+      const data = new Uint8Array(await response.arrayBuffer());
+      const out = createWriteStream(request.filePath, { flags: append ? "a" : "w" });
+      try {
+        await new Promise<void>((resolve, reject) => out.write(data, (error) => (error ? reject(error) : resolve())));
+      } finally {
+        await new Promise<void>((resolve) => out.end(resolve));
+      }
+      request.onProgress?.(data.byteLength, totalBytes);
+      return { status: response.status, headers, bytesWritten: data.byteLength };
+    }
+
     const out = createWriteStream(request.filePath, { flags: append ? "a" : "w" });
     const reader = response.body.getReader();
     let bytesWritten = 0;

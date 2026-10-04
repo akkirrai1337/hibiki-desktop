@@ -14,7 +14,7 @@ import { registerLibraryHandlers } from "./ipc/library";
 import { registerXpEventHandlers } from "./ipc/xpEvents";
 import { registerMarketplaceHandlers } from "./ipc/marketplace";
 import { repairMissingResolverDependencies } from "../core/api/extensions";
-import { DOWNLOADS_DIR, registerDownloadHandlers } from "./ipc/downloads";
+import { registerDownloadHandlers } from "./ipc/downloads";
 import { registerProfileBannerHandlers } from "./ipc/profileBanner";
 import { installPlayerHeaderInjector, registerPlayerHeaderOrigin, registerPlayerHeaders, unregisterPlayerHeaders } from "./playerHeaders";
 import { resolveFinalStreamUrl } from "./playerStream";
@@ -244,7 +244,7 @@ app.whenReady().then(async () => {
     const requestedPath = decodeURIComponent(url.pathname.startsWith("/") ? url.pathname.slice(1) : url.pathname);
     try {
       const realPath = await fs.realpath(requestedPath);
-      const realDownloadsDir = await fs.realpath(DOWNLOADS_DIR);
+      const realDownloadsDir = await fs.realpath(getPlatform().paths.downloads);
       if (!realPath.startsWith(realDownloadsDir + path.sep)) return new Response("Forbidden", { status: 403 });
 
       const stat = await fs.stat(realPath);
@@ -316,11 +316,10 @@ app.whenReady().then(async () => {
   registerMarketplaceHandlers(runtime);
   registerLibraryHandlers(runtime);
   registerXpEventHandlers();
-  // A lazy getter, not `mainWindow` itself - handlers are registered before createWindow() below
-  // assigns it, and a download can still be running long after the window is recreated (e.g. after
-  // being closed and reopened via the dock/taskbar on macOS), so this needs to read whatever the
-  // current window is at send-time, not capture a stale reference from registration time.
-  registerDownloadHandlers(runtime, () => mainWindow);
+  // Progress goes out through platform.events, whose window getter is read at send-time: a download
+  // can still be running long after the window is recreated (e.g. closed and reopened via the
+  // dock/taskbar on macOS).
+  registerDownloadHandlers(runtime);
   registerProfileBannerHandlers();
   installPlayerHeaderInjector();
   ipcMain.handle(IPC.playerRegisterHeaders, (_e, url: string, headers: Record<string, string> | null) =>

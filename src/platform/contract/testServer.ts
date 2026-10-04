@@ -35,6 +35,12 @@ export async function startTestServer(): Promise<{ url: string; close: () => Pro
         case "/slow":
           setTimeout(() => res.end("late"), 2_000);
           return;
+        case "/slow-body":
+          // Half the body now, the rest much later: lets a test abort in the middle of a transfer.
+          res.setHeader("Content-Length", "20");
+          res.write("0123456789");
+          setTimeout(() => res.end("abcdefghij"), 2_000);
+          return;
         case "/bytes": {
           const data = Buffer.from("0123456789abcdefghij");
           const range = /bytes=(\d+)-/.exec(req.headers.range ?? "");
