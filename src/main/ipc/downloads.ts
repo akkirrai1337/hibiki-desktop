@@ -193,10 +193,10 @@ async function cacheForOffline(state: DownloadState): Promise<void> {
   const { sourceId, animeId, groupId, episodeId, episodeNumber, episodeLabel } = state.request;
   try {
     const fileStat = await fs.stat(state.outFile);
-    recordDownloadedEpisode({ sourceId, animeId, groupId, episodeId, episodeNumber, episodeLabel, filePath: state.outFile, fileSizeBytes: fileStat.size, durationMs: state.durationMs ?? null, quality: state.link.quality ?? null });
+    await recordDownloadedEpisode({ sourceId, animeId, groupId, episodeId, episodeNumber, episodeLabel, filePath: state.outFile, fileSizeBytes: fileStat.size, durationMs: state.durationMs ?? null, quality: state.link.quality ?? null });
     const [anime, groups] = await Promise.all([state.runtime.getById(sourceId, animeId), state.runtime.getPlaybackGroups(sourceId, animeId)]);
-    cacheAnime(sourceId, animeId, anime);
-    cachePlaybackGroups(sourceId, animeId, groups);
+    await cacheAnime(sourceId, animeId, anime);
+    await cachePlaybackGroups(sourceId, animeId, groups);
   } catch {
     // Downloaded fine either way - offline browsing for this title just won't have a description/
     // episode list ready until the next successful (online) visit happens to cache it instead.
@@ -373,8 +373,8 @@ export function registerDownloadHandlers(runtime: ExtensionRuntime, getWindow: (
     getDownloadedEpisode(sourceId, animeId, episodeId),
   );
   ipcMain.handle(IPC.downloadsRemove, async (_e, sourceId: string, animeId: string, episodeId: string) => {
-    const row = getDownloadedEpisode(sourceId, animeId, episodeId);
-    deleteDownloadedEpisodeRow(sourceId, animeId, episodeId);
+    const row = await getDownloadedEpisode(sourceId, animeId, episodeId);
+    await deleteDownloadedEpisodeRow(sourceId, animeId, episodeId);
     if (row) await fs.rm(row.filePath, { force: true }).catch(() => {});
   });
 }

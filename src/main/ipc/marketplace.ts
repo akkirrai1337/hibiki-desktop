@@ -87,13 +87,13 @@ export async function repairMissingResolverDependencies(runtime: ExtensionRuntim
   return changed;
 }
 
-function listRepositoryUrls(): string[] {
+async function listRepositoryUrls(): Promise<string[]> {
   const db = getDb();
-  const rows = db.select().from(sourceRepositories).all();
+  const rows = await db.select().from(sourceRepositories).all();
   // First run: nothing installed and no repository configured yet — seed the built-in
   // hibiki-sources repository so the marketplace isn't empty out of the box.
   if (rows.length === 0) {
-    db.insert(sourceRepositories).values({ url: DEFAULT_REPOSITORY_URL, addedAt: Date.now() }).run();
+    await db.insert(sourceRepositories).values({ url: DEFAULT_REPOSITORY_URL, addedAt: Date.now() }).run();
     return [DEFAULT_REPOSITORY_URL];
   }
   return rows.map((r) => r.url);
@@ -107,17 +107,17 @@ function notifyChanged(sender: Electron.WebContents): void {
 }
 
 export function registerMarketplaceHandlers(runtime: ExtensionRuntime): void {
-  ipcMain.handle(IPC.sourcesRepositoriesList, (): string[] => listRepositoryUrls());
+  ipcMain.handle(IPC.sourcesRepositoriesList, (): Promise<string[]> => listRepositoryUrls());
 
   ipcMain.handle(IPC.sourcesRepositoriesAdd, async (_e, url: string): Promise<string[]> => {
     if (!isHttpsRepositoryUrl(url)) throw new Error("Repository URL must use HTTPS");
     await fetchRepositoryIndex(url); // validates it's actually a repository index before saving
-    getDb().insert(sourceRepositories).values({ url, addedAt: Date.now() }).onConflictDoNothing().run();
+    await getDb().insert(sourceRepositories).values({ url, addedAt: Date.now() }).onConflictDoNothing().run();
     return listRepositoryUrls();
   });
 
-  ipcMain.handle(IPC.sourcesRepositoriesRemove, (_e, url: string): string[] => {
-    getDb().delete(sourceRepositories).where(eq(sourceRepositories.url, url)).run();
+  ipcMain.handle(IPC.sourcesRepositoriesRemove, async (_e, url: string): Promise<string[]> => {
+    await getDb().delete(sourceRepositories).where(eq(sourceRepositories.url, url)).run();
     return listRepositoryUrls();
   });
 

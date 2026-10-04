@@ -24,9 +24,9 @@ function stripForCache(anime: AnimeTitle): AnimeTitle {
  * Deliberately keyed by request rather than "give me everything": the table grows with every title
  * ever opened, and a screen only ever needs the handful it is about to draw.
  */
-export function getCachedAnimeMany(
+export async function getCachedAnimeMany(
   keys: Array<{ sourceId: string; animeId: string }>,
-): Record<string, CachedAnimeEntry> {
+): Promise<Record<string, CachedAnimeEntry>> {
   if (keys.length === 0) return {};
   const result: Record<string, CachedAnimeEntry> = {};
   // Two bound values per title. Keep comfortably below SQLite's common 999-variable limit while
@@ -35,7 +35,7 @@ export function getCachedAnimeMany(
   const BATCH_SIZE = 400;
   for (let offset = 0; offset < unique.length; offset += BATCH_SIZE) {
     const batch = unique.slice(offset, offset + BATCH_SIZE);
-    const rows = getDb()
+    const rows = await getDb()
       .select()
       .from(cachedAnime)
       .where(or(...batch.map(({ sourceId, animeId }) => and(eq(cachedAnime.sourceId, sourceId), eq(cachedAnime.animeId, animeId)))))
@@ -50,8 +50,8 @@ export function getCachedAnimeMany(
   return result;
 }
 
-export function cacheAnime(sourceId: string, animeId: string, anime: AnimeTitle): void {
-  getDb()
+export async function cacheAnime(sourceId: string, animeId: string, anime: AnimeTitle): Promise<void> {
+  await getDb()
     .insert(cachedAnime)
     .values({ sourceId, animeId, animeJson: JSON.stringify(stripForCache(anime)), cachedAt: Date.now() })
     .onConflictDoUpdate({
@@ -61,13 +61,13 @@ export function cacheAnime(sourceId: string, animeId: string, anime: AnimeTitle)
     .run();
 }
 
-export function getCachedAnime(sourceId: string, animeId: string): AnimeTitle | null {
-  const row = getDb().select().from(cachedAnime).where(and(eq(cachedAnime.sourceId, sourceId), eq(cachedAnime.animeId, animeId))).get();
+export async function getCachedAnime(sourceId: string, animeId: string): Promise<AnimeTitle | null> {
+  const row = await getDb().select().from(cachedAnime).where(and(eq(cachedAnime.sourceId, sourceId), eq(cachedAnime.animeId, animeId))).get();
   return row ? (JSON.parse(row.animeJson) as AnimeTitle) : null;
 }
 
-export function cachePlaybackGroups(sourceId: string, animeId: string, groups: PlaybackGroup[]): void {
-  getDb()
+export async function cachePlaybackGroups(sourceId: string, animeId: string, groups: PlaybackGroup[]): Promise<void> {
+  await getDb()
     .insert(cachedPlaybackGroups)
     .values({ sourceId, animeId, groupsJson: JSON.stringify(groups), cachedAt: Date.now() })
     .onConflictDoUpdate({
@@ -77,12 +77,12 @@ export function cachePlaybackGroups(sourceId: string, animeId: string, groups: P
     .run();
 }
 
-export function getCachedPlaybackGroups(sourceId: string, animeId: string): PlaybackGroup[] | null {
-  return getCachedPlaybackGroupsEntry(sourceId, animeId)?.groups ?? null;
+export async function getCachedPlaybackGroups(sourceId: string, animeId: string): Promise<PlaybackGroup[] | null> {
+  return (await getCachedPlaybackGroupsEntry(sourceId, animeId))?.groups ?? null;
 }
 
-export function getCachedPlaybackGroupsEntry(sourceId: string, animeId: string): CachedPlaybackGroupsEntry | null {
-  const row = getDb()
+export async function getCachedPlaybackGroupsEntry(sourceId: string, animeId: string): Promise<CachedPlaybackGroupsEntry | null> {
+  const row = await getDb()
     .select()
     .from(cachedPlaybackGroups)
     .where(and(eq(cachedPlaybackGroups.sourceId, sourceId), eq(cachedPlaybackGroups.animeId, animeId)))
@@ -90,7 +90,7 @@ export function getCachedPlaybackGroupsEntry(sourceId: string, animeId: string):
   return row ? { groups: JSON.parse(row.groupsJson) as PlaybackGroup[], cachedAt: row.cachedAt } : null;
 }
 
-export function recordDownloadedEpisode(entry: {
+export async function recordDownloadedEpisode(entry: {
   sourceId: string;
   animeId: string;
   groupId: string;
@@ -101,8 +101,8 @@ export function recordDownloadedEpisode(entry: {
   fileSizeBytes: number;
   durationMs: number | null;
   quality: string | null;
-}): void {
-  getDb()
+}): Promise<void> {
+  await getDb()
     .insert(downloadedEpisodes)
     .values({ ...entry, downloadedAt: Date.now() })
     .onConflictDoUpdate({
@@ -127,12 +127,12 @@ function titleFor(anime: AnimeTitle | null, fallbackId: string): string {
 
 // Joined with cachedAnime in-memory after one batched lookup. Keeping the JSON decode here is
 // simpler than a SQL join while avoiding the old extra indexed statement for every episode row.
-export function listDownloadedEpisodes(): DownloadedEpisode[] {
-  const rows = getDb()
+export async function listDownloadedEpisodes(): Promise<DownloadedEpisode[]> {
+  const rows = await getDb()
     .select()
     .from(downloadedEpisodes)
     .all();
-  const cached = getCachedAnimeMany(rows.map((row) => ({ sourceId: row.sourceId, animeId: row.animeId })));
+  const cached = await getCachedAnimeMany(rows.map((row) => ({ sourceId: row.sourceId, animeId: row.animeId })));
   return rows.map((r) => {
     const anime = cached[`${r.sourceId}:${r.animeId}`]?.title ?? null;
     return {
@@ -152,8 +152,8 @@ export function listDownloadedEpisodes(): DownloadedEpisode[] {
   });
 }
 
-export function getDownloadedEpisode(sourceId: string, animeId: string, episodeId: string): { filePath: string; durationMs: number | null; quality: string | null } | null {
-  const row = getDb()
+export async function getDownloadedEpisode(sourceId: string, animeId: string, episodeId: string): Promise<{ filePath: string; durationMs: number | null; quality: string | null } | null> {
+  const row = await getDb()
     .select({ filePath: downloadedEpisodes.filePath, durationMs: downloadedEpisodes.durationMs, quality: downloadedEpisodes.quality })
     .from(downloadedEpisodes)
     .where(and(eq(downloadedEpisodes.sourceId, sourceId), eq(downloadedEpisodes.animeId, animeId), eq(downloadedEpisodes.episodeId, episodeId)))
@@ -161,8 +161,8 @@ export function getDownloadedEpisode(sourceId: string, animeId: string, episodeI
   return row ?? null;
 }
 
-export function deleteDownloadedEpisodeRow(sourceId: string, animeId: string, episodeId: string): void {
-  getDb()
+export async function deleteDownloadedEpisodeRow(sourceId: string, animeId: string, episodeId: string): Promise<void> {
+  await getDb()
     .delete(downloadedEpisodes)
     .where(and(eq(downloadedEpisodes.sourceId, sourceId), eq(downloadedEpisodes.animeId, animeId), eq(downloadedEpisodes.episodeId, episodeId)))
     .run();
@@ -175,10 +175,11 @@ const MAX_CACHED_QUERIES = 200;
 
 /** Stores the list a source screen was last built from. Fire-and-forget: a failure here costs a
  * slower first paint next launch and nothing else, so it must never fail the call it came from. */
-export function cacheSourceQuery(queryKey: string, titles: AnimeTitle[]): void {
+export async function cacheSourceQuery(queryKey: string, titles: AnimeTitle[]): Promise<void> {
   if (titles.length === 0) return;
   const db = getDb();
-  db.insert(cachedSourceQueries)
+  await db
+    .insert(cachedSourceQueries)
     .values({ queryKey, titlesJson: JSON.stringify(titles), cachedAt: Date.now() })
     .onConflictDoUpdate({
       target: cachedSourceQueries.queryKey,
@@ -186,19 +187,20 @@ export function cacheSourceQuery(queryKey: string, titles: AnimeTitle[]): void {
     })
     .run();
 
-  const keep = db
-    .select({ queryKey: cachedSourceQueries.queryKey })
-    .from(cachedSourceQueries)
-    .orderBy(desc(cachedSourceQueries.cachedAt))
-    .limit(MAX_CACHED_QUERIES)
-    .all()
-    .map((row) => row.queryKey);
+  const keep = (
+    await db
+      .select({ queryKey: cachedSourceQueries.queryKey })
+      .from(cachedSourceQueries)
+      .orderBy(desc(cachedSourceQueries.cachedAt))
+      .limit(MAX_CACHED_QUERIES)
+      .all()
+  ).map((row) => row.queryKey);
   if (keep.length >= MAX_CACHED_QUERIES) {
-    db.delete(cachedSourceQueries).where(notInArray(cachedSourceQueries.queryKey, keep)).run();
+    await db.delete(cachedSourceQueries).where(notInArray(cachedSourceQueries.queryKey, keep)).run();
   }
 }
 
-export function getCachedSourceQuery(queryKey: string): CachedTitleListEntry | null {
-  const row = getDb().select().from(cachedSourceQueries).where(eq(cachedSourceQueries.queryKey, queryKey)).get();
+export async function getCachedSourceQuery(queryKey: string): Promise<CachedTitleListEntry | null> {
+  const row = await getDb().select().from(cachedSourceQueries).where(eq(cachedSourceQueries.queryKey, queryKey)).get();
   return row ? { titles: JSON.parse(row.titlesJson) as AnimeTitle[], cachedAt: row.cachedAt } : null;
 }

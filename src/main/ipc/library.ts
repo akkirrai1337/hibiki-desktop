@@ -72,7 +72,7 @@ async function pushRating(
   const account = await runtime.getAccount(sourceId).catch(() => null);
   if (!account) return { synced: false, reason: "signed-out" };
 
-  const local = getDb()
+  const local = await getDb()
     .select()
     .from(library)
     .where(and(eq(library.sourceId, sourceId), eq(library.animeId, animeId)))
@@ -87,8 +87,8 @@ async function pushRating(
 }
 
 export function registerLibraryHandlers(runtime: ExtensionRuntime): void {
-  ipcMain.handle(IPC.ratingGet, (_e, sourceId: string, animeId: string): number | null => {
-    const row = getDb()
+  ipcMain.handle(IPC.ratingGet, async (_e, sourceId: string, animeId: string): Promise<number | null> => {
+    const row = await getDb()
       .select()
       .from(titleRatings)
       .where(and(eq(titleRatings.sourceId, sourceId), eq(titleRatings.animeId, animeId)))
@@ -99,10 +99,11 @@ export function registerLibraryHandlers(runtime: ExtensionRuntime): void {
   ipcMain.handle(IPC.ratingSet, async (_e, sourceId: string, animeId: string, rating: number | null): Promise<RatingSyncResult> => {
     const db = getDb();
     if (rating == null) {
-      db.delete(titleRatings).where(and(eq(titleRatings.sourceId, sourceId), eq(titleRatings.animeId, animeId))).run();
+      await db.delete(titleRatings).where(and(eq(titleRatings.sourceId, sourceId), eq(titleRatings.animeId, animeId))).run();
     } else {
       const values = { sourceId, animeId, rating, ratedAt: Date.now() };
-      db.insert(titleRatings)
+      await db
+        .insert(titleRatings)
         .values(values)
         .onConflictDoUpdate({ target: [titleRatings.sourceId, titleRatings.animeId], set: { rating, ratedAt: values.ratedAt } })
         .run();
@@ -117,8 +118,8 @@ export function registerLibraryHandlers(runtime: ExtensionRuntime): void {
     });
   });
 
-  ipcMain.handle(IPC.libraryList, (): LibraryEntry[] => {
-    const rows = getDb().select().from(library).all();
+  ipcMain.handle(IPC.libraryList, async (): Promise<LibraryEntry[]> => {
+    const rows = await getDb().select().from(library).all();
     return rows.map((r) => ({
       animeId: r.animeId,
       sourceId: r.sourceId,
@@ -128,8 +129,8 @@ export function registerLibraryHandlers(runtime: ExtensionRuntime): void {
     }));
   });
 
-  ipcMain.handle(IPC.libraryUpsert, (_e, entry: LibraryEntry) => {
-    getDb()
+  ipcMain.handle(IPC.libraryUpsert, async (_e, entry: LibraryEntry) => {
+    await getDb()
       .insert(library)
       .values({
         animeId: entry.animeId,
@@ -146,16 +147,16 @@ export function registerLibraryHandlers(runtime: ExtensionRuntime): void {
     pushToAccount(runtime, entry.sourceId, entry.animeId, entry.category);
   });
 
-  ipcMain.handle(IPC.libraryRemove, (_e, sourceId: string, animeId: string) => {
-    getDb()
+  ipcMain.handle(IPC.libraryRemove, async (_e, sourceId: string, animeId: string) => {
+    await getDb()
       .delete(library)
       .where(and(eq(library.sourceId, sourceId), eq(library.animeId, animeId)))
       .run();
     pushToAccount(runtime, sourceId, animeId, null);
   });
 
-  ipcMain.handle(IPC.progressGet, (_e, sourceId: string, titleId: string, episodeId: string): WatchProgress | null => {
-    const row = getDb()
+  ipcMain.handle(IPC.progressGet, async (_e, sourceId: string, titleId: string, episodeId: string): Promise<WatchProgress | null> => {
+    const row = await getDb()
       .select()
       .from(watchProgress)
       .where(
@@ -169,12 +170,15 @@ export function registerLibraryHandlers(runtime: ExtensionRuntime): void {
     return row ?? null;
   });
 
-  ipcMain.handle(IPC.progressUpsert, (_e, incoming: WatchProgress) => {
+  // With better-sqlite3 every awaited statement below runs to completion before control returns,
+  // so the read of `previous` and the writes that depend on it cannot interleave with another save.
+  // An asynchronous driver loses that for free and needs a transaction here.
+  ipcMain.handle(IPC.progressUpsert, async (_e, incoming: WatchProgress) => {
     // Split off before the row is written: it describes this save, not the episode, and there is
     // no column for it.
     const { watchedDeltaMs: measuredWatchedMs, ...progress } = incoming;
     const db = getDb();
-    const previous = db
+    const previous = await db
       .select()
       .from(watchProgress)
       .where(
@@ -186,7 +190,8 @@ export function registerLibraryHandlers(runtime: ExtensionRuntime): void {
       )
       .get();
 
-    db.insert(watchProgress)
+    await db
+      .insert(watchProgress)
       .values(progress)
       .onConflictDoUpdate({
         target: [watchProgress.sourceId, watchProgress.titleId, watchProgress.episodeId],
@@ -221,7 +226,8 @@ export function registerLibraryHandlers(runtime: ExtensionRuntime): void {
     const newlyCompleted = progress.watched && !(previous?.watched ?? false);
     if (watchedDeltaMs > 0 || newlyCompleted) {
       const date = localDateKey(progress.updatedAt);
-      db.insert(dailyActivity)
+      await db
+        .insert(dailyActivity)
         .values({ date, watchedMs: watchedDeltaMs, completedCount: newlyCompleted ? 1 : 0 })
         .onConflictDoUpdate({
           target: dailyActivity.date,
@@ -234,20 +240,20 @@ export function registerLibraryHandlers(runtime: ExtensionRuntime): void {
     }
   });
 
-  ipcMain.handle(IPC.progressListRecent, (_e, limit: number) =>
-    getDb().select().from(watchProgress).orderBy(desc(watchProgress.updatedAt)).limit(limit).all(),
+  ipcMain.handle(IPC.progressListRecent, async (_e, limit: number) =>
+    await getDb().select().from(watchProgress).orderBy(desc(watchProgress.updatedAt)).limit(limit).all(),
   );
 
-  ipcMain.handle(IPC.progressListForAnime, (_e, sourceId: string, titleId: string): WatchProgress[] =>
-    getDb()
+  ipcMain.handle(IPC.progressListForAnime, async (_e, sourceId: string, titleId: string): Promise<WatchProgress[]> =>
+    await getDb()
       .select()
       .from(watchProgress)
       .where(and(eq(watchProgress.sourceId, sourceId), eq(watchProgress.titleId, titleId)))
       .all(),
   );
 
-  ipcMain.handle(IPC.progressRemoveForAnime, (_e, sourceId: string, titleId: string) => {
-    getDb()
+  ipcMain.handle(IPC.progressRemoveForAnime, async (_e, sourceId: string, titleId: string) => {
+    await getDb()
       .delete(watchProgress)
       .where(and(eq(watchProgress.sourceId, sourceId), eq(watchProgress.titleId, titleId)))
       .run();
@@ -256,8 +262,8 @@ export function registerLibraryHandlers(runtime: ExtensionRuntime): void {
   // Same as progressRemoveForAnime but scoped to one episode - the history page (see
   // routes/history.tsx) shows one row per episode rather than per anime, so "delete this entry"
   // there means just this row, not every episode of the title.
-  ipcMain.handle(IPC.progressRemoveEpisode, (_e, sourceId: string, titleId: string, episodeId: string) => {
-    getDb()
+  ipcMain.handle(IPC.progressRemoveEpisode, async (_e, sourceId: string, titleId: string, episodeId: string) => {
+    await getDb()
       .delete(watchProgress)
       .where(and(eq(watchProgress.sourceId, sourceId), eq(watchProgress.titleId, titleId), eq(watchProgress.episodeId, episodeId)))
       .run();
@@ -267,17 +273,17 @@ export function registerLibraryHandlers(runtime: ExtensionRuntime): void {
   // - a progress row for this episode should already exist by the time a real frame is worth
   // capturing; if one doesn't yet (playback just started), this is a harmless no-op update of 0
   // rows rather than inventing a progress row from just a thumbnail.
-  ipcMain.handle(IPC.progressSaveThumbnail, (_e, sourceId: string, titleId: string, episodeId: string, dataUrl: string) => {
-    getDb()
+  ipcMain.handle(IPC.progressSaveThumbnail, async (_e, sourceId: string, titleId: string, episodeId: string, dataUrl: string) => {
+    await getDb()
       .update(watchProgress)
       .set({ thumbnailDataUrl: dataUrl })
       .where(and(eq(watchProgress.sourceId, sourceId), eq(watchProgress.titleId, titleId), eq(watchProgress.episodeId, episodeId)))
       .run();
   });
 
-  ipcMain.handle(IPC.progressListDailyActivity, (_e, days: number): DailyActivity[] => {
+  ipcMain.handle(IPC.progressListDailyActivity, async (_e, days: number): Promise<DailyActivity[]> => {
     const since = localDateKey(Date.now() - (days - 1) * 86_400_000);
-    return getDb()
+    return await getDb()
       .select()
       .from(dailyActivity)
       .where(gte(dailyActivity.date, since))

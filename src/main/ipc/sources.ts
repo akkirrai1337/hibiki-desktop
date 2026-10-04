@@ -17,16 +17,16 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   ipcMain.handle(IPC.sourceGetById, async (_e, sourceId: string, id: string): Promise<AnimeTitle> => {
     try {
       const anime = await runtime.getById(sourceId, id);
-      cacheAnime(sourceId, id, anime);
+      await cacheAnime(sourceId, id, anime);
       return anime;
     } catch (err) {
-      const cached = getCachedAnime(sourceId, id);
+      const cached = await getCachedAnime(sourceId, id);
       if (cached) return cached;
       throw err;
     }
   });
-  // Synchronous on purpose - it is a single indexed SQLite read per title, and making the
-  // renderer wait a microtask for it would defeat the point of having it.
+  // Cheap on purpose - one batched, indexed SQLite read for the whole screen, answered from disk
+  // without waiting on any source.
   ipcMain.handle(IPC.sourceCachedTitles, (_e, keys: Array<{ sourceId: string; animeId: string }>) =>
     getCachedAnimeMany(keys),
   );
@@ -37,19 +37,17 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   // `on`, not `handle`: the renderer has already rendered these titles, and nothing it does next
   // depends on the write landing.
   ipcMain.on(IPC.sourceCacheQuery, (_e, queryKey: string, titles: AnimeTitle[]) => {
-    try {
-      cacheSourceQuery(queryKey, titles);
-    } catch {
+    cacheSourceQuery(queryKey, titles).catch(() => {
       // A first paint that is one round trip slower next launch, and nothing worse.
-    }
+    });
   });
   ipcMain.handle(IPC.sourcePlaybackGroups, async (_e, sourceId: string, titleId: string): Promise<PlaybackGroup[]> => {
     try {
       const groups = await runtime.getPlaybackGroups(sourceId, titleId);
-      cachePlaybackGroups(sourceId, titleId, groups);
+      await cachePlaybackGroups(sourceId, titleId, groups);
       return groups;
     } catch (err) {
-      const cached = getCachedPlaybackGroups(sourceId, titleId);
+      const cached = await getCachedPlaybackGroups(sourceId, titleId);
       if (cached) return cached;
       throw err;
     }
