@@ -521,7 +521,10 @@ function AnimeDetailPage() {
       {source && <CommentsSection source={source} animeId={animeId} />}
       {/* The phone keeps the page's one main action pinned under the thumb, where the tab bar sits on
           other screens. */}
-      {isMobile && (
+      {/* Portaled out of the page, as are the round buttons at the top (MobileTitleChrome): a page
+          transition moves the page's box, which carries fixed children along with it - they blinked
+          out and back on every switch between titles. */}
+      {isMobile && createPortal(
         // The page's two actions, pinned under the thumb: keep it (library), and watch.
         <div className="fixed inset-x-3 z-40 flex items-center gap-2.5" style={{ bottom: "calc(0.75rem + var(--safe-bottom))" }}>
           <LibraryButton category={libraryEntry?.category ?? null} onSelect={setLibraryCategory} onRemove={removeFromLibrary} />
@@ -537,7 +540,8 @@ function AnimeDetailPage() {
           ) : (
             <span className="flex h-[3.25rem] flex-1 items-center justify-center rounded-full bg-app-popover text-sm font-semibold text-muted shadow-[0_10px_30px_rgba(0,0,0,0.5)]">{t("detail.noEpisodes")}</span>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
       <AnimatePresence>
         {downloadEpisode && (
@@ -1240,7 +1244,7 @@ function MobileTitleChrome({ posterUrl, siteUrl }: { posterUrl?: string | null; 
           own colour, so the title over it reads in either theme. */}
       <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgb(0 0 0 / 0.45), rgb(var(--color-bg) / 0.3) 40%, rgb(var(--color-bg) / 0.65))" }} />
     </div>
-    <div className="pointer-events-none fixed inset-x-0 z-40 flex justify-between px-3" style={{ top: "calc(0.375rem + var(--safe-top))" }}>
+    {createPortal(<div className="pointer-events-none fixed inset-x-0 z-40 flex justify-between px-3" style={{ top: "calc(0.375rem + var(--safe-top))" }}>
       <button
         type="button"
         aria-label={t("detail.back")}
@@ -1255,7 +1259,7 @@ function MobileTitleChrome({ posterUrl, siteUrl }: { posterUrl?: string | null; 
         <ArrowLeft className="h-5 w-5" strokeWidth={2.25} />
       </button>
       {siteUrl && <a href={siteUrl} target="_blank" rel="noreferrer" aria-label={t("detail.openOnSite")} className={cn(button, "pointer-events-auto")}><ExternalLink className="h-[18px] w-[18px]" strokeWidth={2} /></a>}
-    </div>
+    </div>, document.body)}
   </>;
 }
 
