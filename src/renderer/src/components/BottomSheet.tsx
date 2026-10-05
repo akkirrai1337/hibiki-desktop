@@ -63,8 +63,15 @@ export function BottomSheet({
               <div className="mx-auto h-1 w-10 rounded-full bg-text/20" />
               {title && <div className="px-5 pb-1 pt-3 text-[15px] font-bold text-text">{title}</div>}
             </div>
-            <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3">{children}</div>
-            {footer && <div className="shrink-0 border-t border-border px-4 py-3">{footer}</div>}
+            {/* The body fades out over its last 1.5rem instead of cutting rows mid-height at its edge; the
+                bottom padding is as tall, so the end of the list scrolls clear of the fade. */}
+            <div
+              className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-6"
+              style={footer ? { maskImage: "linear-gradient(to bottom, #000 calc(100% - 1.5rem), transparent)", WebkitMaskImage: "linear-gradient(to bottom, #000 calc(100% - 1.5rem), transparent)" } : undefined}
+            >
+              {children}
+            </div>
+            {footer && <div className="shrink-0 px-4 py-3">{footer}</div>}
           </motion.div>
         </div>
       )}
