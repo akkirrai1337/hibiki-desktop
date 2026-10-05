@@ -148,6 +148,22 @@ body,
 .mobile-range:active::-webkit-slider-thumb {
   transform: scale(1.15);
 }
+/* The phone's picture-in-picture window (VideoPlayer, data-pip): the picture and its subtitles,
+   nothing else of the player, and subtitles small enough for a window that size. */
+[data-pip] > :not(video):not([data-subtitles]) {
+  display: none !important;
+}
+[data-pip] [data-subtitles] {
+  bottom: 6% !important;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+[data-pip] [data-subtitles] > div {
+  transform: none !important;
+  max-width: 95%;
+  padding: 0.125rem 0.375rem;
+  font-size: 11px;
+}
 .bg-app-surface {
   background-color: rgb(var(--color-surface));
 }

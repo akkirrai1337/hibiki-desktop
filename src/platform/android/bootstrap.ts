@@ -2,7 +2,7 @@
 // object the Electron preload exposes over IPC on desktop, here answered in-process by core.
 // Runs before the renderer's own modules load (see src/renderer/android-entry.ts), because
 // lib/hibiki.ts reads window.hibiki once at import time.
-import type { HibikiApi } from "@shared/hibikiApi";
+import type { HibikiApi, PipAction } from "@shared/hibikiApi";
 import { IPC } from "@shared/ipc";
 import type { DownloadProgress } from "@shared/types";
 import { createCoreApi } from "../../core/api";
@@ -91,6 +91,19 @@ export async function installAndroidHibiki(): Promise<void> {
       },
       keepAwake: (on) => HibikiApp.keepAwake({ value: on }),
       setOrientation: (orientation) => HibikiApp.setOrientation({ value: orientation }),
+      pip: {
+        update: (state) => void HibikiApp.updatePip({ ...state, width: state.width ? Math.round(state.width) : undefined, height: state.height ? Math.round(state.height) : undefined }).catch(() => undefined),
+        enter: async () => (await HibikiApp.enterPip().catch(() => ({ entered: false }))).entered,
+        onAction: (callback) => {
+          const handle = HibikiApp.addListener("pipAction", (event) => callback(event.action as PipAction));
+          return () => void handle.then((h) => h.remove());
+        },
+        onModeChange: (callback) => {
+          const listener = (event: Event) => callback(Boolean((event as Event & { active?: boolean }).active));
+          window.addEventListener("hibikipip", listener);
+          return () => window.removeEventListener("hibikipip", listener);
+        },
+      },
     },
     app: {
       getVersion: async () => version,

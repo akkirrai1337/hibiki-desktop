@@ -176,6 +176,12 @@
     "playerSwitchedToast": "Player switched automatically",
     "availableSources": "Available sources: {{count}}",
     "player": {
+      "previousEpisode": "Previous episode",
+      "nextEpisode": "Next episode",
+      "play": "Play",
+      "pause": "Pause",
+      "audioOnly": "Audio only",
+      "pictureInPicture": "Picture in picture",
       "skip": "Skip",
       "watch": "Watch"
     },

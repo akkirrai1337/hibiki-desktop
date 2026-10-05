@@ -176,6 +176,12 @@
     "playerSwitchedToast": "Плеер переключён автоматически",
     "availableSources": "Доступно источников: {{count}}",
     "player": {
+      "previousEpisode": "Предыдущая серия",
+      "nextEpisode": "Следующая серия",
+      "play": "Воспроизвести",
+      "pause": "Пауза",
+      "audioOnly": "Только звук",
+      "pictureInPicture": "Картинка в картинке",
       "skip": "Пропустить",
       "watch": "Смотреть"
     },

@@ -497,6 +497,17 @@ function PlayerSettingsMenu({
   </div>;
 }
 
+/** The picture-in-picture window's button names, in the app's language. */
+function pipLabels(t: (key: string) => string) {
+  return {
+    previous: t("watch.player.previousEpisode"),
+    next: t("watch.player.nextEpisode"),
+    play: t("watch.player.play"),
+    pause: t("watch.player.pause"),
+    audioOnly: t("watch.player.audioOnly"),
+  };
+}
+
 export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions, selectedDubId, onSelectDub, sourceSwitching, unplayable, onSelectLink, onPlaybackFailure, startPositionMs, onProgress, onPlayStateChange, onCaptureThumbnail, title, episodeLabel, onBack, onPrevEpisode, onNextEpisode, onOpenEpisodes, episodesLoading, episodes, currentEpisodeId, onSelectEpisode, streakToast, playerSwitchToast }: VideoPlayerProps) {
   const { t } = useTranslation();
   // Held in a ref, deliberately not read as a prop from inside the effects below. Both the source
@@ -1700,6 +1711,86 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   }, [menuOpenOnPhone, controlsVisible, playing, scheduleHide]);
   useBackHandler(settingsOpen || episodeListOpen, () => { setSettingsOpen(false); setEpisodeListOpen(false); });
 
+  // --- the phone's picture in picture (as the Kotlin app has it) ---
+  // The window shows only the picture (and subtitles); its buttons are previous / play-pause / next,
+  // plus "audio only" (the window goes, the sound goes on). Leaving the app otherwise pauses, as
+  // the Kotlin player does, and coming back resumes what was playing.
+  const pip = hibiki.device?.pip;
+  const [pipActive, setPipActive] = useState(false);
+  const pipActiveRef = useRef(false);
+  const audioOnlyRef = useRef(false);
+  const pipHandlers = useRef({ togglePlay: () => {}, previous: () => {}, next: () => {} });
+  pipHandlers.current = {
+    togglePlay: () => {
+      const video = videoRef.current;
+      if (!video) return;
+      if (video.paused) void video.play().catch((error: unknown) => logPlayRequestFailure("picture in picture", error));
+      else video.pause();
+    },
+    previous: () => onPrevEpisode?.(),
+    next: () => onNextEpisode?.(),
+  };
+  useEffect(() => {
+    if (!pip) return;
+    const offMode = pip.onModeChange((active) => {
+      pipActiveRef.current = active;
+      setPipActive(active);
+      if (active) { setSettingsOpen(false); setEpisodeListOpen(false); }
+    });
+    const offAction = pip.onAction((action) => {
+      if (action === "toggle") pipHandlers.current.togglePlay();
+      else if (action === "previous") pipHandlers.current.previous();
+      else if (action === "next") pipHandlers.current.next();
+      else if (action === "audioOnly") {
+        audioOnlyRef.current = true;
+        void videoRef.current?.play().catch(() => undefined);
+        hibiki.device?.minimize();
+      }
+    });
+    let resumeOnReturn = false;
+    const onVisibility = () => {
+      const video = videoRef.current;
+      if (!video) return;
+      if (document.hidden) {
+        // The small window closed, or the app left without one: pause - unless it's audio only.
+        if (pipActiveRef.current || audioOnlyRef.current) return;
+        resumeOnReturn = !video.paused;
+        video.pause();
+      } else {
+        audioOnlyRef.current = false;
+        if (resumeOnReturn) void video.play().catch(() => undefined);
+        resumeOnReturn = false;
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      offMode();
+      offAction();
+      document.removeEventListener("visibilitychange", onVisibility);
+      // Off the player: no window to go to on leaving the app.
+      pip.update({ enabled: false, playing: false, hasPrevious: false, hasNext: false, labels: pipLabels(t) });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- handlers are read through pipHandlers
+  }, [pip]);
+  useEffect(() => {
+    if (!pip) return;
+    const video = videoRef.current;
+    pip.update({
+      enabled: !!link && !unplayable,
+      playing,
+      hasPrevious: !!onPrevEpisode,
+      hasNext: !!onNextEpisode,
+      width: video?.videoWidth || undefined,
+      height: video?.videoHeight || undefined,
+      labels: pipLabels(t),
+    });
+  }, [pip, link, unplayable, playing, onPrevEpisode, onNextEpisode, t, buffering]);
+  const enterPip = () => {
+    if (!pip) return;
+    setControlsVisible(false);
+    void pip.enter();
+  };
+
   // Shared by the space-bar hold below and the mouse-hold handlers - same threshold and speed, so
   // holding the left button reads exactly like holding space.
   const HOLD_TO_FAST_FORWARD_MS = 350;
@@ -2067,6 +2158,11 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   // Subtitles, episodes and settings sit up top beside the title, where a phone player keeps them;
   // their menus open as a panel down the right side of the screen.
   const mobileTopActions = <div className="ml-auto flex shrink-0 items-center gap-1">
+    {pip && (
+      <button onClick={(e) => { stop(e); enterPip(); }} disabled={!link || !!unplayable} aria-label={t("watch.player.pictureInPicture")} className={cn("flex h-10 w-10 items-center justify-center rounded-full", !link || unplayable ? "text-white/25" : "text-white active:bg-white/10")}>
+        <PictureInPicture2 className="h-[22px] w-[22px]" strokeWidth={2} />
+      </button>
+    )}
     <button
       onClick={(e) => { stop(e); setSelectedSubtitleId(selectedSubtitleId ? null : subtitleOptions[0].id); }}
       disabled={subtitleOptions.length === 0}
@@ -2172,6 +2268,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       // The cursor goes with the controls (they only ever hide while playing), including over children
       // that set their own, like the draggable subtitle box.
       className={cn("group/player relative h-full w-full select-none overflow-hidden bg-black", !controlsVisible && "[&_*]:!cursor-none cursor-none")}
+      data-pip={pipActive ? "" : undefined}
       // Not on the phone: a tap sends a compatibility mousemove first, which would show the controls
       // just before the tap itself toggles them off again.
       onMouseMove={isMobile ? undefined : wake}
@@ -2214,7 +2311,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
           DOM. `bottom` and the horizontal shift are player preferences (see playerPrefsStore), dragged live via the pointer handlers on the
           box itself and only committed to the store on release. */}
       {activeSubtitleLines.length > 0 && (
-        <div className="pointer-events-none absolute inset-x-0 flex justify-center px-6" style={{ bottom: draggingSubtitle?.y ?? subtitleOffset }}>
+        <div data-subtitles className="pointer-events-none absolute inset-x-0 flex justify-center px-6" style={{ bottom: draggingSubtitle?.y ?? subtitleOffset }}>
           <div
             onPointerDown={onSubtitleDragStart}
             onPointerMove={onSubtitleDragMove}

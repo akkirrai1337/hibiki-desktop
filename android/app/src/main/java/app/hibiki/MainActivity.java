@@ -1,5 +1,6 @@
 package app.hibiki;
 
+import android.content.res.Configuration;
 import android.os.Bundle;
 import androidx.activity.EdgeToEdge;
 import androidx.activity.OnBackPressedCallback;
@@ -36,5 +37,12 @@ public class MainActivity extends BridgeActivity {
                 bridge.triggerWindowJSEvent("hibikiback");
             }
         });
+    }
+
+    /** The player shows only its picture while in the small window (see HibikiAppPlugin's PiP). */
+    @Override
+    public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode, Configuration newConfig) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
+        if (bridge != null) bridge.triggerWindowJSEvent("hibikipip", "{ \"active\": " + isInPictureInPictureMode + " }");
     }
 }

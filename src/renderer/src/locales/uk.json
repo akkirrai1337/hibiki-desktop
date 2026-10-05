@@ -176,6 +176,12 @@
     "playerSwitchedToast": "Плеєр перемкнено автоматично",
     "availableSources": "Доступно джерел: {{count}}",
     "player": {
+      "previousEpisode": "Попередня серія",
+      "nextEpisode": "Наступна серія",
+      "play": "Відтворити",
+      "pause": "Пауза",
+      "audioOnly": "Лише звук",
+      "pictureInPicture": "Картинка в картинці",
       "skip": "Пропустити",
       "watch": "Дивитись"
     },

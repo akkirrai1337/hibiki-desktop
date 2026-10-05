@@ -41,6 +41,21 @@ export interface LogEntry {
   message: string;
 }
 
+/** A button of the picture-in-picture window. */
+export type PipAction = "previous" | "toggle" | "next" | "audioOnly";
+
+export interface PipState {
+  enabled: boolean;
+  playing: boolean;
+  hasPrevious: boolean;
+  hasNext: boolean;
+  /** The video's own size, for the window's shape. */
+  width?: number;
+  height?: number;
+  /** The buttons' names, in the app's language. */
+  labels: Record<"previous" | "next" | "play" | "pause" | "audioOnly", string>;
+}
+
 export interface HibikiApi {
   sources: {
     list(): Promise<SourceInfo[]>;
@@ -172,6 +187,14 @@ export interface HibikiApi {
     setSystemBars(options: { hidden?: boolean; style?: "light" | "dark" }): Promise<void>;
     keepAwake(on: boolean): Promise<void>;
     setOrientation(orientation: "landscape" | "portrait" | "auto"): Promise<void>;
+    /** Picture in picture - the player in a small window over other apps. Absent where unsupported. */
+    pip?: {
+      /** The player's state: the window's buttons and shape; enabled while a video is on screen. */
+      update(state: PipState): void;
+      enter(): Promise<boolean>;
+      onAction(callback: (action: PipAction) => void): () => void;
+      onModeChange(callback: (active: boolean) => void): () => void;
+    };
   };
   app: {
     getVersion(): Promise<string>;

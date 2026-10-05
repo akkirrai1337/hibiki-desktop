@@ -84,6 +84,9 @@ export interface HibikiAppPlugin {
   setOrientation(options: { value: "landscape" | "portrait" | "auto" }): Promise<void>;
   /** The system share sheet with a text file of that name. */
   shareText(options: { name: string; text: string }): Promise<void>;
+  updatePip(options: { enabled: boolean; playing: boolean; hasPrevious: boolean; hasNext: boolean; width?: number; height?: number; labels: Record<string, string> }): Promise<void>;
+  enterPip(): Promise<{ entered: boolean }>;
+  addListener(event: "pipAction", listener: (event: { action: string }) => void): Promise<PluginListenerHandle>;
 }
 
 export const HibikiApp = registerPlugin<HibikiAppPlugin>("HibikiApp");
