@@ -1231,7 +1231,27 @@ function Modal({ onDismiss, children }: { onDismiss: () => void; children: React
 
 function Dot() { return <span className="h-0.5 w-0.5 rounded-full bg-muted" />; }
 function ErrorBanner({ message }: { message: string }) { const { t } = useTranslation(); return <div className="flex items-start gap-3 rounded-2xl border border-rose-400/30 bg-rose-400/10 p-4 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/5 dark:text-rose-200"><TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} /><span>{t("common.loadFailed", { message })}</span></div>; }
-function DetailSkeleton() { return <div className="animate-pulse px-8 pb-12 pt-8"><div className="flex gap-7"><div className="aspect-[2/3] w-44 shrink-0 rounded-2xl bg-text/[.06] sm:w-52" /><div className="flex-1 pt-1"><div className="h-9 w-2/3 max-w-md rounded bg-text/[.08]" /><div className="mt-4 h-3 w-40 rounded bg-text/[.06]" /><div className="mt-5 h-3 w-full max-w-xl rounded bg-text/[.06]" /><div className="mt-2 h-3 w-4/5 max-w-xl rounded bg-text/[.06]" /><div className="mt-6 h-12 w-40 rounded-xl bg-text/[.08]" /></div></div></div>; }
+// Phone: the shape of the phone's own layout (MobileOverview) - the desktop one's big poster and
+// right-hand column ran off the side of the screen.
+function MobileDetailSkeleton() {
+  return <div className="animate-pulse px-4 pb-12 pt-[9.5rem]">
+    <div className="flex items-end gap-4">
+      <div className="aspect-[2/3] w-[104px] shrink-0 rounded-xl bg-text/[.07]" />
+      <div className="min-w-0 flex-1 pb-1">
+        <div className="h-5 w-4/5 rounded bg-text/[.08]" />
+        <div className="mt-2 h-5 w-3/5 rounded bg-text/[.08]" />
+        <div className="mt-3 h-3 w-2/5 rounded bg-text/[.06]" />
+        <div className="mt-2.5 h-5 w-20 rounded-md bg-text/[.06]" />
+      </div>
+    </div>
+    <div className="mt-4 flex gap-1.5">{[64, 88, 56, 72].map((w) => <div key={w} className="h-7 rounded-full bg-text/[.06]" style={{ width: w }} />)}</div>
+    <div className="mt-4 space-y-2"><div className="h-3 w-full rounded bg-text/[.06]" /><div className="h-3 w-full rounded bg-text/[.06]" /><div className="h-3 w-2/3 rounded bg-text/[.06]" /></div>
+    <div className="mt-7 h-5 w-32 rounded bg-text/[.08]" />
+    <div className="mt-3 grid grid-cols-4 gap-2">{Array.from({ length: 8 }, (_, i) => <div key={i} className="aspect-square rounded-xl bg-text/[.06]" />)}</div>
+  </div>;
+}
+
+function DetailSkeleton() { if (isMobile) return <MobileDetailSkeleton />; return <div className="animate-pulse px-8 pb-12 pt-8"><div className="flex gap-7"><div className="aspect-[2/3] w-44 shrink-0 rounded-2xl bg-text/[.06] sm:w-52" /><div className="flex-1 pt-1"><div className="h-9 w-2/3 max-w-md rounded bg-text/[.08]" /><div className="mt-4 h-3 w-40 rounded bg-text/[.06]" /><div className="mt-5 h-3 w-full max-w-xl rounded bg-text/[.06]" /><div className="mt-2 h-3 w-4/5 max-w-xl rounded bg-text/[.06]" /><div className="mt-6 h-12 w-40 rounded-xl bg-text/[.08]" /></div></div></div>; }
 
 /**
  * Phone only: the poster as artwork across the top of the title page, running under the status
