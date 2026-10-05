@@ -227,7 +227,10 @@ export function FilterSection({ title, children }: { title: string; children: Re
     </div>
   );
 }
+// The phone's sheet rises with its rows already in place: a fade on every row during the rise cost
+// the WebView a repaint of the whole sheet each frame and dropped it visibly below 60 fps.
 function ChipRow({ children }: { children: React.ReactNode }) {
+  if (isMobile) return <div className="flex flex-wrap gap-2">{children}</div>;
   return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }} className="flex flex-wrap gap-2">{children}</motion.div>;
 }
 
