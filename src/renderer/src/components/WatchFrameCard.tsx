@@ -132,7 +132,9 @@ export function WatchFrameCard({ slot, sourceById, dateLabel, showWatchedBadge, 
                   every one made the shelf read as busier than it is. The remaining-time label under
                   the card still carries the same information at rest. */}
               {percent > 0 && (
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] bg-white/15 opacity-0 transition-opacity duration-200 group-hover:opacity-100"><div className="h-full bg-red-500" style={{ width: `${percent}%` }} /></div>
+                // Always shown on the phone: there is no hover to reveal it, and a row there holds a
+                // frame or two, not a wall of them.
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] bg-white/15 opacity-0 transition-opacity duration-200 group-hover:opacity-100 mobile:opacity-100"><div className="h-full bg-red-500" style={{ width: `${percent}%` }} /></div>
               )}
             </div>
           </Link>
@@ -143,7 +145,7 @@ export function WatchFrameCard({ slot, sourceById, dateLabel, showWatchedBadge, 
             <p className="min-h-4 min-w-0 line-clamp-1 text-xs text-muted">{playbackLabel}</p>
             {dateLabel && <p className="shrink-0 text-xs text-muted">{dateLabel}</p>}
           </div>
-          <div className="mt-1.5 flex min-h-4 items-center gap-1.5 text-xs text-muted">
+          <div className="mt-1.5 flex min-h-4 items-center gap-1.5 text-xs text-muted mobile:hidden">
             {anime?.type && <span className="rounded-md bg-text/10 px-1.5 py-0.5 text-[10px] font-bold uppercase">{anime.type}</span>}
             {anime?.year ? <span>{anime.year}</span> : null}
             {rating != null && Number.isFinite(rating) && <span>{anime?.type || anime?.year ? "· " : ""}★ {Number.isInteger(rating) ? rating : rating.toFixed(2)}</span>}

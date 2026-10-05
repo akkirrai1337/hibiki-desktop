@@ -11,6 +11,7 @@ import { WatchFrameCard } from "@/components/WatchFrameCard";
 import { usePopoverTheme } from "@/lib/usePopoverTheme";
 import { useKnownSourcesStore } from "@/stores/knownSourcesStore";
 import { hibiki } from "@/lib/hibiki";
+import { isMobile } from "@/lib/mobile";
 import type { WatchProgress } from "@shared/types";
 
 // Same breakpoint the catalog/"you might like" Grid uses for its own 5→6 column jump (see
@@ -156,6 +157,19 @@ export function ContinueWatchingFrameRow({ sourceById }: { sourceById?: Map<stri
     el.scrollBy({ left: direction * ((card?.offsetWidth ?? el.clientWidth / 3) + 16) * 3,
       behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   };
+  if (isMobile) {
+    // Phone: wide frames that run to the screen edges, the next one peeking in; the thumb scrolls,
+    // so no arrows.
+    return (
+      <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-1">
+        {visible.map((slot) => (
+          <div key={`${slot.progress.sourceId}:${slot.progress.titleId}`} className="w-[64vw] max-w-[300px] min-w-0 shrink-0 snap-start">
+            <WatchFrameCard slot={slot} sourceById={sourceById} />
+          </div>
+        ))}
+      </div>
+    );
+  }
   const buttonClass = "pointer-events-auto flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-black/60 text-zinc-200 shadow-md backdrop-blur-sm transition-[transform,background-color,border-color,color] hover:scale-110 hover:border-white/20 hover:bg-black/80 hover:text-white active:scale-95";
   return (
     <div className="relative" style={{ "--frame-width": visible.length > 3 ? "calc((100% - 48px) / 3.2)" : "calc((100% - 32px) / 3)" } as React.CSSProperties}>

@@ -16,9 +16,17 @@ function formatRating(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
-/** The one poster-grid rhythm used by Home, Catalog, and both search modes. */
+/** The one poster-grid rhythm used by Home, Catalog, and both search modes. Three columns on a phone. */
 export function PosterGrid({ children }: { children: React.ReactNode }) {
-  return <div className="grid grid-cols-5 gap-x-4 gap-y-6 xl:grid-cols-6">{children}</div>;
+  return <div className="grid grid-cols-5 gap-x-4 gap-y-6 xl:grid-cols-6 mobile:grid-cols-3 mobile:gap-x-3 mobile:gap-y-5">{children}</div>;
+}
+
+/**
+ * Phone only: posters in one row that scrolls sideways, running to the screen edges (the parent's
+ * px-4 is undone and given back as scroll padding) with the next card peeking in.
+ */
+export function PosterRow({ children }: { children: React.ReactNode }) {
+  return <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 [&>*]:w-[30vw] [&>*]:max-w-[150px] [&>*]:shrink-0 [&>*]:snap-start">{children}</div>;
 }
 
 export function PosterGridSkeleton({ count = 12 }: { count?: number }) {
@@ -136,10 +144,10 @@ export function PosterCard({ title, posterUrl, type, year, episodeCount, rating,
       </div>
       {progress !== undefined && <div className="absolute inset-x-0 bottom-0 h-[3px] bg-white/15 opacity-0 transition-opacity duration-300 group-hover:opacity-100"><div className="h-full bg-red-500" style={{ width: `${Math.min(100, Math.max(0, progress))}%` }} /></div>}
     </div>
-    <p className="mt-3 line-clamp-2 select-text text-base font-semibold leading-snug tracking-[-.01em] text-text/90 transition-colors group-hover:text-text">{title}</p>
-    <div className="mt-1 flex items-center gap-1.5">
-      {type && <span className="shrink-0 rounded-md bg-text/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted">{type}</span>}
-      <p className="line-clamp-1 text-sm text-muted">{meta || t("common.anime")}</p>
+    <p className="mt-3 line-clamp-2 select-text text-base font-semibold leading-snug tracking-[-.01em] text-text/90 transition-colors group-hover:text-text mobile:mt-2 mobile:text-[13px] mobile:leading-[1.25]">{title}</p>
+    <div className="mt-1 flex items-center gap-1.5 mobile:mt-0.5">
+      {type && <span className="shrink-0 rounded-md bg-text/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted mobile:hidden">{type}</span>}
+      <p className="line-clamp-1 text-sm text-muted mobile:text-[11.5px]">{meta || t("common.anime")}</p>
     </div>
   </>;
 }
@@ -149,7 +157,9 @@ export const AnimeCard = memo(function AnimeCard({ anime, progress, source, comp
   return <Link
     to="/anime/$sourceId/$animeId"
     params={{ sourceId: anime.sourceId, animeId: anime.id }}
-    className="group block w-full [contain-intrinsic-size:auto_440px] [content-visibility:auto]"
+    // content-visibility stays off on the phone: there cards sit in sideways rows, and an off-screen
+    // card's 440px placeholder height stretched the whole row to it.
+    className="group block w-full [contain-intrinsic-size:auto_440px] [content-visibility:auto] mobile:[content-visibility:visible]"
   >
     <PosterCard
       title={title}

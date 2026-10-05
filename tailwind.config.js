@@ -3,6 +3,9 @@ import plugin from "tailwindcss/plugin";
 /** @type {import('tailwindcss').Config} */
 export default {
   darkMode: "class",
+  // hover: only where a real pointer can hover. A phone keeps :hover on whatever was last tapped,
+  // which left cards stuck showing their hover overlay; with a mouse nothing changes.
+  future: { hoverOnlyWhenSupported: true },
   content: ["./src/renderer/index.html", "./src/renderer/src/**/*.{ts,tsx}"],
   theme: {
     extend: {

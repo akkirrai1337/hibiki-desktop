@@ -6,7 +6,7 @@ import { useKnownSourcesStore } from "@/stores/knownSourcesStore";
 import { applyAccentColor, applyBackgroundTheme, BACKGROUND_THEME_PRESETS, CUSTOM_BACKGROUND_THEME_ID, customBackgroundGradientCss } from "@/lib/theme";
 import { TitleBar } from "@/components/TitleBar";
 import { Sidebar } from "@/components/Sidebar";
-import { MobileTabBar } from "@/components/MobileTabBar";
+import { MobileStatusScrim, MobileTabBar } from "@/components/MobileTabBar";
 import { installBackButton, isMobile } from "@/lib/mobile";
 import { SearchSpotlight } from "@/components/SearchSpotlight";
 import { AchievementToast } from "@/components/AchievementToast";
@@ -300,6 +300,6 @@ function RootLayoutContent() {
         )}
       </main>
     </div>
-    {isMobile && !isWatching && <MobileTabBar />}
+    {isMobile && !isWatching && <><MobileStatusScrim /><MobileTabBar /></>}
   </div>;
 }

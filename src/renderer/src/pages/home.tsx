@@ -5,10 +5,12 @@ import { useTranslation } from "react-i18next";
 import { Play, Radio } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
 import { useCachedTitleList } from "@/lib/cachedTitleList";
-import { AnimeCard, PosterGrid, PosterGridSkeleton, animeTitle } from "@/components/AnimeCard";
+import { AnimeCard, PosterGrid, PosterGridSkeleton, PosterRow, animeTitle } from "@/components/AnimeCard";
 import { ContinueWatchingFrameRow } from "@/components/ContinueWatchingRow";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { HERO_ACTION_CLASS, HeroCarousel, type HeroSlide } from "@/components/Hero";
+import { MobileHero } from "@/components/MobileHero";
+import { isMobile } from "@/lib/mobile";
 import { useContinueWatching } from "@/lib/continueWatching";
 import { useUiStore } from "@/stores/uiStore";
 import { pickRelevanceSort } from "@/lib/catalogSort";
@@ -110,9 +112,11 @@ export function CatalogPage() {
     {sources.isLoading && <HeroSkeleton />}{sources.data?.length === 0 && <EmptySources />}{sources.isError && <ErrorBanner message={(sources.error as Error).message} className="m-8" />}
     {source && <>
       {heroSlides.length > 0
-        ? <HeroCarousel slides={heroSlides.map((slide) => toHeroSlide(slide, t("catalog.openTitle"), source.iconUrl))} label={t("catalog.trendingOnPrefix")} sourceName={source.name} />
+        ? isMobile
+          ? <MobileHero slides={heroSlides.map((slide) => toHeroSlide(slide, t("catalog.openTitle"), source.iconUrl))} label={t("catalog.trendingOnPrefix")} sourceName={source.name} />
+          : <HeroCarousel slides={heroSlides.map((slide) => toHeroSlide(slide, t("catalog.openTitle"), source.iconUrl))} label={t("catalog.trendingOnPrefix")} sourceName={source.name} />
         : hero.isLoading && <HeroSkeleton />}
-      <div className="space-y-12 px-8 pt-10">
+      <div className="space-y-12 px-8 pt-10 mobile:space-y-8 mobile:px-4 mobile:pt-5">
         {pool.isError && <ErrorBanner message={(pool.error as Error).message} />}
         {/* Always the frame row: swapping to poster cards below a threshold meant the section
             changed shape as history filled up, and a single captured frame still reads as "here's
@@ -121,10 +125,10 @@ export function CatalogPage() {
           <ContinueWatchingFrameRow sourceById={sourceById} />
         </Section>}
         <Section title={isNew ? t("catalog.popularNow") : t("catalog.becauseYouWatched")} action={t("catalog.openCatalog")} to="/catalog">
-          {pool.isLoading ? <PosterGridSkeleton count={15} /> : <PosterGrid>{recommended.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</PosterGrid>}
+          {pool.isLoading ? <PosterGridSkeleton count={isMobile ? 3 : 15} /> : <HomeTitles>{recommended.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</HomeTitles>}
         </Section>
         {genreSection && <Section title={t("catalog.genreSection", { genre: genreSection.genre })} action={t("catalog.openCatalog")} to="/catalog">
-          <PosterGrid>{genreSection.items.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</PosterGrid>
+          <HomeTitles>{genreSection.items.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</HomeTitles>
         </Section>}
       </div>
     </>}
@@ -154,6 +158,8 @@ function toHeroSlide(anime: AnimeTitle, openLabel: string, sourceIconUrl?: strin
   };
 }
 
-function Section({ title, action, to, children }: { title: string; action: string; to: "/catalog" | "/history"; children: React.ReactNode }) { return <section><div className="mb-5 flex items-center justify-between"><h2 className="text-2xl font-bold tracking-[-.02em] text-text">{title}</h2><Link to={to} className="text-sm font-semibold text-muted transition-colors hover:text-accent-text">{action} →</Link></div>{children}</section>; }
+function Section({ title, action, to, children }: { title: string; action: string; to: "/catalog" | "/history"; children: React.ReactNode }) { return <section><div className="mb-5 flex items-center justify-between gap-3 mobile:mb-3"><h2 className="text-2xl font-bold tracking-[-.02em] text-text mobile:truncate mobile:text-[19px]">{title}</h2><Link to={to} className="text-sm font-semibold text-muted transition-colors hover:text-accent-text mobile:shrink-0 mobile:text-[13px]">{action} →</Link></div>{children}</section>; }
+// A grid on desktop; on the phone a row the thumb scrolls sideways, so a section stays one screen-line tall.
+function HomeTitles({ children }: { children: React.ReactNode }) { return isMobile ? <PosterRow>{children}</PosterRow> : <PosterGrid>{children}</PosterGrid>; }
 function HeroSkeleton() { return <div className="min-h-[420px] animate-pulse border-b border-white/[.04] bg-white/[.03] px-8 py-16"><div className="h-3 w-40 rounded bg-white/[.08]" /><div className="mt-5 h-12 w-96 rounded bg-white/[.08]" /><div className="mt-5 h-3 w-full max-w-lg rounded bg-white/[.06]" /><div className="mt-2 h-3 w-4/5 max-w-lg rounded bg-white/[.06]" /></div>; }
 function EmptySources() { const { t } = useTranslation(); return <div className="flex min-h-[calc(100vh-76px)] items-center justify-center p-8"><div className="max-w-sm text-center"><div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-text/[.06]"><Radio className="h-6 w-6 text-muted" strokeWidth={1.75} /></div><h1 className="text-xl font-bold text-text">{t("catalog.emptySourcesTitle")}</h1><p className="mt-3 text-sm leading-6 text-muted">{t("catalog.emptySourcesText")}</p><Link to="/sources" className="mt-6 inline-block rounded-xl bg-accent px-4 py-2.5 text-sm font-bold text-accent-fg">{t("catalog.openSources")}</Link></div></div>; }

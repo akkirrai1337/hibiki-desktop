@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { Bookmark, Home, LayoutGrid, User } from "lucide-react";
@@ -18,6 +18,33 @@ type TabPath = (typeof tabs)[number]["to"];
 
 function tabFor(pathname: string): TabPath | null {
   return tabs.find((tab) => (tab.owns as readonly string[]).includes(pathname))?.to ?? null;
+}
+
+/**
+ * The page colour behind the status bar once content scrolls under it, so the clock and icons stay
+ * readable. It fades in over the first stretch of scrolling: at the top a page either has its own
+ * background there or, like the home hero, artwork meant to run under the bar.
+ */
+export function MobileStatusScrim() {
+  const scrim = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // scroll does not bubble, but capturing on the document sees every page's own scroll box.
+    const onScroll = (event: Event) => {
+      const target = event.target;
+      // Only a page's own vertical scroll box - not a poster row scrolled sideways.
+      if (!(target instanceof HTMLElement) || !scrim.current || !target.matches("[data-page-scroll], [data-scroll-restoration-id]")) return;
+      scrim.current.style.opacity = String(Math.min(1, target.scrollTop / 160));
+    };
+    document.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () => document.removeEventListener("scroll", onScroll, { capture: true });
+  }, []);
+  // A page switch shows another scroll box, possibly scrolled elsewhere: start from its position.
+  const pathname = useRouterState({ select: (s) => (s.resolvedLocation ?? s.location).pathname });
+  useEffect(() => {
+    const box = document.querySelector<HTMLElement>(`[data-page-scroll="${pathname}"], [data-scroll-restoration-id="app-main"]`);
+    if (scrim.current) scrim.current.style.opacity = String(Math.min(1, (box?.scrollTop ?? 0) / 160));
+  }, [pathname]);
+  return <div ref={scrim} aria-hidden className="pointer-events-none fixed inset-x-0 top-0 z-30 h-[var(--safe-top)] bg-app-bg opacity-0" />;
 }
 
 /** Floating bar at the bottom of every screen except the player. */
