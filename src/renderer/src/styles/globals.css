@@ -79,8 +79,10 @@ body,
 /* Phone: a page's scroll box pads itself clear of the status bar and the floating tab bar, and
    those paddings lie outside the page's own (tinted) root - left alone they show the bare, brighter
    gradient as a band under the tab bar. Paint the same tint into just those two strips; `local`
-   keeps them on the padding as the content scrolls. */
-.mobile.bg-theme-active [data-page-scroll] {
+   keeps them on the padding as the content scrolls. Param routes (search) scroll in the shared
+   app-main box instead - only when their root is the same tinted page, not the title page's own. */
+.mobile.bg-theme-active [data-page-scroll],
+.mobile.bg-theme-active [data-scroll-restoration-id="app-main"]:has(> .bg-app-bg) {
   background:
     linear-gradient(rgb(var(--color-bg) / 0.8), rgb(var(--color-bg) / 0.8)) top / 100% var(--safe-top) no-repeat local,
     linear-gradient(rgb(var(--color-bg) / 0.8), rgb(var(--color-bg) / 0.8)) bottom / 100% var(--tabbar-space) no-repeat local;
