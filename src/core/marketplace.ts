@@ -81,20 +81,29 @@ function apkIndexEntries(indexUrl: string, entries: AniyomiIndexEntry[]): Market
     if (!entry.pkg || !entry.apk) return [];
     const extensionName = entry.name.replace(/^(Aniyomi|Tachiyomi): /, "");
     const sources = entry.sources?.length ? entry.sources : [];
-    return sources.map((source): MarketplaceExtension => ({
-      id: `apk:${source.id}`,
-      name: sources.length > 1 ? source.name : extensionName,
-      version: entry.version ?? "0",
-      website: source.baseUrl ?? null,
-      iconUrl: resolve(`icon/${entry.pkg}.png`),
-      lang: source.lang ?? entry.lang ?? "all",
-      capabilities: ["PLAYBACK"],
-      resolverDependencies: [],
-      isNsfw: entry.nsfw === 1,
-      type: "source",
-      manifestUrl: resolve(`apk/${entry.apk}`),
-      apkPackage: entry.pkg,
-    }));
+    // One card per distinct source name: the language variants of one source (AnimeWorld India in
+    // nine languages) are one source to pick, not nine look-alike rows - the package installs them
+    // all anyway. The card stands for the variant in no particular language, else English, else the first.
+    const byName = new Map<string, typeof sources>();
+    for (const source of sources) byName.set(source.name, [...(byName.get(source.name) ?? []), source]);
+    const distinctNames = byName.size;
+    return [...byName.values()].map((variants): MarketplaceExtension => {
+      const source = variants.find((v) => v.lang === "all") ?? variants.find((v) => v.lang === "en") ?? variants[0];
+      return {
+        id: `apk:${source.id}`,
+        name: distinctNames > 1 ? source.name : extensionName,
+        version: entry.version ?? "0",
+        website: source.baseUrl ?? null,
+        iconUrl: resolve(`icon/${entry.pkg}.png`),
+        lang: variants.length > 1 ? "all" : source.lang ?? entry.lang ?? "all",
+        capabilities: ["PLAYBACK"],
+        resolverDependencies: [],
+        isNsfw: entry.nsfw === 1,
+        type: "source",
+        manifestUrl: resolve(`apk/${entry.apk}`),
+        apkPackage: entry.pkg,
+      };
+    });
   });
 }
 

@@ -220,6 +220,7 @@
       "genres": "Genres",
       "genresExpand": "Show all genres",
       "genresCollapse": "Collapse genres",
+      "yearAny": "Any year",
       "ratingAny": "Any rating",
       "ratingUpTo": "Up to {{rating}}",
       "year": "Year",

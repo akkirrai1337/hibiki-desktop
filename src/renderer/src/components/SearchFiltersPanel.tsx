@@ -1,3 +1,4 @@
+import { isMobile } from "@/lib/mobile";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
@@ -13,7 +14,7 @@ import {
   tristateOf,
   type ChipState,
 } from "@/lib/searchFilters";
-import { ageRatingRank, chipIconFor, inDisplayOrder, isSortFilter, isAgeRatingFilter, isConnectedToggle, optionIcon, yearOptions } from "@/lib/filterVisuals";
+import { ageRatingRank, chipIconFor, inDisplayOrder, isSortFilter, isAgeRatingFilter, isConnectedToggle, optionIcon, singleYearOptions, yearOptions } from "@/lib/filterVisuals";
 import type { LucideIcon } from "lucide-react";
 import type { FilterValue, SearchFilterDef, SearchFilterOption } from "@shared/types";
 
@@ -103,6 +104,10 @@ export function FilterControl({ def, value, onChange }: { def: SearchFilterDef; 
         }}
       />
     );
+  }
+  const singleYears = singleYearOptions(def);
+  if (singleYears) {
+    return <YearPickSlider years={singleYears.years} value={typeof value === "string" ? value : ""} onChange={(id) => onChange(id ?? singleYears.anyId ?? "")} />;
   }
   if (isAgeRatingFilter(def)) {
     const included = def.type === "tristate" ? asTristate(value).include : asList(value);
@@ -330,6 +335,36 @@ function AgeRatingSlider({ options, included, onChange }: { options: SearchFilte
         onPointerUp={() => drag !== null && commit(drag)}
         onKeyUp={() => drag !== null && commit(drag)}
         className="w-full accent-[rgb(var(--color-accent))]"
+      />
+    </div>
+  );
+}
+
+/** One year out of a source's list, or any: the slider's left end is "any year". */
+function YearPickSlider({ years, value, onChange }: { years: Array<{ year: number; id: string }>; value: string; onChange: (id: string | null) => void }) {
+  const { t } = useTranslation();
+  const level = Math.max(0, years.findIndex((y) => y.id === value) + 1);
+  const [drag, setDrag] = useState<number | null>(null);
+  const shown = drag ?? level;
+  const commit = (n: number) => {
+    setDrag(null);
+    onChange(n === 0 ? null : years[n - 1].id);
+  };
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <span className="text-sm font-semibold text-text">{shown === 0 ? t("search.filters.yearAny") : years[shown - 1].year}</span>
+      <input
+        type="range"
+        min={0}
+        max={years.length}
+        step={1}
+        value={shown}
+        onChange={(e) => setDrag(Number(e.target.value))}
+        onPointerUp={() => drag !== null && commit(drag)}
+        onKeyUp={() => drag !== null && commit(drag)}
+        // Phone: the app's own slider look (see .mobile-range in globals.css), filled up to the year.
+        className={isMobile ? "mobile-range w-full" : "w-full accent-[rgb(var(--color-accent))]"}
+        style={isMobile ? ({ "--fill": `${years.length ? (shown / years.length) * 100 : 0}%` } as React.CSSProperties) : undefined}
       />
     </div>
   );

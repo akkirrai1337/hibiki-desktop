@@ -294,6 +294,7 @@
       "genres": "Жанры",
       "genresExpand": "Показать все жанры",
       "genresCollapse": "Свернуть жанры",
+      "yearAny": "Любой год",
       "ratingAny": "Любой рейтинг",
       "ratingUpTo": "До {{rating}}",
       "year": "Год",

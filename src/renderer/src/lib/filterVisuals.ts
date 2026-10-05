@@ -197,6 +197,24 @@ export function yearOptions(def: SearchFilterDef): Array<{ year: number; id: str
   return years.length >= 2 ? years : null;
 }
 
+/**
+ * A one-choice list of years ("Browse by Year": <select>, 2026, 2025, ...), as many Aniyomi
+ * extensions declare their year filter - drawn as a slider over the years instead of fifty chips.
+ * A few non-year options (a "<select>" / "Any" placeholder) are allowed; the first becomes "any year".
+ */
+export function singleYearOptions(def: SearchFilterDef): { years: Array<{ year: number; id: string }>; anyId: string | null } | null {
+  if (def.type !== "select" || def.directional) return null;
+  if (!/year|год|рік/i.test(`${def.id} ${def.title}`)) return null;
+  const options = def.options ?? [];
+  const years = options
+    .map((o) => ({ year: /^\d{4}$/.test(o.title.trim()) ? Number(o.title.trim()) : NaN, id: o.id }))
+    .filter((y) => y.year >= 1900 && y.year <= 2100)
+    .sort((a, b) => a.year - b.year);
+  const others = options.filter((o) => !years.some((y) => y.id === o.id));
+  if (years.length < 5 || others.length > 2) return null;
+  return { years, anyId: others[0]?.id ?? null };
+}
+
 // Where each kind of filter sits in the window (the Android window's order): sort first, then
 // season, genres, status, language, type, year; anything else follows in the order the source gave.
 function filterRank(def: SearchFilterDef): number {
