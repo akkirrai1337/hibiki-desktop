@@ -597,6 +597,7 @@ function ExtensionsTab({
   onSelect: (id: string) => void;
 }) {
   const { t } = useTranslation();
+  const { shown: availableShown, sentinel } = useProgressiveList(available.length);
   if (state === "loading") return <CenteredMessage text={t("sources.repositoryLoading")} />;
   if (state === "error") return <CenteredMessage text={t("sources.repositoryError")} detail={errorMessage} onRetry={onRetry} />;
   if (isEmpty) return <CenteredMessage text={t("sources.noResults")} />;
@@ -635,16 +636,45 @@ function ExtensionsTab({
           <SectionHeader title={t("sources.availableSection", { count: available.length })} />
           <div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-3">
             <AnimatePresence initial={false}>
-              {available.map((extension) => (
+              {available.slice(0, availableShown).map((extension) => (
                 <ExtensionCard key={extension.id} extension={extension} installedVersion={null} installing={installingIds.has(extension.id)} errorMessage={installErrors[extension.id]} selected={false} onInstall={() => onInstall(extension)} onUninstall={() => onUninstall(extension.id)} onOpenSettings={() => onOpenSettings(extension.id)} hasSettings={sourcesWithSettings.has(extension.id)} onSelect={() => onSelect(extension.id)} />
               ))}
             </AnimatePresence>
           </div>
+          {/* Keyed by the count: a fresh node is observed afresh, so a sentinel still in view asks again. */}
+          {availableShown < available.length && <div key={availableShown} ref={sentinel} className="h-24" />}
         </>
       )}
     </div>
   );
 }
+
+const PROGRESSIVE_CHUNK = 24;
+
+/**
+ * On the phone, how many of a long list to render: a first screenful, then another chunk each time the
+ * sentinel under them comes near the viewport. Rendering every source of every repository at once
+ * (hundreds of cards) held up entering the page by a sixth of a second. Desktop renders all.
+ */
+function useProgressiveList(total: number): { shown: number; sentinel: (node: HTMLDivElement | null) => void } {
+  const [shown, setShown] = useState(isMobile ? PROGRESSIVE_CHUNK : Infinity);
+  const observer = useRef<IntersectionObserver | null>(null);
+  const sentinel = useCallback((node: HTMLDivElement | null) => {
+    observer.current?.disconnect();
+    if (!node) return;
+    observer.current = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setShown((count) => count + PROGRESSIVE_CHUNK);
+      },
+      { rootMargin: "800px 0px" },
+    );
+    observer.current.observe(node);
+  }, []);
+  useEffect(() => () => observer.current?.disconnect(), []);
+  return { shown: Math.min(shown, total), sentinel };
+}
+
+const MOBILE_CARD_STYLE: React.CSSProperties = { contentVisibility: "auto", containIntrinsicSize: "auto 104px" };
 
 function ExtensionCard({
   extension,
@@ -694,11 +724,15 @@ function ExtensionCard({
 
   return (
     <motion.div
-      layout
+      // The phone lists every source of every repository (hundreds of cards): no layout tracking, which
+      // measured them all on each render, and the cards out of view are neither laid out nor painted
+      // until scrolled to. Entering the page stalled on them.
+      layout={!isMobile}
       initial={{ opacity: 0, scale: 0.96 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.96 }}
       transition={{ duration: 0.18, ease: "easeOut" }}
+      style={isMobile ? MOBILE_CARD_STYLE : undefined}
       className={cn(
         "flex flex-col gap-1.5 rounded-xl border p-2.5 transition-colors",
         selected ? "border-accent/40 bg-accent/[.06]" : "border-border bg-text/[.03]",
