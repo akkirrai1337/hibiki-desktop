@@ -2,5 +2,8 @@
   "appId": "app.hibiki",
   "appName": "hibiki",
   "webDir": "dist-android",
-  "android": { "webContentsDebuggingEnabled": true }
+  "android": { "webContentsDebuggingEnabled": true },
+  "plugins": {
+    "SystemBars": { "insetsHandling": "css", "initialViewportFitValueHint": "cover", "style": "DARK" }
+  }
 }

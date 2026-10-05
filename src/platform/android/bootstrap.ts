@@ -10,6 +10,8 @@ import { ExtensionRuntime } from "../../core/extensions/runtime";
 import { log, recentEntries } from "../../core/logger";
 import { installPlatform } from "../../core/platform";
 import { createAndroidPlatform } from "./index";
+import { SystemBars, SystemBarsStyle } from "@capacitor/core";
+import { HibikiApp } from "./native";
 
 declare const __APP_VERSION__: string;
 
@@ -46,6 +48,20 @@ export async function installAndroidHibiki(): Promise<void> {
     updates: { check: async () => null, downloadAndInstall: async () => {}, openRelease: (url) => platform.app.openExternal(url), onProgress: nothing },
     zoom: { set() {}, get: () => 1 },
     platform: "android",
+    device: {
+      onBack: (callback) => {
+        window.addEventListener("hibikiback", callback);
+        return () => window.removeEventListener("hibikiback", callback);
+      },
+      minimize: () => void HibikiApp.minimize(),
+      setSystemBars: async ({ hidden, style }) => {
+        // "dark" bars carry light icons - the app's dark theme; "light" bars carry dark icons.
+        if (style) await SystemBars.setStyle({ style: style === "dark" ? SystemBarsStyle.Dark : SystemBarsStyle.Light });
+        if (hidden !== undefined) await (hidden ? SystemBars.hide() : SystemBars.show());
+      },
+      keepAwake: (on) => HibikiApp.keepAwake({ value: on }),
+      setOrientation: (orientation) => HibikiApp.setOrientation({ value: orientation }),
+    },
     app: {
       getVersion: async () => version,
       relaunch: () => platform.app.relaunch(),

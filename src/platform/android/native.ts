@@ -77,6 +77,13 @@ export interface HibikiResolverPlugin {
   close(options: { key: string }): Promise<void>;
 }
 
+export interface HibikiAppPlugin {
+  minimize(): Promise<void>;
+  keepAwake(options: { value: boolean }): Promise<void>;
+  setOrientation(options: { value: "landscape" | "portrait" | "auto" }): Promise<void>;
+}
+
+export const HibikiApp = registerPlugin<HibikiAppPlugin>("HibikiApp");
 export const HibikiNet = registerPlugin<HibikiNetPlugin>("HibikiNet");
 export const HibikiResolver = registerPlugin<HibikiResolverPlugin>("HibikiResolver");
 export const HibikiFiles = registerPlugin<HibikiFilesPlugin>("HibikiFiles");

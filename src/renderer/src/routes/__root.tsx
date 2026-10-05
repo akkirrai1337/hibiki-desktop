@@ -1,11 +1,13 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { createRootRoute, Outlet, useRouterState } from "@tanstack/react-router";
+import { createRootRoute, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useUiStore } from "@/stores/uiStore";
 import { useKnownSourcesStore } from "@/stores/knownSourcesStore";
 import { applyAccentColor, applyBackgroundTheme, BACKGROUND_THEME_PRESETS, CUSTOM_BACKGROUND_THEME_ID, customBackgroundGradientCss } from "@/lib/theme";
 import { TitleBar } from "@/components/TitleBar";
 import { Sidebar } from "@/components/Sidebar";
+import { MobileTabBar } from "@/components/MobileTabBar";
+import { installBackButton, isMobile } from "@/lib/mobile";
 import { SearchSpotlight } from "@/components/SearchSpotlight";
 import { AchievementToast } from "@/components/AchievementToast";
 import { useAchievementUnlocks } from "@/lib/achievementUnlocks";
@@ -65,6 +67,10 @@ function RootLayoutContent() {
   // painted the frame, which left one extra frame where the page was still showing the old theme;
   // a layout effect runs synchronously right after the DOM update but before that paint.
   useLayoutEffect(() => { document.documentElement.classList.toggle("dark", theme === "dark"); }, [theme]);
+  // On the phone the status/navigation bar icons follow the theme: light icons over the dark one.
+  useEffect(() => { void hibiki.device?.setSystemBars({ style: theme }); }, [theme]);
+  const router = useRouter();
+  useEffect(() => installBackButton(() => router.history.back()), [router]);
   const accentColor = useUiStore((s) => s.accentColor);
   // Depends on `theme` too, not just `accentColor` - see applyAccentColor's own comment for why
   // (--color-accent-text's white/black-vs-theme contrast fallback needs to know which theme is
@@ -214,17 +220,17 @@ function RootLayoutContent() {
   // yet at this point anyway) - nothing in the real app is usable without at least one source
   // installed, so this fully replaces the normal chrome instead of layering on top of it.
   if (!onboardingResolved) return <div className="h-screen w-screen bg-app-bg" style={{ backgroundImage: backgroundGradient }} />;
-  if (shouldShowOnboarding) return <div className="flex h-screen w-screen flex-col overflow-hidden bg-app-bg text-text" style={{ backgroundImage: backgroundGradient }}>
-    <TitleBar />
+  if (shouldShowOnboarding) return <div className="flex h-screen w-screen flex-col overflow-hidden bg-app-bg text-text mobile:pb-[var(--safe-bottom)] mobile:pt-[var(--safe-top)]" style={{ backgroundImage: backgroundGradient }}>
+    {!isMobile && <TitleBar />}
     <div className="min-h-0 flex-1"><Onboarding onComplete={() => setOnboardingCompleted(true)} /></div>
   </div>;
 
   return <div className="flex h-screen w-screen flex-col overflow-hidden bg-app-bg text-text" style={{ backgroundImage: backgroundGradient }}>
-    <TitleBar />
+    {!isMobile && <TitleBar />}
     <AchievementToast />
     <SearchSpotlight />
     <div className="flex min-h-0 flex-1">
-      <Sidebar />
+      {!isMobile && <Sidebar />}
       <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         {/* The router destroys a route's whole component tree on navigating away, which was silently
             resetting anything living in its component state one piece at a time (a carousel's slide,
@@ -265,9 +271,12 @@ function RootLayoutContent() {
           return <div
             key={path}
             data-browse-section={path === "/" ? "home" : path === "/catalog" ? "catalog" : undefined}
+            data-page-scroll={path}
             aria-hidden={!isActive}
             className={cn(
               "no-scrollbar min-h-0 overflow-y-auto",
+              // Phone: clear of the status bar above and the floating tab bar below.
+              "mobile:pb-[var(--tabbar-space)] mobile:pt-[var(--safe-top)]",
               isActive ? "flex-1" : "hidden",
             )}
           >
@@ -285,11 +294,12 @@ function RootLayoutContent() {
         {!(pathname in PERSISTED_PAGES) && (
           // The player fills its box itself (own black background, own fullscreen) and must not scroll
           // inside it; every other param route (anime details) scrolls here as before.
-          <div className={cn("min-h-0 flex-1", isWatching ? "bg-black" : "no-scrollbar overflow-y-auto")} data-scroll-restoration-id="app-main" data-player-fullscreen-root={isWatching ? "" : undefined}>
+          <div className={cn("min-h-0 flex-1", isWatching ? "bg-black" : "no-scrollbar overflow-y-auto mobile:pb-[var(--tabbar-space)] mobile:pt-[var(--safe-top)]")} data-scroll-restoration-id="app-main" data-player-fullscreen-root={isWatching ? "" : undefined}>
             <Outlet />
           </div>
         )}
       </main>
     </div>
+    {isMobile && !isWatching && <MobileTabBar />}
   </div>;
 }

@@ -19,9 +19,19 @@ const androidEntry: Plugin = {
   transformIndexHtml: {
     order: "pre",
     handler: (html) => {
-      const desktopEntry = '<script type="module" src="/src/main.tsx"></script>';
-      if (!html.includes(desktopEntry)) throw new Error("index.html no longer loads /src/main.tsx - update vite.android.config.ts");
-      return html.replace(desktopEntry, '<script type="module" src="/android-entry.ts"></script>');
+      const swaps: Array<[string, string]> = [
+        ['<script type="module" src="/src/main.tsx"></script>', '<script type="module" src="/android-entry.ts"></script>'],
+        // The page runs edge to edge and pads itself by env(safe-area-inset-*) (globals.css).
+        ['<meta name="viewport" content="width=device-width, initial-scale=1.0" />', '<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />'],
+        // `mobile:` utilities (tailwind.config.js) and the mobile layout key off this class, present
+        // from the first paint so nothing lays out the desktop way first.
+        ['<html lang="ru">', '<html lang="ru" class="mobile">'],
+      ];
+      for (const [from, to] of swaps) {
+        if (!html.includes(from)) throw new Error(`index.html no longer contains ${from} - update vite.android.config.ts`);
+        html = html.replace(from, to);
+      }
+      return html;
     },
   },
 };

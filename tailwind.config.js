@@ -1,3 +1,5 @@
+import plugin from "tailwindcss/plugin";
+
 /** @type {import('tailwindcss').Config} */
 export default {
   darkMode: "class",
@@ -19,5 +21,9 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    // `mobile:` applies only inside the Android build (it puts class="mobile" on <html>, see
+    // vite.android.config.ts) - never in a narrow desktop window, so the desktop layout is untouched.
+    plugin(({ addVariant }) => addVariant("mobile", ".mobile &")),
+  ],
 };

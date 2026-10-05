@@ -155,6 +155,19 @@ export interface HibikiApi {
     get(): number;
   };
   platform: NodeJS.Platform;
+  /**
+   * The phone the app runs on: present only on Android, where the mobile layout uses it. Desktop has
+   * no such surface (its window chrome lives in `window` above).
+   */
+  device?: {
+    /** The system Back key/gesture. The app decides what it does; see lib/backButton.ts. */
+    onBack(callback: () => void): () => void;
+    /** Leaves to the launcher, keeping the app alive - Back on the first screen. */
+    minimize(): void;
+    setSystemBars(options: { hidden?: boolean; style?: "light" | "dark" }): Promise<void>;
+    keepAwake(on: boolean): Promise<void>;
+    setOrientation(orientation: "landscape" | "portrait" | "auto"): Promise<void>;
+  };
   app: {
     getVersion(): Promise<string>;
     relaunch(): void;

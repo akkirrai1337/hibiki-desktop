@@ -33,6 +33,18 @@
   --color-accent-text: var(--color-accent);
 }
 
+.mobile {
+  /* Safe areas of an edge-to-edge Android window. Capacitor's SystemBars injects --safe-area-inset-*
+     (correct on every WebView version); env() is the fallback. */
+  --safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --safe-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+  --safe-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  /* The floating tab bar's height plus the gap under it - what page content keeps clear of. */
+  --tabbar-space: calc(4.75rem + var(--safe-bottom));
+  -webkit-tap-highlight-color: transparent;
+}
+
 .dark {
   --color-bg: 12 12 15;
   --color-surface: 20 20 24;
