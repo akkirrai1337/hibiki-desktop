@@ -116,16 +116,30 @@ export function usePageTransition(pathname: string): void {
     let frame = 0;
     let observer: MutationObserver | null = null;
     let giveUp = 0;
+    // Drawing a page for the first time keeps the phone busy for a while after its first frame (the
+    // WebView rasterises it, decodes its images); an animation started in that window plays out
+    // unseen. So it starts once frames come at an even pace again - two short gaps in a row after
+    // at least three frames - or after 800 ms at the latest.
     const play = () => {
       observer?.disconnect();
       clearTimeout(giveUp);
-      frame = requestAnimationFrame(() => {
-        frame = requestAnimationFrame(() => {
+      const began = performance.now();
+      let frames = 0;
+      let last = 0;
+      let calm = 0;
+      const tick = (now: number) => {
+        frames += 1;
+        calm = last && now - last < 34 ? calm + 1 : 0;
+        last = now;
+        if ((frames >= 3 && calm >= 2) || now - began > 800) {
           pending.current = null;
           reset();
           box.animate([start, { opacity: 1, transform: "none" }], options);
-        });
-      });
+          return;
+        }
+        frame = requestAnimationFrame(tick);
+      };
+      frame = requestAnimationFrame(tick);
     };
     const loading = () => box.querySelector(':scope > [aria-busy="true"]') !== null;
     if (loading()) {

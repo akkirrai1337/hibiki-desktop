@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PullToRefresh, refetchFromFirstPage } from "@/components/PullToRefresh";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { measureElement, observeElementRect, useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
 import { Radio } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
@@ -219,6 +219,14 @@ function VirtualGrid({ items }: { items: AnimeTitle[] }) {
     estimateSize: () => (isMobile ? 240 : 380),
     overscan: 4,
     gap: GRID_GAP_Y,
+    // The phone builds this page hidden ahead of its first visit (see __root.tsx). Hidden, its
+    // scroll box measures 0 tall, which leaves no rows at all - the grid showed up empty for the
+    // first frames of the visit. So a hidden box counts as one screen tall, and a row measured
+    // while hidden keeps its estimate instead of a height of 0.
+    observeElementRect: (instance, callback) => observeElementRect(instance, (rect) => (
+      callback(rect.height > 0 ? rect : { width: rect.width || window.innerWidth, height: window.innerHeight })
+    )),
+    measureElement: (element, entry, instance) => measureElement(element, entry, instance) || (isMobile ? 240 : 380),
   });
 
   // `containerRef` has to be attached in both branches below (it's what resolves `scrollElement`

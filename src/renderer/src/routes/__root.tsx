@@ -53,6 +53,10 @@ const PERSISTED_PAGES: Record<string, PersistedPage> = {
   "/sources": lazyPage(() => import("@/pages/sources").then((module) => module.SourcesPage)),
 };
 
+// Phone: pages built ahead of their first visit (see the effect using it). Search is not among the
+// persisted pages; history and downloads switch without a transition.
+const WARM_PAGES = ["/catalog", "/library", "/profile", "/settings"];
+
 // A lazy page has no DOM of its own until its chunk arrives. Keep the same page background in
 // place for that brief interval so the app-wide theme gradient never flashes through before the
 // page's `bg-app-bg` root mounts.
@@ -213,6 +217,17 @@ function RootLayoutContent() {
   useEffect(() => {
     if (pathname in PERSISTED_PAGES) setVisited((prev) => (prev.includes(pathname) ? prev : [...prev, pathname]));
   }, [pathname]);
+  // Phone: the tabs are built in the background a moment after start, hidden, so the first visit to
+  // one is like any later visit. Built on the spot, a first visit had its whole first render, its
+  // data (the profile's, the catalog's first page) and its images all arrive in the middle of the
+  // page transition, which then played out unseen - every first tab, and the profile, every time.
+  useEffect(() => {
+    if (!isMobile) return;
+    const timer = window.setTimeout(() => {
+      setVisited((prev) => [...prev, ...WARM_PAGES.filter((path) => !prev.includes(path))]);
+    }, 2500);
+    return () => window.clearTimeout(timer);
+  }, []);
   // The page being opened is mounted in the very render that switches to it, not one effect later: the
   // effect above only records it for the renders after. Waiting for it left one frame with the
   // previous page already hidden and this one not there yet - just the app-wide theme gradient, which
