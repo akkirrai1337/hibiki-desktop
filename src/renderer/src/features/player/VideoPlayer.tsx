@@ -725,6 +725,11 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [playbackRetryKey, setPlaybackRetryKey] = useState(0);
   const retryPositionMsRef = useRef<number | null>(null);
+  // The current link and the failure fallback, for the startup timeout below (which is set up
+  // before either exists in this function, and fires long after the render that armed it).
+  const timeoutLinkRef = useRef<PlayerLink | null>(null);
+  timeoutLinkRef.current = link ?? null;
+  const timeoutFallbackRef = useRef<((failedLink: PlayerLink, reason: string) => boolean) | null>(null);
   const armPlaybackTimeout = useCallback((stage: "startup" | "buffering") => {
     if (playbackTimeoutRef.current !== null) clearTimeout(playbackTimeoutRef.current);
     playbackTimeoutRef.current = window.setTimeout(() => {
@@ -740,6 +745,12 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       const trace = playbackTraceRef.current;
       if (trace) trace.write(`playback ${stage} timeout after ${PLAYBACK_LOAD_TIMEOUT_MS}ms`, trace.snapshot?.() ?? {});
       else log.error("player", `playback ${stage} timeout after ${PLAYBACK_LOAD_TIMEOUT_MS}ms`);
+      // A stream that never starts is as dead as one that errors: a CDN node can hand out the
+      // playlist and then never answer for a single segment (Kodik's nova.cloud.solodcdn.com did,
+      // the request failing only half a minute later). Move on to the next quality / player the
+      // same way an error does, and only say it failed when there is nothing left to try.
+      const stalled = timeoutLinkRef.current;
+      if (stage === "startup" && stalled && timeoutFallbackRef.current?.(stalled, "playback startup timeout")) return;
       setPlaybackError(t("common.playbackTimeout"));
       setBuffering(false);
       // A switch that never finishes shouldn't leave the clock frozen at wherever it started
@@ -792,6 +803,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     },
     [armPlaybackTimeout],
   );
+  timeoutFallbackRef.current = reportPlaybackFailure;
   const [buffered, setBuffered] = useState(0);
   // Seeded from the persisted preference rather than the element's own 1.0 default, so the very
   // first controls render already shows the volume this episode is about to play at.
