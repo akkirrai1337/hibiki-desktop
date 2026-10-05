@@ -130,7 +130,7 @@ function MobileSearchPage() {
     <div className="min-h-full bg-app-bg px-4 pb-6">
       {/* Stays at the top while the results scroll - the page's scroll box already starts under the
           status bar, so its top edge is the right place. */}
-      <div className="sticky top-0 z-20 -mx-4 bg-app-bg px-4 pb-3 pt-3">
+      <div className="mobile-sticky-backdrop sticky top-0 z-20 -mx-4 bg-app-bg px-4 pb-3 pt-3">
         <div className="flex items-center gap-2">
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted" strokeWidth={2} />

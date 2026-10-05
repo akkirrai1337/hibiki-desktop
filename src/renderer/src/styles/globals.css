@@ -96,6 +96,15 @@ body,
     var(--app-backdrop, none) 0 0 / 100vw 100vh no-repeat,
     rgb(var(--color-bg));
 }
+/* A bar stuck to the top of a page's scroll box (the search field) sits on the page's own tint, so
+   translucent it would tint twice and read darker; it repaints the backdrop opaquely like the
+   scrim. Always at the viewport's top under the status bar, hence that offset. */
+.mobile.bg-theme-active .mobile-sticky-backdrop {
+  background:
+    linear-gradient(rgb(var(--color-bg) / 0.8), rgb(var(--color-bg) / 0.8)),
+    var(--app-backdrop, none) 0 calc(-1 * var(--safe-top)) / 100vw 100vh no-repeat,
+    rgb(var(--color-bg));
+}
 .bg-app-surface {
   background-color: rgb(var(--color-surface));
 }
