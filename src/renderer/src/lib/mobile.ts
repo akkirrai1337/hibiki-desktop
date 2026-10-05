@@ -56,7 +56,7 @@ export function installBackButton(goBack: () => void, goUp: () => boolean): () =
 
 // --- page transitions ---------------------------------------------------------------------------
 // Only the incoming page moves - the outgoing one is already gone (hidden or unmounted) by the
-// time the route resolves. Switching tabs (and the library's segments) is a short fade; going
+// time the route resolves. Switching tabs is a short fade in place; going
 // deeper slides in from the right, going back from the left. Nothing for the player: the screen
 // turns on the way in and out, and a slide on top of that only reads as a stutter.
 // Never from fully transparent: the WebView does not draw a layer at opacity 0, so the new page
@@ -88,8 +88,9 @@ export function usePageTransition(pathname: string): void {
     if (!box) return;
     if (TOP_LEVEL.has(pathname) && TOP_LEVEL.has(from.pathname)) {
       box.animate(
-        [{ opacity: 0.5, transform: "translateY(8px)" }, { opacity: 1, transform: "none" }],
-        { duration: 170, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
+        // A plain fade, in place: a tab is a place of its own, not something arriving from below.
+        [{ opacity: 0.4 }, { opacity: 1 }],
+        { duration: 160, easing: "ease-out" },
       );
       return;
     }
