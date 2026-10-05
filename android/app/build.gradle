@@ -1,6 +1,14 @@
 apply plugin: 'com.android.application'
 apply plugin: 'org.jetbrains.kotlin.android'
 
+// One version for both builds: package.json's, the one the desktop app and the web layer already use.
+// versionCode is derived from it (1.5.1 -> 10501), so it always grows as the version does.
+def appVersion = new groovy.json.JsonSlurper().parse(rootProject.file("../package.json")).version as String
+def appVersionCode = { String v ->
+    def (major, minor, patch) = (v.tokenize("-+")[0].tokenize(".") + ["0", "0", "0"]).take(3).collect { it as int }
+    major * 10000 + minor * 100 + patch
+}(appVersion)
+
 android {
     namespace = "app.hibiki"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -8,8 +16,8 @@ android {
         applicationId "app.hibiki"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
