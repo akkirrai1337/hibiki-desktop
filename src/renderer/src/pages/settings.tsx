@@ -3,7 +3,9 @@ import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { MemoryStick, ArrowDownToLine, ArrowUpDown, Ban, Check, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, DatabaseBackup, FileText, FolderOpen, Home, Info, Languages, MessageCircle, MonitorPlay, Moon, Palette, Radio, RefreshCw, RotateCcw, ScrollText, SlidersHorizontal, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { isMobile } from "@/lib/mobile";
+import { isMobile, useBackHandler } from "@/lib/mobile";
+import { motion } from "motion/react";
+import { useSourceUpdateCount } from "@/lib/sourceUpdates";
 import { MobilePageHeader } from "@/components/MobilePageHeader";
 import { BottomSheet, SheetOption } from "@/components/BottomSheet";
 import { Switch } from "@/components/Switch";
@@ -82,6 +84,8 @@ function SecondsControl({ label, hint, value, onChange }: { label: string; hint:
     if (Number.isFinite(parsed)) commit(parsed);
     else setDraft(String(value));
   };
+  const { t } = useTranslation();
+  if (isMobile) return <MobileSliderControl label={label} hint={hint} value={value} min={SKIP_TIMER_MIN_SECONDS} max={SKIP_TIMER_MAX_SECONDS} display={t("common.secondsShort", { count: value })} onChange={commit} />;
   return <div>
     <div className="flex items-center justify-between gap-3">
       <p className="text-sm font-semibold text-text">{label}</p>
@@ -134,6 +138,7 @@ function PercentControl({ label, hint, value, onChange }: { label: string; hint:
     if (Number.isFinite(parsed)) commit(parsed);
     else setDraft(String(value));
   };
+  if (isMobile) return <MobileSliderControl label={label} hint={hint} value={value} min={WATCHED_THRESHOLD_MIN_PERCENT} max={WATCHED_THRESHOLD_MAX_PERCENT} display={`${value}%`} onChange={commit} />;
   return <div>
     <div className="flex items-center justify-between gap-3">
       <p className="text-sm font-semibold text-text">{label}</p>
@@ -724,16 +729,37 @@ export function SettingsPage() {
   // The "Home" tab can disappear (last source just got uninstalled) out from under whichever tab
   // was open - falls back to the first one rather than rendering an empty pane for a category that
   // no longer exists in the rail.
-  const activeCategory = categories.some((c) => c.id === category) ? category : categories[0].id;
+  const desktopCategory = categories.some((c) => c.id === category) ? category : categories[0].id;
+  // Phone: settings as Android has them - a list of sections, each opening as a screen of its own
+  // (Back returns to the list) - instead of a row of chips over one long page.
+  const [mobileCategory, setMobileCategory] = useState<(typeof categories)[number]["id"] | null>(null);
+  const mobileOpen = categories.find((c) => c.id === mobileCategory) ?? null;
+  const activeCategory = isMobile ? mobileOpen?.id ?? null : desktopCategory;
+  useBackHandler(mobileOpen !== null, () => setMobileCategory(null));
+  const openMobileCategory = (id: (typeof categories)[number]["id"] | null) => {
+    setMobileCategory(id);
+    // A section opens at its top, and the list comes back at its own.
+    document.querySelector<HTMLElement>('[data-page-scroll="/settings"]')?.scrollTo({ top: 0 });
+  };
 
   return <div className="flex h-full bg-app-bg mobile:h-auto mobile:min-h-full mobile:flex-col">
-    {isMobile && <div className="px-4 pt-2"><MobilePageHeader title={t("nav.settings")} parent="/profile" /></div>}
-    <nav className="flex w-56 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border px-3 py-8 mobile:[scrollbar-width:none] mobile:w-auto mobile:flex-row mobile:gap-1.5 mobile:overflow-x-auto mobile:border-r-0 mobile:px-4 mobile:pb-2 mobile:pt-0">
+    {isMobile && <div className="px-4 pt-2">
+      <MobilePageHeader title={mobileOpen?.label ?? t("nav.settings")} parent="/profile" onBack={mobileOpen ? () => openMobileCategory(null) : undefined} />
+    </div>}
+    {isMobile && !mobileOpen && <MobileSettingsList categories={categories} onOpen={openMobileCategory} />}
+    <nav className="flex w-56 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border px-3 py-8 mobile:hidden">
       {categories.map((c) => (
         <SettingsCategoryButton key={c.id} active={activeCategory === c.id} icon={c.icon} label={c.label} onClick={() => setCategory(c.id)} />
       ))}
     </nav>
-    <div className="min-w-0 flex-1 overflow-y-auto p-8 mobile:overflow-visible mobile:px-4 mobile:pb-6 mobile:pt-3">
+    <motion.div
+      // Phone: a section slides in over where the list was, as a screen of its own.
+      key={isMobile ? activeCategory ?? "list" : "content"}
+      initial={isMobile && activeCategory ? { opacity: 0.5, x: 28 } : false}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1] }}
+      className={cn("min-w-0 flex-1 overflow-y-auto p-8 mobile:overflow-visible mobile:px-4 mobile:pb-6 mobile:pt-1", isMobile && !activeCategory && "hidden")}
+    >
     {/* Not centered (`mx-auto`) - a wide window would then float this column in the middle of
         whatever's left of the rail, forcing a long mouse trip from the category just clicked over
         to the settings it opened. Left-aligned right next to the rail instead, same as the rail
@@ -898,7 +924,7 @@ export function SettingsPage() {
       {activeCategory === "data" && <BackupSection />}
       {activeCategory === "diagnostics" && <DiagnosticsSection />}
     </div>
-    </div>
+    </motion.div>
   </div>;
 }
 
@@ -934,4 +960,64 @@ function MobileLanguagePicker() {
       </BottomSheet>
     </>
   );
+}
+
+/** Phone: the settings sections as one card of rows, like a system settings screen. */
+function MobileSettingsList({ categories, onOpen }: {
+  categories: Array<{ id: "appearance" | "sources" | "general" | "player" | "home" | "data" | "diagnostics"; label: string; icon: typeof Sun }>;
+  onOpen: (id: "appearance" | "sources" | "general" | "player" | "home" | "data" | "diagnostics") => void;
+}) {
+  const updates = useSourceUpdateCount();
+  return (
+    <motion.div initial={{ opacity: 0.6 }} animate={{ opacity: 1 }} transition={{ duration: 0.16 }} className="px-4 pb-6 pt-1">
+      <div className="overflow-hidden rounded-2xl border border-border bg-text/[.03]">
+        {categories.map(({ id, label, icon: Icon }, index) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onOpen(id)}
+            className={cn("flex w-full items-center gap-3.5 px-4 py-3.5 text-left active:bg-text/[.06]", index > 0 && "border-t border-border")}
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-text/[.07] text-text"><Icon className="h-[18px] w-[18px]" strokeWidth={2} /></span>
+            <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-text">{label}</span>
+            {id === "sources" && updates > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-white">{updates > 9 ? "9+" : updates}</span>}
+            <ChevronRight className="h-5 w-5 shrink-0 text-muted" strokeWidth={2} />
+          </button>
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
+/**
+ * Phone: a setting with a range - its value beside the label, and a slider styled to match the app
+ * (a thick track filled up to the value and a round thumb) instead of a number box with arrows.
+ */
+function MobileSliderControl({ label, hint, value, min, max, display, onChange }: {
+  label: string;
+  hint: string;
+  value: number;
+  min: number;
+  max: number;
+  display: string;
+  onChange: (value: number) => void;
+}) {
+  const fill = max > min ? ((value - min) / (max - min)) * 100 : 0;
+  return <div>
+    <div className="flex items-baseline justify-between gap-3">
+      <p className="text-sm font-semibold text-text">{label}</p>
+      <span className="shrink-0 text-sm font-semibold tabular-nums text-text">{display}</span>
+    </div>
+    <input
+      type="range"
+      min={min}
+      max={max}
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      aria-label={label}
+      className="mobile-range mt-3 w-full"
+      style={{ "--fill": `${fill}%` } as React.CSSProperties}
+    />
+    <p className="mt-2 text-xs leading-relaxed text-muted">{hint}</p>
+  </div>;
 }

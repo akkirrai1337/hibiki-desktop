@@ -119,6 +119,35 @@ body,
   -webkit-backdrop-filter: blur(18px) saturate(1.4);
   backdrop-filter: blur(18px) saturate(1.4);
 }
+/* The phone's settings slider (MobileSliderControl): a thick rounded track, filled with the
+   selection colour up to the value (--fill), and a round thumb with a soft shadow. */
+.mobile-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 28px;
+  background: transparent;
+  cursor: pointer;
+}
+.mobile-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(to right, rgb(var(--color-accent-solid)) var(--fill), rgb(var(--color-text) / 0.12) var(--fill));
+}
+.mobile-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -8px;
+  border-radius: 9999px;
+  background: rgb(var(--color-accent-solid));
+  border: 3px solid rgb(var(--color-surface));
+  box-shadow: 0 1px 6px rgb(0 0 0 / 0.35);
+  transition: transform 120ms ease-out;
+}
+.mobile-range:active::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
 .bg-app-surface {
   background-color: rgb(var(--color-surface));
 }

@@ -8,7 +8,12 @@ import { cn } from "@/lib/cn";
  * Phone only: the top of a screen one level inside a tab (settings and sources under the profile) -
  * its name, with the way back to the tab beside it.
  */
-export function MobilePageHeader({ title, parent }: { title: string; parent: "/library" | "/profile" | "/settings" }) {
+export function MobilePageHeader({ title, parent, onBack }: {
+  title: string;
+  parent: "/library" | "/profile" | "/settings";
+  /** Back within the screen itself (a settings section back to the list), instead of leaving it. */
+  onBack?: () => void;
+}) {
   const { t } = useTranslation();
   const router = useRouter();
   const navigate = useNavigate();
@@ -18,6 +23,10 @@ export function MobilePageHeader({ title, parent }: { title: string; parent: "/l
         type="button"
         aria-label={t("detail.back")}
         onClick={() => {
+          if (onBack) {
+            onBack();
+            return;
+          }
           // Reached some other way than from its tab (a link, the app restored onto it): to the tab.
           const index = (window.history.state as { __TSR_index?: number } | null)?.__TSR_index ?? 0;
           if (index > 0) router.history.back();

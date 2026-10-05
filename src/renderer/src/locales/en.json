@@ -25,6 +25,7 @@
     }
   },
   "common": {
+    "secondsShort": "{{count}} s",
     "loadFailed": "Failed to load: {{message}}",
     "playbackTimeout": "The stream did not become playable within 15 seconds. Check your connection or choose another player.",
     "offlineHint": "Looks like you're offline — you can watch what's already downloaded.",
