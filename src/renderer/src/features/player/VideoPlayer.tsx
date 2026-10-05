@@ -341,7 +341,9 @@ function EpisodeListPanel({ episodes, currentEpisodeId, onSelect, title, t }: {
   useLayoutEffect(() => {
     const item = listRef.current?.querySelector<HTMLElement>('[data-selected="true"]');
     let box = item?.parentElement ?? null;
-    while (box && !/(auto|scroll)/.test(getComputedStyle(box).overflowY)) box = box.parentElement;
+    // The first box that actually scrolls: on the phone the list has no height cap of its own and
+    // the whole side panel scrolls instead.
+    while (box && !(/(auto|scroll)/.test(getComputedStyle(box).overflowY) && box.scrollHeight > box.clientHeight)) box = box.parentElement;
     if (!item || !box) return;
     const offset = item.getBoundingClientRect().top - box.getBoundingClientRect().top;
     box.scrollTop += offset - (box.clientHeight - item.offsetHeight) / 2;
