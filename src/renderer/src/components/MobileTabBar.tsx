@@ -1,15 +1,18 @@
 import { useEffect, useRef } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { Bookmark, Home, LayoutGrid, User } from "lucide-react";
+import { Bookmark, Home, LayoutGrid, Search, User } from "lucide-react";
+import { useSpotlightStore } from "@/stores/spotlightStore";
 import { cn } from "@/lib/cn";
 
-// The phone's whole navigation: four places, each owning the screens reached from it. History and
+// The phone's whole navigation: five places, each owning the screens reached from it. History and
 // downloads live under the library, settings and sources under the profile - the desktop sidebar's
-// other entries, one level down.
+// other entries, one level down. Search opens the search panel (full screen on the phone) rather
+// than a page; its full results page belongs to it.
 const tabs = [
   { to: "/", labelKey: "nav.home", icon: Home, owns: ["/"] },
-  { to: "/catalog", labelKey: "nav.catalog", icon: LayoutGrid, owns: ["/catalog", "/search"] },
+  { to: "/catalog", labelKey: "nav.catalog", icon: LayoutGrid, owns: ["/catalog"] },
+  { to: "/search", labelKey: "nav.search", icon: Search, owns: ["/search"] },
   { to: "/library", labelKey: "library.title", icon: Bookmark, owns: ["/library", "/history", "/downloads"] },
   { to: "/profile", labelKey: "nav.profile", icon: User, owns: ["/profile", "/settings", "/sources"] },
 ] as const;
@@ -71,6 +74,10 @@ export function MobileTabBar() {
             type="button"
             aria-current={isActive ? "page" : undefined}
             onClick={() => {
+              if (tab.to === "/search") {
+                useSpotlightStore.getState().setOpen(true);
+                return;
+              }
               if (pathname === tab.to) {
                 // Already there: back to the top, the way a tab bar does it.
                 document.querySelector<HTMLElement>(`[data-page-scroll="${tab.to}"]`)?.scrollTo({ top: 0, behavior: "smooth" });

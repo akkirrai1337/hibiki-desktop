@@ -83,13 +83,15 @@ export function RatingButton({ source, animeId }: { source: SourceInfo; animeId:
         onClick={() => (signedIn ? setOpen((value) => !value) : promptSignIn(source))}
         className={cn(
           "inline-flex h-[46px] items-center gap-2 rounded-xl border px-4 text-sm font-bold transition-colors",
+          // Phone: a chip that sits in the line of scores, not a button of its own.
+          "mobile:h-7 mobile:gap-1 mobile:rounded-full mobile:px-2.5 mobile:text-xs",
           current != null
             ? "border-amber-400/40 bg-amber-400/15 text-amber-500 dark:text-amber-300"
             : "border-border bg-text/[.05] text-muted hover:bg-text/[.09]",
         )}
         aria-label={t("detail.rating.rate")}
       >
-        <Star className={cn("h-[18px] w-[18px]", current != null && "fill-current")} strokeWidth={2} />
+        <Star className={cn("h-[18px] w-[18px] mobile:h-3.5 mobile:w-3.5", current != null && "fill-current")} strokeWidth={2} />
         {current != null ? current : t("detail.rating.rate")}
       </button>
       <AnimatePresence>
@@ -101,7 +103,7 @@ export function RatingButton({ source, animeId }: { source: SourceInfo; animeId:
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.15 }}
-              className="absolute left-0 top-[52px] z-50 w-max rounded-2xl border border-border bg-surface p-3 shadow-2xl"
+              className="absolute left-0 top-[52px] z-50 w-max rounded-2xl border border-border bg-surface p-3 shadow-2xl mobile:top-9"
               onMouseLeave={() => setHovered(null)}
             >
               {/* The number being considered, said out loud. Ten bare buttons gave no answer to

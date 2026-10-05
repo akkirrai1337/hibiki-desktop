@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { AnimatePresence, motion } from "motion/react";
-import { Pencil, User, Check, ChevronRight, Film, Library, Clock, CheckCircle2, Gauge, Radio, Settings, Sparkles, Trash2, X } from "lucide-react";
+import { Pencil, User, Check, ChevronRight, Film, ImageUp, Library, Clock, CheckCircle2, Gauge, Radio, Settings, Sparkles, Trash2, X } from "lucide-react";
 import { hibiki, profileBannerUrl } from "@/lib/hibiki";
 import { Modal } from "@/components/Modal";
 import { animeTitle } from "@/components/AnimeCard";
@@ -308,8 +308,17 @@ function MobileProfileLayout({
         <div className="relative overflow-hidden bg-gradient-to-br from-accent/25 via-text/[.04] to-transparent" style={{ height: "calc(9rem + var(--safe-top))" }}>
           <BannerMedia filename={bannerFilename} />
           <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-[rgb(var(--color-bg))] to-transparent" />
-          <div className="absolute inset-x-0 bottom-0" style={{ top: "var(--safe-top)" }}>
-            <BannerActions filename={bannerFilename} onChange={onBannerChange} />
+          {/* What a new user looks for first - settings, and where the anime comes from - up in the
+              corner where an app keeps them, with the banner's own edit beside. */}
+          <div className="absolute right-3 flex items-center gap-2" style={{ top: "calc(0.5rem + var(--safe-top))" }}>
+            <BannerActions filename={bannerFilename} onChange={onBannerChange} inline />
+            <Link to="/sources" aria-label={t("nav.sources")} className={cn(MOBILE_CORNER_BUTTON, "relative")}>
+              <Radio className="h-[18px] w-[18px]" strokeWidth={2} />
+              {sourceUpdateCount > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{sourceUpdateCount > 9 ? "9+" : sourceUpdateCount}</span>}
+            </Link>
+            <Link to="/settings" aria-label={t("nav.settings")} className={MOBILE_CORNER_BUTTON}>
+              <Settings className="h-[18px] w-[18px]" strokeWidth={2} />
+            </Link>
           </div>
         </div>
         <div className="relative -mt-12 px-4">{header}</div>
@@ -356,10 +365,6 @@ function MobileProfileLayout({
           <MobileMenuRow icon={Sparkles} label={t("profile.xpHistoryTitle")} detail={xpEvents.length || undefined} onClick={() => setSheet("xp")} />
           <MobileMenuRow icon={Clock} label={t("profile.recentTitle")} detail={recent.length || undefined} onClick={() => setSheet("recent")} />
         </div>
-        <div className="overflow-hidden rounded-2xl border border-border bg-text/[.03]">
-          <MobileMenuRow icon={Settings} label={t("nav.settings")} to="/settings" />
-          <MobileMenuRow icon={Radio} label={t("nav.sources")} to="/sources" badge={sourceUpdateCount} />
-        </div>
       </div>
 
       <BottomSheet open={sheet === "achievements"} onClose={() => setSheet(null)} title={t("profile.achievementsTitle")}>
@@ -379,6 +384,8 @@ function MobileProfileLayout({
     </div>
   );
 }
+
+const MOBILE_CORNER_BUTTON = "flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-white/10 backdrop-blur-md active:bg-black/70";
 
 function MobileStat({ value, label }: { value: string | number; label: string }) {
   return (
@@ -567,7 +574,7 @@ function BannerMedia({ filename }: { filename: string | null }) {
 // header (see the comment where this is mounted) - `pointer-events-none` on the layer itself so
 // the empty space around the two buttons still passes clicks through to whatever is actually
 // under it (the avatar, the name field), and `pointer-events-auto` puts it back just on them.
-function BannerActions({ filename, onChange }: { filename: string | null; onChange: (filename: string | null) => void }) {
+function BannerActions({ filename, onChange, inline }: { filename: string | null; onChange: (filename: string | null) => void; inline?: boolean }) {
   const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -592,6 +599,17 @@ function BannerActions({ filename, onChange }: { filename: string | null; onChan
     await hibiki.profile.clearBanner();
     onChange(null);
   };
+
+  // Phone: the same two actions as round buttons in a row of the header's corner buttons.
+  if (inline) {
+    return (
+      <>
+        {filename && <button type="button" onClick={onClear} aria-label={t("profile.removeBanner")} className={MOBILE_CORNER_BUTTON}><X className="h-[18px] w-[18px]" strokeWidth={2.25} /></button>}
+        <button type="button" onClick={() => inputRef.current?.click()} disabled={busy} aria-label={t("profile.editBanner")} className={MOBILE_CORNER_BUTTON}><ImageUp className="h-[18px] w-[18px]" strokeWidth={2} /></button>
+        <input ref={inputRef} type="file" accept={[...ACCEPTED_BANNER_TYPES].join(",")} onChange={onPick} className="hidden" />
+      </>
+    );
+  }
 
   return (
     <div className="pointer-events-none absolute inset-0">

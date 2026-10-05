@@ -355,31 +355,33 @@ function AnimeDetailPage() {
           // Phone: the heading with the view and order as two small icons beside it, and the dub as a
           // chip under it - controls the size of what they control, not the size of buttons.
           <div className="mb-3">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="flex items-baseline gap-2 text-lg font-bold tracking-[-.02em] text-text">
+            <div className="flex items-center gap-2">
+              <h2 className="flex shrink-0 items-baseline gap-2 text-lg font-bold tracking-[-.02em] text-text">
                 {t("detail.episodes")}
                 {activeGroup && <span className="text-sm font-semibold tabular-nums text-muted">{activeGroup.episodes.length}</span>}
               </h2>
+              <div className="flex min-w-0 flex-1">
+                {groups.length > 1 && <GroupDropdown groups={groups} activeGroupId={activeGroup?.id} onSelect={setActiveGroupId} />}
+                {groups.length === 1 && !isGenericDubTitle(groups[0].title) && (
+                  <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full bg-text/[.06] px-3 py-1.5 text-[13px] font-semibold text-muted">
+                    <Mic className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+                    <span className="truncate">{groups[0].title}{groups[0].qualityLabel ? ` · ${groups[0].qualityLabel}` : ""}</span>
+                  </span>
+                )}
+              </div>
               {activeGroup && activeGroup.episodes.length > 1 && (
-                <div className="flex items-center gap-0.5">
+                <div className="flex shrink-0 items-center">
                   {([["tiles", LayoutGrid], ["list", List]] as const).map(([view, Icon]) => (
-                    <button key={view} onClick={() => setEpisodesView(view)} aria-label={t(`detail.episodesView.${view}`)} className={cn("flex h-9 w-9 items-center justify-center rounded-full", episodesView === view ? "bg-text/[.1] text-text" : "text-muted")}>
+                    <button key={view} onClick={() => setEpisodesView(view)} aria-label={t(`detail.episodesView.${view}`)} className={cn("flex h-8 w-8 items-center justify-center rounded-full", episodesView === view ? "bg-text/[.1] text-text" : "text-muted")}>
                       <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
                     </button>
                   ))}
-                  <button onClick={() => setEpisodesNewestFirst(!episodesNewestFirst)} aria-label={episodesNewestFirst ? t("detail.episodesNewestFirst") : t("detail.episodesOldestFirst")} className="flex h-9 w-9 items-center justify-center rounded-full text-muted active:bg-text/[.08]">
+                  <button onClick={() => setEpisodesNewestFirst(!episodesNewestFirst)} aria-label={episodesNewestFirst ? t("detail.episodesNewestFirst") : t("detail.episodesOldestFirst")} className="flex h-8 w-8 items-center justify-center rounded-full text-muted active:bg-text/[.08]">
                     {episodesNewestFirst ? <ArrowDown10 className="h-[18px] w-[18px]" strokeWidth={2} /> : <ArrowDown01 className="h-[18px] w-[18px]" strokeWidth={2} />}
                   </button>
                 </div>
               )}
             </div>
-            {groups.length > 1 && <div className="mt-2"><GroupDropdown groups={groups} activeGroupId={activeGroup?.id} onSelect={setActiveGroupId} /></div>}
-            {groups.length === 1 && !isGenericDubTitle(groups[0].title) && (
-              <span className="mt-2 inline-flex max-w-full items-center gap-2 rounded-full bg-text/[.06] px-3 py-1.5 text-[13px] font-semibold text-muted">
-                <Mic className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-                <span className="truncate">{groups[0].title}{groups[0].qualityLabel ? ` · ${groups[0].qualityLabel}` : ""}</span>
-              </span>
-            )}
           </div>
         ) : <div className="mb-4 flex flex-wrap items-center justify-between gap-3 mobile:mb-3 mobile:gap-2">
           <h2 className="flex items-baseline gap-2 text-xl font-bold tracking-[-.02em] text-text">
@@ -851,18 +853,18 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
         {statusLabel && <span className={cn("mt-2 inline-block rounded-md px-1.5 py-0.5 text-[11px] font-semibold", anime.status === "ongoing" ? "bg-accent/15 text-accent-text" : "bg-text/10 text-muted")}>{statusLabel}</span>}
       </div>
     </div>
-    {(nextEpisodeLabel || (anime.ratings?.length ?? 0) > 0) && <div className="mt-3.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs font-medium text-muted">
+    {/* The scores, with this user's own (a chip, first so its star panel opens fully on screen). */}
+    <div className="mt-3.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs font-medium text-muted empty:hidden">
+      {source && <RatingButton source={source} animeId={animeId} />}
       {(anime.ratings?.length ?? 0) > 0 && <SourceRatings ratings={anime.ratings ?? []} />}
       {nextEpisodeLabel && <span className="flex items-center gap-1 rounded-md bg-emerald-400/15 px-1.5 py-0.5 font-semibold text-emerald-500 dark:text-emerald-400"><Clock className="h-3 w-3" strokeWidth={2.5} />{nextEpisodeLabel}</span>}
-    </div>}
+    </div>
     {/* One line the thumb scrolls, instead of genres wrapping into a block of chips. */}
     {anime.genres && anime.genres.length > 0 && <div className="no-scrollbar -mx-4 mt-3.5 flex gap-1.5 overflow-x-auto px-4 [&>*]:shrink-0">{anime.genres.map((g) => <GenreChip key={g} genre={g} sourceId={sourceId} className={GENRE_CHIP_CLASS} />)}</div>}
     {anime.description && <div className="mt-3.5 overflow-hidden transition-[max-height] duration-300 ease-in-out" style={{ maxHeight }}>
       <p ref={descriptionRef} className="select-text text-[13.5px] leading-[1.55] text-muted">{anime.description}</p>
     </div>}
     {anime.description && <button onClick={() => setDescriptionOpen((v) => !v)} className="mt-1 inline-flex items-center gap-1 py-1 text-xs font-semibold text-text/70">{descriptionOpen ? t("common.hideDescription") : t("common.readDescription")}<ChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-300", descriptionOpen && "rotate-180")} strokeWidth={2.5} /></button>}
-    {/* The library button lives in the pinned bar at the bottom; rating (only some sources) stays here. */}
-    {source && <div className="mt-3 flex items-center gap-2.5 empty:hidden"><RatingButton source={source} animeId={animeId} /></div>}
     {related.length > 0 && <div className="mt-7">
       <RelatedList items={related} sourceId={sourceId} currentAnimeId={animeId} />
     </div>}

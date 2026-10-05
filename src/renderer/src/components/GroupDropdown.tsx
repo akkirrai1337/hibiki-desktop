@@ -59,8 +59,8 @@ export function GroupDropdown({ groups, activeGroupId, onSelect, align = "left" 
   if (isMobile) {
     return (
       <>
-        <button type="button" onClick={() => setOpen(true)} className="flex min-w-0 max-w-full items-center gap-2 rounded-full bg-text/[.07] px-3.5 py-2 text-[13px] font-semibold text-text/85 active:bg-text/[.12]">
-          <Mic className="h-4 w-4 shrink-0 text-muted" strokeWidth={2} />
+        <button type="button" onClick={() => setOpen(true)} className="flex min-w-0 max-w-full items-center gap-1.5 rounded-full bg-text/[.07] px-3 py-1.5 text-[13px] font-semibold text-text/85 active:bg-text/[.12]">
+          <Mic className="h-3.5 w-3.5 shrink-0 text-muted" strokeWidth={2} />
           <span className="truncate">{active.title}{active.qualityLabel ? ` · ${active.qualityLabel}` : ""}</span>
           <ChevronDown className="h-4 w-4 shrink-0 text-muted" strokeWidth={2} />
         </button>

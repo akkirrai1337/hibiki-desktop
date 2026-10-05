@@ -3,7 +3,7 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
-import { Radio, Search } from "lucide-react";
+import { Radio } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
 import { AnimeCard, PosterGrid, PosterGridSkeleton } from "@/components/AnimeCard";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -14,7 +14,6 @@ import { CatalogFilters } from "@/components/CatalogFilters";
 import { useCatalogIntentStore } from "@/stores/catalogIntentStore";
 import { activeFilterCount, toSearchRequestFilters, type SearchFilters } from "@/lib/searchFilters";
 import { isMobile } from "@/lib/mobile";
-import { useSpotlightStore } from "@/stores/spotlightStore";
 import type { AnimeTitle } from "@shared/types";
 
 // What "browse" can be sorted by is the source's business: it declares its own orders in
@@ -107,17 +106,6 @@ export function CatalogBrowsePage() {
 
   return (
     <div className="min-h-full bg-app-bg px-8 py-8 pb-16 mobile:px-4 mobile:pb-6 mobile:pt-3">
-      {/* Phone: the search lives here, at the top of the catalog tab - a field that opens the same
-          search panel the desktop title bar opens. */}
-      {isMobile && (
-        <button
-          onClick={() => useSpotlightStore.getState().setOpen(true)}
-          className="mb-3 flex h-12 w-full items-center gap-3 rounded-2xl border border-border bg-app-popover px-4 text-left text-[15px] text-muted active:bg-text/[.06]"
-        >
-          <Search className="h-5 w-5 shrink-0" strokeWidth={2} />
-          <span className="truncate">{t("catalog.searchPlaceholder")}</span>
-        </button>
-      )}
       {sources.isLoading && <PosterGridSkeleton count={15} />}
       {sources.isError && <ErrorBanner message={(sources.error as Error).message} />}
       {sources.data?.length === 0 && <EmptySources />}
