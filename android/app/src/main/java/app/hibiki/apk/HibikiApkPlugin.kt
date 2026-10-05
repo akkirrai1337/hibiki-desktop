@@ -9,8 +9,11 @@ import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.await
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
@@ -26,13 +29,18 @@ import java.io.File
 class HibikiApkPlugin : Plugin() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /** The installed extensions' first load: every call waits for it, so one arriving at startup
+     * (the page lists sources as soon as it boots) doesn't find an empty registry. */
+    private lateinit var firstLoad: Deferred<Unit>
+
     override fun load() {
-        scope.launch { runCatching { ApkSourceRegistry.refresh(context) } }
+        firstLoad = scope.async { runCatching { ApkSourceRegistry.refresh(context) }; Unit }
     }
 
     private fun run(call: PluginCall, block: suspend () -> JSObject) {
         scope.launch {
             try {
+                firstLoad.await()
                 call.resolve(block())
             } catch (error: Throwable) {
                 call.reject(error.message ?: error.javaClass.simpleName)
@@ -59,11 +67,17 @@ class HibikiApkPlugin : Plugin() {
         describe()
     }
 
-    private fun describe(): JSObject {
+    private suspend fun describe(): JSObject {
         val loaded = ApkSourceRegistry.extensions().associateBy { it.extension.packageName }
         val failures = ApkSourceRegistry.failures().associateBy { it.extension.packageName }
         val sources = JSONArray()
-        loaded.values.forEach { extension -> extension.adapters.forEach { sources.put(it.info()) } }
+        for (extension in loaded.values) {
+            for (adapter in extension.adapters) {
+                // The extension's settings screen is its own UI code: built on the main thread.
+                val settings = withContext(Dispatchers.Main) { runCatching { ApkPreferences.describe(context, adapter) }.getOrDefault(JSONArray()) }
+                sources.put(adapter.info(settings))
+            }
+        }
         val extensions = JSONArray()
         ApkExtensionStore.list(context).forEach { extension ->
             extensions.put(JSONObject().apply {
@@ -142,6 +156,21 @@ class HibikiApkPlugin : Plugin() {
     }
 
     // --- one source's calls -------------------------------------------------------------------------
+
+    @PluginMethod
+    fun readSettings(call: PluginCall) = run(call) {
+        val adapter = adapter(call)
+        JSObject.fromJSONObject(withContext(Dispatchers.Main) { ApkPreferences.values(context, adapter) })
+    }
+
+    @PluginMethod
+    fun writeSetting(call: PluginCall) = run(call) {
+        val adapter = adapter(call)
+        val key = call.getString("key") ?: throw IllegalArgumentException("key is required")
+        val value = call.getString("value")
+        withContext(Dispatchers.Main) { ApkPreferences.write(context, adapter, key, value) }
+        JSObject()
+    }
 
     @PluginMethod
     fun search(call: PluginCall) = run(call) {

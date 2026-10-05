@@ -58,7 +58,7 @@ class ApkSourceAdapter(
     /** Number and name of each episode listed so far: the page asks for links by episode id alone. */
     private val episodeMeta = ConcurrentHashMap<String, Pair<Double, String?>>()
 
-    fun info(): JSONObject = JSONObject().apply {
+    fun info(settings: JSONArray = JSONArray()): JSONObject = JSONObject().apply {
         put("id", id)
         put("name", name)
         put("version", extension.versionName)
@@ -68,7 +68,7 @@ class ApkSourceAdapter(
             put("PLAYBACK")
             if (supportsLatest) put("LATEST_RELEASES")
         })
-        put("settings", JSONArray())
+        put("settings", settings)
         put("website", baseUrl ?: JSONObject.NULL)
         put("packageName", extension.packageName)
     }

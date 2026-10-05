@@ -187,12 +187,18 @@ export class ExtensionRuntime {
    * and the settings screen has no business reading it - nor does anything else in the renderer.
    */
   async readSettings(sourceId: string): Promise<Record<string, string>> {
+    // An APK source keeps its own preferences; the platform reads them out of it.
+    if (isApkSource(sourceId)) return (await getPlatform().apkSources?.call(sourceId, "readSettings", [])) as Record<string, string>;
     const declared = new Set(this.settingKeysOf(sourceId));
     const stored = await this.storage.read(sourceId);
     return Object.fromEntries(Object.entries(stored).filter(([key]) => declared.has(key)));
   }
 
   async writeSetting(sourceId: string, key: string, value: string | null): Promise<void> {
+    if (isApkSource(sourceId)) {
+      await getPlatform().apkSources?.call(sourceId, "writeSetting", [key, value]);
+      return;
+    }
     if (!this.settingKeysOf(sourceId).includes(key)) {
       throw new Error(`Source "${sourceId}" declares no setting named "${key}"`);
     }

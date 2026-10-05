@@ -106,6 +106,9 @@ export async function createAndroidPlatform(version: string): Promise<{ platform
           // (titleId, groupId, episodeId): an Aniyomi episode is found by its own id alone.
           case "getPlayerLinks": return (await HibikiApk.playerLinks({ sourceId, episodeId: String(args[2]) })).items;
           case "getSettings": return HibikiApk.filterCatalog({ sourceId });
+          // The source's own settings rows (SourceInfo.settings), read and written in the extension's preferences.
+          case "readSettings": return HibikiApk.readSettings({ sourceId });
+          case "writeSetting": return HibikiApk.writeSetting({ sourceId, key: String(args[0]), value: args[1] == null ? null : String(args[1]) });
           default: throw new Error(`APK sources do not support ${method}()`);
         }
       },
