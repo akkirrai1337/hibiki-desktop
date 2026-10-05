@@ -125,7 +125,8 @@ function MobileSearchPage() {
   const filterDefs = filterCatalog.data?.filters ?? [];
   const count = pickedCount(filterDefs, filters);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const { draft, change } = useLiveFilters(filters, setFilters);
+  // Applied when the sheet is done with, not at every tap (see useLiveFilters).
+  const { draft, change, apply, reset } = useLiveFilters(filters, setFilters, true);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const searching = longEnough || hasFilters;
@@ -209,13 +210,13 @@ function MobileSearchPage() {
 
       <BottomSheet
         open={filtersOpen}
-        onClose={() => setFiltersOpen(false)}
+        onClose={() => { apply(); setFiltersOpen(false); }}
         title={t("search.filters.button")}
         className="h-[85vh]"
         footer={
           <div className="flex items-center justify-between gap-2">
-            <button onClick={() => setFilters({})} disabled={count === 0} className="rounded-full px-4 py-2.5 text-sm font-semibold text-muted active:bg-text/[.06] disabled:opacity-40">{t("search.filters.reset")}</button>
-            <button onClick={() => setFiltersOpen(false)} className="rounded-full bg-text px-6 py-2.5 text-sm font-bold text-bg active:opacity-90">{t("search.filters.done")}</button>
+            <button onClick={reset} disabled={pickedCount(filterDefs, draft) === 0} className="rounded-full px-4 py-2.5 text-sm font-semibold text-muted active:bg-text/[.06] disabled:opacity-40">{t("search.filters.reset")}</button>
+            <button onClick={() => { apply(); setFiltersOpen(false); }} className="rounded-full bg-text px-6 py-2.5 text-sm font-bold text-bg active:opacity-90">{t("search.filters.done")}</button>
           </div>
         }
       >

@@ -17,17 +17,26 @@ import type { FilterValue, SearchFilterDef } from "@shared/types";
 const APPLY_DELAY_MS = 400;
 
 /** The draft of a set of filters that is being edited: changes show at once and reach `onChange` after a pause. */
-export function useLiveFilters(filters: SearchFilters, onChange: (filters: SearchFilters) => void) {
+/**
+ * The filters being picked, and when they take effect: on the desktop live, a short pause after each
+ * change; on the phone (`deferred`) only once the sheet is done with - apply() on "Done" or on closing
+ * it - so the results behind it do not reload at every tap.
+ */
+export function useLiveFilters(filters: SearchFilters, onChange: (filters: SearchFilters) => void, deferred = false) {
   const [draft, setDraft] = useState(filters);
   // Whatever changed the filters from outside (a clear, a source switch) is the new draft.
   useEffect(() => setDraft(filters), [filters]);
   useEffect(() => {
-    if (draft === filters) return;
+    if (deferred || draft === filters) return;
     const timer = setTimeout(() => onChange(draft), APPLY_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [draft, filters, onChange]);
+  }, [deferred, draft, filters, onChange]);
   const change = (def: SearchFilterDef, value: FilterValue) => setDraft((current) => withFilterValue(current, def.id, value));
-  return { draft, change };
+  const apply = () => {
+    if (draft !== filters) onChange(draft);
+  };
+  const reset = () => setDraft({});
+  return { draft, change, apply, reset };
 }
 
 /** How many of the source's filters are picked. */
@@ -117,7 +126,7 @@ export function CatalogFilters({
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const popoverTheme = usePopoverTheme();
-  const { draft, change } = useLiveFilters(filters, onChange);
+  const { draft, change, apply, reset } = useLiveFilters(filters, onChange, isMobile);
 
   useEffect(() => {
     if (!open) return;
@@ -139,15 +148,16 @@ export function CatalogFilters({
           {defs.length > 0 && <FiltersControl count={count} open={open} onToggle={() => setOpen((v) => !v)} onClear={() => onChange({})} />}
           {children}
         </div>
+        {/* What is picked applies when the sheet is done with - "Done", or closing it any other way. */}
         <BottomSheet
           open={open}
-          onClose={() => setOpen(false)}
+          onClose={() => { apply(); setOpen(false); }}
           title={t("search.filters.button")}
           className="h-[85vh]"
           footer={
             <div className="flex items-center justify-between gap-2">
-              <button onClick={() => onChange({})} disabled={count === 0} className="rounded-full px-4 py-2.5 text-sm font-semibold text-muted active:bg-text/[.06] disabled:opacity-40">{t("search.filters.reset")}</button>
-              <button onClick={() => setOpen(false)} className="rounded-full bg-text px-6 py-2.5 text-sm font-bold text-bg active:opacity-90">{t("search.filters.done")}</button>
+              <button onClick={reset} disabled={pickedCount(defs, draft) === 0} className="rounded-full px-4 py-2.5 text-sm font-semibold text-muted active:bg-text/[.06] disabled:opacity-40">{t("search.filters.reset")}</button>
+              <button onClick={() => { apply(); setOpen(false); }} className="rounded-full bg-text px-6 py-2.5 text-sm font-bold text-bg active:opacity-90">{t("search.filters.done")}</button>
             </div>
           }
         >

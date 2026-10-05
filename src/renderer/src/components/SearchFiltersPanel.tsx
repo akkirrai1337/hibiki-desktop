@@ -334,7 +334,9 @@ function AgeRatingSlider({ options, included, onChange }: { options: SearchFilte
         onChange={(e) => setDrag(Number(e.target.value))}
         onPointerUp={() => drag !== null && commit(drag)}
         onKeyUp={() => drag !== null && commit(drag)}
-        className="w-full accent-[rgb(var(--color-accent))]"
+        // Phone: the app's own slider look (see .mobile-range in globals.css), filled up to the level.
+        className={isMobile ? "mobile-range w-full" : "w-full accent-[rgb(var(--color-accent))]"}
+        style={isMobile ? ({ "--fill": `${ordered.length ? (shown / ordered.length) * 100 : 0}%` } as React.CSSProperties) : undefined}
       />
     </div>
   );
