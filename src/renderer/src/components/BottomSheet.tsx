@@ -58,7 +58,9 @@ export function BottomSheet({
             onDragEnd={(_, info) => {
               if (info.offset.y > CLOSE_DISTANCE || info.velocity.y > CLOSE_VELOCITY) onClose();
             }}
-            style={{ ...popoverTheme, y, paddingBottom: "var(--safe-bottom)" }}
+            // Kept on its own layer for good: when the rise ended and the layer was dropped, Android's
+            // WebView painted one frame of the masked body without the sheet and the scrim under it.
+            style={{ ...popoverTheme, y, willChange: "transform", paddingBottom: "var(--safe-bottom)" }}
             className={cn("absolute inset-x-0 bottom-0 flex max-h-[85vh] flex-col rounded-t-[1.5rem] border-t border-border bg-app-popover shadow-[0_-12px_40px_rgba(0,0,0,0.5)]", className)}
           >
             <div className="shrink-0 touch-none select-none pb-1 pt-2.5" onPointerDown={(event) => drag.start(event)}>
