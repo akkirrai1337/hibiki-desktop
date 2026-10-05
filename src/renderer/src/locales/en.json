@@ -632,7 +632,7 @@
     "diagnostics": {
       "title": "Diagnostics",
       "export": "Application log",
-      "exportHint": "Saves this session's log to a file: source HTTP requests, player resolve attempts and playback errors, all timed. Attach it to a bug report when an episode won't load or takes too long.",
+      "exportHint": "Attach it to a bug report if something doesn't work.",
       "exportAction": "Export log",
       "openFolder": "Open folder",
       "show": "Show log",

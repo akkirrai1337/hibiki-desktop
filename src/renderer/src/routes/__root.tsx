@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type CSSProperties, lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createRootRoute, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useUiStore } from "@/stores/uiStore";
@@ -255,7 +255,8 @@ function RootLayoutContent() {
     <div className="min-h-0 flex-1"><Onboarding onComplete={() => setOnboardingCompleted(true)} /></div>
   </div>;
 
-  return <div className="flex h-screen w-screen flex-col overflow-hidden bg-app-bg text-text" style={{ backgroundImage: backgroundGradient }}>
+  // The gradient also as a variable: the phone's status-bar scrim repaints this exact backdrop (see globals.css).
+  return <div className="flex h-screen w-screen flex-col overflow-hidden bg-app-bg text-text" style={{ backgroundImage: backgroundGradient, ...(backgroundGradient ? { "--app-backdrop": backgroundGradient } as CSSProperties : {}) }}>
     {!isMobile && <TitleBar />}
     <AchievementToast />
     <SearchSpotlight />

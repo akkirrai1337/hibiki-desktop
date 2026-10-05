@@ -7,7 +7,7 @@ import { IPC } from "@shared/ipc";
 import type { DownloadProgress } from "@shared/types";
 import { createCoreApi } from "../../core/api";
 import { ExtensionRuntime } from "../../core/extensions/runtime";
-import { log, recentEntries } from "../../core/logger";
+import { log, recentEntries, renderLog } from "../../core/logger";
 import { installPlatform } from "../../core/platform";
 import { createAndroidPlatform } from "./index";
 import { Capacitor, SystemBars, SystemBarsStyle } from "@capacitor/core";
@@ -112,7 +112,22 @@ export async function installAndroidHibiki(): Promise<void> {
       onDeepLinkWatch: nothing,
     },
     logs: {
-      export: async () => null,
+      // No save dialog on the phone: the share sheet is where the file goes (a messenger, Files...).
+      // Resolves null like a cancelled desktop dialog - there is no saved path to report.
+      export: async () => {
+        const sources = await core.sources.list().then((list) => list.map((source) => source.id).join(", ")).catch(() => "?");
+        const text = renderLog({
+          app: `hibiki ${version} (android)`,
+          webview: navigator.userAgent,
+          exportedAt: new Date().toISOString(),
+          sources: sources || "none",
+        });
+        // Local time, as the user will look for it.
+        const now = new Date();
+        const stamp = new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 19).replace(/[T:]/g, "-");
+        await HibikiApp.shareText({ name: `hibiki-log-${stamp}.txt`, text });
+        return null;
+      },
       recent: async (limit) => recentEntries(limit ?? 300),
       openFolder() {},
       memory: async () => ({ time: Date.now(), processes: [], totalMb: 0, mainHeapUsedMb: 0, rendererCount: 0 }),

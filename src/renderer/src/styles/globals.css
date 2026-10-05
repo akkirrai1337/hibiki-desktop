@@ -76,6 +76,24 @@ body,
 .bg-theme-active .bg-app-bg {
   background-color: rgb(var(--color-bg) / 0.8);
 }
+/* Phone: a page's scroll box pads itself clear of the status bar and the floating tab bar, and
+   those paddings lie outside the page's own (tinted) root - left alone they show the bare, brighter
+   gradient as a band under the tab bar. Paint the same tint into just those two strips; `local`
+   keeps them on the padding as the content scrolls. */
+.mobile.bg-theme-active [data-page-scroll] {
+  background:
+    linear-gradient(rgb(var(--color-bg) / 0.8), rgb(var(--color-bg) / 0.8)) top / 100% var(--safe-top) no-repeat local,
+    linear-gradient(rgb(var(--color-bg) / 0.8), rgb(var(--color-bg) / 0.8)) bottom / 100% var(--tabbar-space) no-repeat local;
+}
+/* The status-bar scrim over that top strip: translucent it would tint it a second time, so it
+   repaints the whole backdrop opaquely instead - the root's gradient (same viewport-sized box, same
+   origin) under the same tint - and reads as the page itself. */
+.mobile.bg-theme-active .mobile-status-scrim {
+  background:
+    linear-gradient(rgb(var(--color-bg) / 0.8), rgb(var(--color-bg) / 0.8)),
+    var(--app-backdrop, none) 0 0 / 100vw 100vh no-repeat,
+    rgb(var(--color-bg));
+}
 .bg-app-surface {
   background-color: rgb(var(--color-surface));
 }

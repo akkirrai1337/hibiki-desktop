@@ -82,6 +82,8 @@ export interface HibikiAppPlugin {
   keepAwake(options: { value: boolean }): Promise<void>;
   setImmersive(options: { value: boolean }): Promise<void>;
   setOrientation(options: { value: "landscape" | "portrait" | "auto" }): Promise<void>;
+  /** The system share sheet with a text file of that name. */
+  shareText(options: { name: string; text: string }): Promise<void>;
 }
 
 export const HibikiApp = registerPlugin<HibikiAppPlugin>("HibikiApp");

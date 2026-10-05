@@ -182,7 +182,7 @@ export interface HibikiApi {
     onDeepLinkWatch(callback: (target: DeepLinkWatchTarget) => void): () => void;
   };
   logs: {
-    /** Resolves the written path, or null if the save dialog was cancelled. */
+    /** Resolves the written path, or null if the save dialog was cancelled (Android: handed to the share sheet, always null). */
     export(): Promise<string | null>;
     recent(limit?: number): Promise<LogEntry[]>;
     openFolder(): void;

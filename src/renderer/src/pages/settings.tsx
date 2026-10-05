@@ -377,14 +377,14 @@ function DiagnosticsSection() {
         <p className="text-sm font-semibold text-text">{t("settings.diagnostics.export")}</p>
         <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.diagnostics.exportHint")}</p>
         <div className="mt-3 flex flex-wrap gap-2">
-          {/* Saving the log and opening its folder go through the desktop's file dialogs and file manager. */}
-          {!isMobile && <button
+          {/* On the phone the export goes to the system share sheet; there is no folder to open. */}
+          <button
             onClick={handleExport}
             disabled={busy}
             className="rounded-lg bg-text/[.08] px-3 py-1.5 text-sm font-semibold text-text transition-colors hover:bg-text/[.14] disabled:opacity-50"
           >
             {t("settings.diagnostics.exportAction")}
-          </button>}
+          </button>
           {!isMobile && <button
             onClick={() => hibiki.logs.openFolder()}
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-muted transition-colors hover:bg-text/[.06]"

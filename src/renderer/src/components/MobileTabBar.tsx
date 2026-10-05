@@ -53,7 +53,7 @@ export function MobileStatusScrim() {
     if (scrim.current) scrim.current.style.opacity = String(opacityFor(box?.scrollTop ?? 0));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- opacityFor only reads refs
   }, [pathname]);
-  return <div ref={scrim} aria-hidden className="pointer-events-none fixed inset-x-0 top-0 z-30 h-[var(--safe-top)] bg-app-bg opacity-0" />;
+  return <div ref={scrim} aria-hidden className="mobile-status-scrim pointer-events-none fixed inset-x-0 top-0 z-30 h-[var(--safe-top)] bg-app-bg opacity-0" />;
 }
 
 /** Floating bar at the bottom of every screen except the player and a title page (it pins its watch button there). */
