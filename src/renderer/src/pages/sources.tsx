@@ -299,7 +299,7 @@ export function SourcesPage() {
   return (
     <div className="flex min-h-full flex-col bg-app-bg">
       <div className="px-8 pt-8 mobile:px-4 mobile:pt-2">
-        {isMobile && <MobilePageHeader title={t("nav.sources")} parent="/profile" />}
+        {isMobile && <MobilePageHeader title={t("nav.sources")} parent="/settings" />}
         <div className="flex gap-1 border-b border-border">
           <TabButton layoutId="sourcesTabIndicator" active={tab === "extensions"} onClick={() => setTab("extensions")}>{t("sources.tabs.extensions")}</TabButton>
           <TabButton layoutId="sourcesTabIndicator" active={tab === "repositories"} onClick={() => setTab("repositories")}>{t("sources.tabs.repositories")}</TabButton>

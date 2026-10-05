@@ -566,6 +566,7 @@
     "achievementMaxed": "All levels completed"
   },
   "settings": {
+    "sourcesHint": "Extensions and repositories",
     "subtitle": "Fine-tune how hibiki looks and plays",
     "appearance": {
       "title": "Appearance",

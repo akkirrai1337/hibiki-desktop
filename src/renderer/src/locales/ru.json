@@ -566,6 +566,7 @@
     "achievementMaxed": "Все уровни пройдены"
   },
   "settings": {
+    "sourcesHint": "Расширения и репозитории",
     "subtitle": "Настройте, как hibiki выглядит и воспроизводит видео",
     "appearance": {
       "title": "Оформление",

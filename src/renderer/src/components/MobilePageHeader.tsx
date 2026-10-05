@@ -8,7 +8,7 @@ import { cn } from "@/lib/cn";
  * Phone only: the top of a screen one level inside a tab (settings and sources under the profile) -
  * its name, with the way back to the tab beside it.
  */
-export function MobilePageHeader({ title, parent }: { title: string; parent: "/library" | "/profile" }) {
+export function MobilePageHeader({ title, parent }: { title: string; parent: "/library" | "/profile" | "/settings" }) {
   const { t } = useTranslation();
   const router = useRouter();
   const navigate = useNavigate();
