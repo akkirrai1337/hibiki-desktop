@@ -53,7 +53,9 @@ internal object ApkPreferences {
             val row = JSONObject()
                 .put("key", preference.key)
                 .put("title", if (category != null) "$category · $title" else title)
-            val summary = preference.summary?.toString()?.takeIf(String::isNotBlank)
+            // A list's summary is usually just its current choice ("%s"), which the chips already show.
+            val current = (preference as? ListPreference)?.let { it.entry?.toString() ?: it.value }
+            val summary = preference.summary?.toString()?.trim()?.takeIf { it.isNotBlank() && it != current && it != (preference as? ListPreference)?.value }
             if (summary != null) row.put("description", summary)
             when (preference) {
                 is TwoStatePreference -> row.put("type", "TOGGLE").put("default", preference.isChecked)

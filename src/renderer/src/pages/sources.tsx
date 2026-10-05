@@ -32,6 +32,7 @@ import { SourceSettingsDialog } from "@/components/SourceSettingsDialog";
 import { isExtensionUpdateAvailable } from "@/lib/version";
 import { TabButton } from "@/components/TabButton";
 import { Modal } from "@/components/Modal";
+import { BottomSheet } from "@/components/BottomSheet";
 import type { MarketplaceExtension, RepositoryFetchResult, SourceCapability } from "@shared/types";
 
 type Tab = "extensions" | "repositories";
@@ -335,8 +336,31 @@ export function SourcesPage({ embedded = false }: { embedded?: boolean } = {}) {
                       </span>
                     )}
                   </ToolbarButton>
+                  {/* Phone: a sheet over the screen - a list of dozens of languages doesn't fit a dropdown. */}
+                  {isMobile && (
+                    <BottomSheet
+                      open={languageFilterOpen}
+                      onClose={() => setLanguageFilterOpen(false)}
+                      title={t("sources.filterLanguages")}
+                      footer={selectedLanguages.size > 0 ? (
+                        <button onClick={() => setSelectedLanguages(new Set())} className="w-full rounded-xl bg-text/[.07] py-3 text-sm font-semibold text-text active:bg-text/[.12]">
+                          {t("search.filters.reset")}
+                        </button>
+                      ) : undefined}
+                    >
+                      <LanguageRows
+                        languages={languages}
+                        selected={selectedLanguages}
+                        onToggle={(lang) => setSelectedLanguages((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(lang)) next.delete(lang); else next.add(lang);
+                          return next;
+                        })}
+                      />
+                    </BottomSheet>
+                  )}
                   <AnimatePresence>
-                    {languageFilterOpen && (
+                    {languageFilterOpen && !isMobile && (
                       <LanguageFilterPopover
                         languages={languages}
                         selected={selectedLanguages}
@@ -479,6 +503,16 @@ function LanguageFilterPopover({
         // pattern GroupDropdown's panel uses with no extra padding.
         className="absolute right-0 top-11 z-50 w-64 overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl"
       >
+        <LanguageRows languages={languages} selected={selected} onToggle={onToggle} />
+      </motion.div>
+    </>
+  );
+}
+
+/** The language switches, in the desktop dropdown and the phone's sheet alike. */
+function LanguageRows({ languages, selected, onToggle }: { languages: string[]; selected: Set<string>; onToggle: (lang: string) => void }) {
+  return (
+    <>
         {languages.length === 0 ? (
           <p className="px-3 py-2 text-sm text-muted">—</p>
         ) : (
@@ -508,7 +542,6 @@ function LanguageFilterPopover({
             );
           })
         )}
-      </motion.div>
     </>
   );
 }
