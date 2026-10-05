@@ -47,7 +47,7 @@ export function MobileHero({ slides, label, sourceName }: { slides: HeroSlide[];
     <div
       className="relative -mt-[var(--safe-top)] overflow-hidden"
       // pan-y: the page still scrolls vertically under a finger; sideways movement comes here.
-      style={{ height: "calc(min(62vh, 600px) + var(--safe-top))", minHeight: 440, touchAction: "pan-y" }}
+      style={{ height: "calc(min(46vh, 420px) + var(--safe-top))", minHeight: 340, touchAction: "pan-y" }}
       onPointerDown={(event) => {
         drag.current = { x: event.clientX, y: event.clientY, dx: 0, horizontal: null };
         swiped.current = false;
@@ -92,7 +92,7 @@ export function MobileHero({ slides, label, sourceName }: { slides: HeroSlide[];
       <div ref={track} className="flex h-full will-change-transform">
         {slides.map((slide, i) => (
           <div key={slide.key} className="relative h-full w-full shrink-0" aria-hidden={i !== index}>
-            {slide.posterUrl && <img src={slide.posterUrl} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover object-[center_20%]" />}
+            {slide.posterUrl && <img src={slide.posterUrl} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover object-[center_18%]" />}
           </div>
         ))}
       </div>

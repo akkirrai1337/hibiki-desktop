@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { AnimatePresence, motion } from "motion/react";
 import * as ContextMenu from "@radix-ui/react-context-menu";
-import { ArrowLeft, ArrowUpDown, ChevronRight, LayoutGrid, List, Mic, Play, Bookmark, Check, ChevronDown, Clock, Download, Eraser, ExternalLink, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
+import { ArrowDown01, ArrowDown10, ArrowLeft, ArrowUpDown, ChevronRight, LayoutGrid, List, Mic, Play, Bookmark, Check, ChevronDown, Clock, Download, Eraser, ExternalLink, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
 import { CommentsSection } from "@/components/CommentsSection";
 import { RatingButton, SourceRatings } from "@/components/RatingButton";
 import { hibiki } from "@/lib/hibiki";
@@ -20,6 +20,7 @@ import { HorizontalScrollRow } from "@/components/HorizontalScrollRow";
 import { SmoothImage } from "@/components/SmoothImage";
 import { cn } from "@/lib/cn";
 import { isMobile, useBackHandler } from "@/lib/mobile";
+import { BottomSheet, SheetOption } from "@/components/BottomSheet";
 import { ASSIGNABLE_LIBRARY_CATEGORIES, LIBRARY_CATEGORY_ICONS, LIBRARY_CATEGORY_LABEL_KEYS } from "@/lib/libraryCategories";
 import { STATUS_ID_ALIASES } from "@/lib/searchFilters";
 import { episodeFavoriteKey, useEpisodeFavoritesStore } from "@/stores/episodeFavoritesStore";
@@ -259,6 +260,10 @@ function AnimeDetailPage() {
   // A view that no longer exists (a saved "compact") reads as the default.
   const episodesView = useUiStore((s) => (s.episodesView === "list" ? "list" : "tiles"));
   const setEpisodesView = useUiStore((s) => s.setEpisodesView);
+  // Phone: the list starts folded (see foldEpisodes) - a long show is otherwise a screen of rows
+  // between the overview and everything under it.
+  const [episodesExpanded, setEpisodesExpanded] = useState(false);
+  useEffect(() => setEpisodesExpanded(false), [sourceId, animeId, requestedGroupId]);
 
   // Mirrors Android's DetailsUiModel: franchiseAnime (a source's own "Season 1, Season 2, Movie,
   // ..." sequence) and relatedAnime (prequels/sequels/side-stories) render as one merged section
@@ -346,7 +351,37 @@ function AnimeDetailPage() {
     {anime && <>
       <Overview anime={anime} libraryCategory={libraryEntry?.category ?? null} onSetLibraryCategory={setLibraryCategory} onRemoveFromLibrary={removeFromLibrary} onPosterClick={() => setPosterPreviewOpen(true)} continueTarget={continueTarget ? { groupId: activeGroup!.id, episodeId: continueTarget.episode.id, label: continueTarget.label } : undefined} sourceId={sourceId} animeId={animeId} source={source} related={related} />
       <div className="px-8 pt-6 mobile:px-4 mobile:pt-5">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 mobile:mb-3 mobile:gap-2">
+        {isMobile ? (
+          // Phone: the heading with the view and order as two small icons beside it, and the dub as a
+          // chip under it - controls the size of what they control, not the size of buttons.
+          <div className="mb-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="flex items-baseline gap-2 text-lg font-bold tracking-[-.02em] text-text">
+                {t("detail.episodes")}
+                {activeGroup && <span className="text-sm font-semibold tabular-nums text-muted">{activeGroup.episodes.length}</span>}
+              </h2>
+              {activeGroup && activeGroup.episodes.length > 1 && (
+                <div className="flex items-center gap-0.5">
+                  {([["tiles", LayoutGrid], ["list", List]] as const).map(([view, Icon]) => (
+                    <button key={view} onClick={() => setEpisodesView(view)} aria-label={t(`detail.episodesView.${view}`)} className={cn("flex h-9 w-9 items-center justify-center rounded-full", episodesView === view ? "bg-text/[.1] text-text" : "text-muted")}>
+                      <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
+                    </button>
+                  ))}
+                  <button onClick={() => setEpisodesNewestFirst(!episodesNewestFirst)} aria-label={episodesNewestFirst ? t("detail.episodesNewestFirst") : t("detail.episodesOldestFirst")} className="flex h-9 w-9 items-center justify-center rounded-full text-muted active:bg-text/[.08]">
+                    {episodesNewestFirst ? <ArrowDown10 className="h-[18px] w-[18px]" strokeWidth={2} /> : <ArrowDown01 className="h-[18px] w-[18px]" strokeWidth={2} />}
+                  </button>
+                </div>
+              )}
+            </div>
+            {groups.length > 1 && <div className="mt-2"><GroupDropdown groups={groups} activeGroupId={activeGroup?.id} onSelect={setActiveGroupId} /></div>}
+            {groups.length === 1 && !isGenericDubTitle(groups[0].title) && (
+              <span className="mt-2 inline-flex max-w-full items-center gap-2 rounded-full bg-text/[.06] px-3 py-1.5 text-[13px] font-semibold text-muted">
+                <Mic className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+                <span className="truncate">{groups[0].title}{groups[0].qualityLabel ? ` · ${groups[0].qualityLabel}` : ""}</span>
+              </span>
+            )}
+          </div>
+        ) : <div className="mb-4 flex flex-wrap items-center justify-between gap-3 mobile:mb-3 mobile:gap-2">
           <h2 className="flex items-baseline gap-2 text-xl font-bold tracking-[-.02em] text-text">
             {t("detail.episodes")}
             {activeGroup && <span className="text-sm font-semibold tabular-nums text-muted">{activeGroup.episodes.length}</span>}
@@ -385,12 +420,12 @@ function AnimeDetailPage() {
               </button>
             )}
           </div>
-        </div>
+        </div>}
         {groupsQuery.isLoading && <div className="text-sm text-muted">{t("detail.loadingEpisodes")}</div>}
         {groupsQuery.isError && <ErrorBanner message={(groupsQuery.error as Error).message} />}
         {groups.length === 0 && !groupsQuery.isLoading && !groupsQuery.isError && <div className="text-sm text-muted">{t("detail.noEpisodesYet")}</div>}
         {activeGroup && <div className={cn("grid gap-2.5 mobile:gap-2", episodesView === "tiles" ? "grid-cols-[repeat(auto-fill,minmax(112px,1fr))] mobile:grid-cols-[repeat(auto-fill,minmax(72px,1fr))]" : "grid-cols-[repeat(auto-fill,minmax(300px,1fr))]")}>
-          {(episodesNewestFirst ? [...activeGroup.episodes].reverse() : activeGroup.episodes).map((ep) => (
+          {foldEpisodes(episodesNewestFirst ? [...activeGroup.episodes].reverse() : activeGroup.episodes, continueTarget?.episode.id, episodesView, episodesExpanded).map((ep) => (
             <EpisodeChip
               key={ep.id}
               sourceId={sourceId}
@@ -433,6 +468,15 @@ function AnimeDetailPage() {
             />
           ))}
         </div>}
+        {isMobile && activeGroup && activeGroup.episodes.length > foldedCount(episodesView) && (
+          <button
+            onClick={() => setEpisodesExpanded((open) => !open)}
+            className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl border border-border py-2.5 text-[13px] font-semibold text-text/80 active:bg-text/[.06]"
+          >
+            {episodesExpanded ? t("detail.relatedShowLess") : t("detail.relatedShowMore", { count: activeGroup.episodes.length - foldedCount(episodesView) })}
+            <ChevronDown className={cn("h-4 w-4 transition-transform", episodesExpanded && "rotate-180")} strokeWidth={2.25} />
+          </button>
+        )}
       </div>
       {screenshots.length > 0 && (
         <div className="px-8 pt-10 mobile:px-4 mobile:pt-8">
@@ -464,16 +508,23 @@ function AnimeDetailPage() {
       {source && <CommentsSection source={source} animeId={animeId} />}
       {/* The phone keeps the page's one main action pinned under the thumb, where the tab bar sits on
           other screens. */}
-      {isMobile && continueTarget && activeGroup && (
-        <Link
-          to="/watch/$sourceId/$animeId/$groupId/$episodeId"
-          params={{ sourceId, animeId, groupId: activeGroup.id, episodeId: continueTarget.episode.id }}
-          className="fixed inset-x-3 z-40 flex h-[3.25rem] items-center justify-center gap-2 rounded-full bg-white text-[15px] font-bold text-zinc-900 shadow-[0_10px_30px_rgba(0,0,0,0.5)] active:scale-[0.98]"
-          style={{ bottom: "calc(0.75rem + var(--safe-bottom))" }}
-        >
-          <Play className="ml-0.5 h-4 w-4 fill-current" strokeWidth={0} />
-          {continueTarget.label}
-        </Link>
+      {isMobile && (
+        // The page's two actions, pinned under the thumb: keep it (library), and watch.
+        <div className="fixed inset-x-3 z-40 flex items-center gap-2.5" style={{ bottom: "calc(0.75rem + var(--safe-bottom))" }}>
+          <LibraryButton category={libraryEntry?.category ?? null} onSelect={setLibraryCategory} onRemove={removeFromLibrary} />
+          {continueTarget && activeGroup ? (
+            <Link
+              to="/watch/$sourceId/$animeId/$groupId/$episodeId"
+              params={{ sourceId, animeId, groupId: activeGroup.id, episodeId: continueTarget.episode.id }}
+              className="flex h-[3.25rem] min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-white px-4 text-[15px] font-bold text-zinc-900 shadow-[0_10px_30px_rgba(0,0,0,0.5)] active:scale-[0.98]"
+            >
+              <Play className="ml-0.5 h-4 w-4 shrink-0 fill-current" strokeWidth={0} />
+              <span className="truncate">{continueTarget.label}</span>
+            </Link>
+          ) : (
+            <span className="flex h-[3.25rem] flex-1 items-center justify-center rounded-full bg-app-popover text-sm font-semibold text-muted shadow-[0_10px_30px_rgba(0,0,0,0.5)]">{t("detail.noEpisodes")}</span>
+          )}
+        </div>
       )}
       <AnimatePresence>
         {downloadEpisode && (
@@ -498,6 +549,24 @@ function AnimeDetailPage() {
 }
 
 const GENERIC_EPISODE_TITLE = /^(эпизод|серия|серія|episode|ep\.?)\s*\d+$/i;
+
+/** How many episodes a folded list shows on the phone: two full rows of tiles (four across), or six rows. */
+function foldedCount(view: "tiles" | "list"): number {
+  return view === "tiles" ? 8 : 6;
+}
+
+/**
+ * Phone only: the slice of the (already ordered) episode list shown while it is folded - from the
+ * start, or around the episode to watch next when that one would fall past the fold, so the one
+ * that matters is always on screen.
+ */
+function foldEpisodes(episodes: Episode[], nextId: string | undefined, view: "tiles" | "list", expanded: boolean): Episode[] {
+  const count = foldedCount(view);
+  if (!isMobile || expanded || episodes.length <= count) return episodes;
+  const next = nextId ? episodes.findIndex((ep) => ep.id === nextId) : -1;
+  const start = next < count ? 0 : Math.min(next - 1, episodes.length - count);
+  return episodes.slice(start, start + count);
+}
 
 function EpisodeChip({
   sourceId,
@@ -792,10 +861,8 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
       <p ref={descriptionRef} className="select-text text-[13.5px] leading-[1.55] text-muted">{anime.description}</p>
     </div>}
     {anime.description && <button onClick={() => setDescriptionOpen((v) => !v)} className="mt-1 inline-flex items-center gap-1 py-1 text-xs font-semibold text-text/70">{descriptionOpen ? t("common.hideDescription") : t("common.readDescription")}<ChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-300", descriptionOpen && "rotate-180")} strokeWidth={2.5} /></button>}
-    <div className="mt-3 flex items-center gap-2.5">
-      <LibraryButton category={libraryCategory} onSelect={onSetLibraryCategory} onRemove={onRemoveFromLibrary} />
-      {source && <RatingButton source={source} animeId={animeId} />}
-    </div>
+    {/* The library button lives in the pinned bar at the bottom; rating (only some sources) stays here. */}
+    {source && <div className="mt-3 flex items-center gap-2.5 empty:hidden"><RatingButton source={source} animeId={animeId} /></div>}
     {related.length > 0 && <div className="mt-7">
       <RelatedList items={related} sourceId={sourceId} currentAnimeId={animeId} />
     </div>}
@@ -924,6 +991,26 @@ function LibraryButton({ category, onSelect, onRemove }: { category: LibraryCate
   const [open, setOpen] = useState(false);
   useBackHandler(open, () => setOpen(false));
   const Icon = category ? LIBRARY_CATEGORY_ICONS[category] : Bookmark;
+  if (isMobile) {
+    return (
+      <>
+        <button
+          onClick={() => setOpen(true)}
+          aria-label={category ? t("detail.removeFromLibrary") : t("detail.addToLibrary")}
+          className={cn("flex h-[3.25rem] w-[3.25rem] shrink-0 items-center justify-center rounded-full border shadow-[0_10px_30px_rgba(0,0,0,0.5)] active:scale-95", category ? "border-accent/40 bg-[rgb(var(--color-accent)/0.22)] text-accent-text" : "border-border bg-app-popover text-text")}
+        >
+          <Icon className={cn("h-5 w-5", category && "fill-current")} strokeWidth={2} />
+        </button>
+        <BottomSheet open={open} onClose={() => setOpen(false)} title={category ? t(LIBRARY_CATEGORY_LABEL_KEYS[category]) : t("detail.addToLibrary")}>
+          {ASSIGNABLE_LIBRARY_CATEGORIES.map((option) => {
+            const OptionIcon = LIBRARY_CATEGORY_ICONS[option];
+            return <SheetOption key={option} icon={<OptionIcon className="h-5 w-5" strokeWidth={2} />} label={t(LIBRARY_CATEGORY_LABEL_KEYS[option])} selected={option === category} onClick={() => { onSelect(option); setOpen(false); }} />;
+          })}
+          {category && <SheetOption danger icon={<X className="h-5 w-5" strokeWidth={2} />} label={t("detail.removeFromLibrary")} onClick={() => { onRemove(); setOpen(false); }} />}
+        </BottomSheet>
+      </>
+    );
+  }
   return (
     <div className="relative">
       <button
