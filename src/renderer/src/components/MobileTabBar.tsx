@@ -2,13 +2,12 @@ import { useEffect, useRef } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { Bookmark, Home, LayoutGrid, Search, User } from "lucide-react";
-import { useSpotlightStore } from "@/stores/spotlightStore";
+import { mobileSearchMemory } from "@/lib/mobile";
 import { cn } from "@/lib/cn";
 
 // The phone's whole navigation: five places, each owning the screens reached from it. History and
 // downloads live under the library, settings and sources under the profile - the desktop sidebar's
-// other entries, one level down. Search opens the search panel (full screen on the phone) rather
-// than a page; its full results page belongs to it.
+// other entries, one level down.
 const tabs = [
   { to: "/", labelKey: "nav.home", icon: Home, owns: ["/"] },
   { to: "/catalog", labelKey: "nav.catalog", icon: LayoutGrid, owns: ["/catalog"] },
@@ -74,16 +73,14 @@ export function MobileTabBar() {
             type="button"
             aria-current={isActive ? "page" : undefined}
             onClick={() => {
-              if (tab.to === "/search") {
-                useSpotlightStore.getState().setOpen(true);
-                return;
-              }
               if (pathname === tab.to) {
                 // Already there: back to the top, the way a tab bar does it.
                 document.querySelector<HTMLElement>(`[data-page-scroll="${tab.to}"]`)?.scrollTo({ top: 0, behavior: "smooth" });
                 return;
               }
-              void navigate({ to: tab.to });
+              // Search comes back with what it last searched.
+              if (tab.to === "/search") void navigate({ to: "/search", search: { q: mobileSearchMemory.query } });
+              else void navigate({ to: tab.to });
             }}
             className={cn("flex flex-1 flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors", isActive ? "text-accent-text" : "text-muted active:text-text")}
           >

@@ -8,6 +8,9 @@ import { hibiki } from "@/lib/hibiki";
  */
 export const isMobile = document.documentElement.classList.contains("mobile");
 
+/** The phone's search tab remembers what it last searched, so coming back to the tab shows it again. */
+export const mobileSearchMemory = { query: "" };
+
 // --- the system Back key ------------------------------------------------------------------------
 // Whatever is on top answers first: an open sheet or menu registers a handler while it is open and
 // closes itself; with none open, Back steps back through the app's history, and on the first screen

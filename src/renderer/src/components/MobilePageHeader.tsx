@@ -38,7 +38,7 @@ const LIBRARY_SEGMENTS = [
 ] as const;
 
 /**
- * Phone only: the top of the library tab - its name, and a switch between what it holds: saved
+ * Phone only: the top of the library tab - a switch between what it holds: saved
  * titles, watch history and downloads, as three views of one place rather than screens to visit.
  * Switching replaces the entry, so Back leaves the tab instead of stepping through the switches.
  */
@@ -46,7 +46,6 @@ export function LibrarySegments({ active }: { active: (typeof LIBRARY_SEGMENTS)[
   const { t } = useTranslation();
   return (
     <div className="mb-4">
-      <h1 className="mb-3.5 text-[26px] font-bold tracking-[-.02em] text-text">{t("library.title")}</h1>
       <div className="grid grid-cols-3 rounded-full bg-text/[.06] p-1">
         {LIBRARY_SEGMENTS.map((segment) => (
           <Link
