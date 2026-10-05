@@ -46,8 +46,8 @@ export function SearchResultsPage() {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage, items.length]);
 
   return (
-    <div className="min-h-full bg-app-bg px-8 py-8 pb-16">
-      <h1 className="mb-5 select-text text-lg font-bold text-text">{longEnough ? t("search.resultsFor", { query }) : t("search.filteredResults")}</h1>
+    <div className="min-h-full bg-app-bg px-8 py-8 pb-16 mobile:px-4 mobile:pb-6 mobile:pt-4">
+      <h1 className="mb-5 select-text text-lg font-bold text-text mobile:mb-4 mobile:text-[17px]">{longEnough ? t("search.resultsFor", { query }) : t("search.filteredResults")}</h1>
       {results.isLoading && <PosterGridSkeleton count={12} />}
       {results.isError && <ErrorBanner message={t("search.errorGeneric", { source: source?.name ?? t("search.source") })} />}
       {results.isSuccess && items.length === 0 && <div className="py-16 text-center text-sm text-muted">{longEnough ? t("search.empty", { query }) : t("search.filteredEmpty")}</div>}

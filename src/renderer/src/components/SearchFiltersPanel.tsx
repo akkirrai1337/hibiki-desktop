@@ -246,7 +246,7 @@ function FilterChip({ state, mark = null, icon: Icon, onClick, children }: { sta
   return (
     <button
       onClick={onClick}
-      className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors duration-200", CHIP_TONE[state])}
+      className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors duration-200 mobile:px-3 mobile:py-1.5 mobile:text-[13px]", CHIP_TONE[state])}
     >
       {Icon && <Icon className="h-3.5 w-3.5" strokeWidth={2} />}
       <AnimatePresence initial={false} mode="popLayout">

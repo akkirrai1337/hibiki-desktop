@@ -16,6 +16,7 @@ import { useUiStore } from "@/stores/uiStore";
 import { useSpotlightStore } from "@/stores/spotlightStore";
 import { useSearchHistoryStore } from "@/stores/searchHistoryStore";
 import { useSearchFiltersStore } from "@/stores/searchFiltersStore";
+import { isMobile, useBackHandler } from "@/lib/mobile";
 import type { AnimeTitle } from "@shared/types";
 
 const MIN_QUERY_LENGTH = 3;
@@ -141,6 +142,8 @@ function SpotlightPanel() {
   }, [selected]);
 
   const close = () => setOpen(false);
+  // Back peels one layer off, as Esc does: the filters first, then the panel.
+  useBackHandler(true, () => (filtersOpen ? setFiltersOpen(false) : close()));
   const openTitle = (anime: AnimeTitle) => {
     if (longEnough) addRecent(settled);
     // Where to come back to, and what was typed - see SearchSpotlight.
@@ -202,26 +205,29 @@ function SpotlightPanel() {
     // The container itself does not fade: a backdrop blur inside an element whose opacity is animating is
     // composited as its own group and only lines up once the opacity settles, which read as a crooked
     // blur that snapped into place at the end. The scrim fades on its own; the panel has its own motion.
-    <div className="fixed inset-0 z-[70] flex items-start justify-center px-6 pt-[14vh]" onKeyDown={onKeyDown}>
-      <motion.div className="absolute inset-0 bg-black/45 backdrop-blur-[3px]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} onClick={close} />
+    // Phone: a screen of its own (opaque, under the status bar, above the keyboard) rather than a
+    // panel floating over the page - there is no room around it to float in.
+    <div className="fixed inset-0 z-[70] flex items-start justify-center px-6 pt-[14vh] mobile:px-3 mobile:pb-3 mobile:pt-[calc(0.625rem+var(--safe-top))]" onKeyDown={onKeyDown}>
+      <motion.div className="absolute inset-0 bg-black/45 backdrop-blur-[3px] mobile:bg-[rgb(var(--color-bg))] mobile:backdrop-blur-none" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} onClick={isMobile ? undefined : close} />
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -10 }}
         transition={{ type: "spring", stiffness: 520, damping: 38 }}
-        className="relative w-full max-w-[680px]"
+        className="relative w-full max-w-[680px] mobile:flex mobile:h-full mobile:max-w-none mobile:flex-col"
       >
         <div className="relative">
-          <Search className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" strokeWidth={2} />
+          <Search className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted mobile:left-4" strokeWidth={2} />
           <input
             ref={inputRef}
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder={t("catalog.searchPlaceholder")}
             aria-label={t("catalog.searchPlaceholder")}
+            enterKeyHint="search"
             className={cn(
-              "h-14 w-full rounded-2xl bg-app-popover pl-14 text-base text-text shadow-2xl outline-none placeholder:text-muted",
-              filterDefs.length ? "pr-56" : "pr-24",
+              "h-14 w-full rounded-2xl bg-app-popover pl-14 text-base text-text shadow-2xl outline-none placeholder:text-muted mobile:h-12 mobile:border mobile:border-border mobile:pl-12 mobile:text-[15px] mobile:shadow-none",
+              filterDefs.length ? "pr-56 mobile:pr-[9.5rem]" : "pr-24 mobile:pr-12",
             )}
             style={popoverTheme}
           />
@@ -234,7 +240,7 @@ function SpotlightPanel() {
             {filterDefs.length > 0 ? (
               <FiltersControl count={count} open={filtersOpen} onToggle={() => setFiltersOpen((v) => !v)} onClear={() => setFilters({})} />
             ) : (
-              <kbd className="rounded-md border border-border px-1.5 py-0.5 text-[11px] font-semibold text-muted">Esc</kbd>
+              !isMobile && <kbd className="rounded-md border border-border px-1.5 py-0.5 text-[11px] font-semibold text-muted">Esc</kbd>
             )}
           </div>
         </div>
@@ -261,7 +267,7 @@ function SpotlightPanel() {
                     </button>
                   </div>
                 </div>
-                <div className="no-scrollbar max-h-[38vh] overflow-y-auto px-4 pb-4 pt-2">
+                <div className="no-scrollbar max-h-[38vh] overflow-y-auto px-4 pb-4 pt-2 mobile:max-h-[46vh]">
                   {filterCatalog.isLoading ? <p className="py-4 text-center text-sm text-muted">…</p> : <FilterSections defs={filterDefs} draft={draft} onChange={change} />}
                 </div>
               </div>
@@ -282,7 +288,12 @@ function SpotlightPanel() {
               setDefaultSelection(true);
               setSelected(0);
             }}
-            className={cn("no-scrollbar mt-2 overflow-y-auto rounded-2xl border border-border bg-app-popover p-1.5 shadow-2xl", filtersOpen ? "max-h-[28vh]" : "max-h-[56vh]")}
+            className={cn(
+              "no-scrollbar mt-2 overflow-y-auto rounded-2xl border border-border bg-app-popover p-1.5 shadow-2xl",
+              // Phone: the list takes the rest of the screen above the keyboard, flat on the page.
+              "mobile:max-h-none mobile:min-h-0 mobile:flex-1 mobile:border-0 mobile:bg-transparent mobile:p-0 mobile:shadow-none",
+              filtersOpen ? "max-h-[28vh]" : "max-h-[56vh]",
+            )}
           >
             {showingRecent && (
               <>

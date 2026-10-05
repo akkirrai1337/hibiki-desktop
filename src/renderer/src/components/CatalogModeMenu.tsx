@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowUpDown, Check } from "lucide-react";
 import { usePopoverTheme } from "@/lib/usePopoverTheme";
+import { BottomSheet, SheetOption } from "@/components/BottomSheet";
+import { isMobile } from "@/lib/mobile";
 
 export interface CatalogModeOption<T extends string> {
   value: T;
@@ -42,6 +44,23 @@ export function CatalogModeMenu<T extends string>({
   const selected = options.find((option) => option.value === value) ?? options[0];
 
   if (!selected) return null;
+
+  // Phone: the same button, the choices in a sheet from the bottom edge.
+  if (isMobile) {
+    return (
+      <>
+        <button onClick={() => setOpen(true)} className="flex items-center gap-2 rounded-full bg-text/[.07] px-3.5 py-2 text-[13px] font-semibold text-text/85 active:bg-text/[.12]">
+          <ArrowUpDown className="h-4 w-4" strokeWidth={2} />
+          <span className="max-w-[40vw] truncate">{selected.label}</span>
+        </button>
+        <BottomSheet open={open} onClose={() => setOpen(false)}>
+          {options.map((option) => (
+            <SheetOption key={option.value} label={option.label} selected={option.value === value} onClick={() => { onChange(option.value); setOpen(false); }} />
+          ))}
+        </BottomSheet>
+      </>
+    );
+  }
 
   return (
     <div ref={root} className="relative">

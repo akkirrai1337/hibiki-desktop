@@ -8,6 +8,8 @@ import { usePopoverTheme } from "@/lib/usePopoverTheme";
 import { FilterControl, FilterSection, LongList, inWindowOrder, isLongList } from "@/components/SearchFiltersPanel";
 import { isFilterSet, withFilterValue, type SearchFilters } from "@/lib/searchFilters";
 import { withoutUnknown } from "@/lib/filterVisuals";
+import { BottomSheet } from "@/components/BottomSheet";
+import { isMobile } from "@/lib/mobile";
 import type { FilterValue, SearchFilterDef } from "@shared/types";
 
 // Picking a filter reloads the results under the panel, so changes are sent on once the user pauses
@@ -42,8 +44,8 @@ export function FiltersControl({ count, open, onToggle, onClear }: { count: numb
         onClick={onToggle}
         aria-expanded={open}
         className={cn(
-          "flex items-center gap-2 rounded-l-lg px-3.5 py-2 text-sm font-semibold transition-[background-color,border-radius] duration-200",
-          count > 0 ? "rounded-r" : "rounded-r-lg",
+          "flex items-center gap-2 rounded-l-lg px-3.5 py-2 text-sm font-semibold transition-[background-color,border-radius] duration-200 mobile:rounded-l-full mobile:text-[13px]",
+          count > 0 ? "rounded-r" : "rounded-r-lg mobile:rounded-r-full",
           open ? "bg-text/[.12] text-text" : "bg-text/[.06] text-text/80 hover:bg-text/[.1]",
         )}
       >
@@ -62,7 +64,7 @@ export function FiltersControl({ count, open, onToggle, onClear }: { count: numb
             onClick={onClear}
             aria-label={t("search.filters.reset")}
             title={t("search.filters.reset")}
-            className="flex items-center justify-center overflow-hidden rounded-l rounded-r-lg bg-text/[.06] text-text/80 transition-colors hover:bg-text/[.1] hover:text-text"
+            className="flex items-center justify-center overflow-hidden rounded-l rounded-r-lg bg-text/[.06] mobile:rounded-r-full text-text/80 transition-colors hover:bg-text/[.1] hover:text-text"
           >
             <X className="h-4 w-4 shrink-0" strokeWidth={2.25} />
           </motion.button>
@@ -127,6 +129,33 @@ export function CatalogFilters({
   }, [open]);
 
   const count = pickedCount(defs, filters);
+
+  if (isMobile) {
+    // Phone: the toolbar starts at the left edge, and the filters rise as a sheet instead of a side drawer.
+    return (
+      <div className="mb-4">
+        <div className="flex items-center gap-2">
+          {lead}
+          {defs.length > 0 && <FiltersControl count={count} open={open} onToggle={() => setOpen((v) => !v)} onClear={() => onChange({})} />}
+          {children}
+        </div>
+        <BottomSheet
+          open={open}
+          onClose={() => setOpen(false)}
+          title={t("search.filters.button")}
+          className="h-[85vh]"
+          footer={
+            <div className="flex items-center justify-between gap-2">
+              <button onClick={() => onChange({})} disabled={count === 0} className="rounded-full px-4 py-2.5 text-sm font-semibold text-muted active:bg-text/[.06] disabled:opacity-40">{t("search.filters.reset")}</button>
+              <button onClick={() => setOpen(false)} className="rounded-full bg-text px-6 py-2.5 text-sm font-bold text-bg active:opacity-90">{t("search.filters.done")}</button>
+            </div>
+          }
+        >
+          <div className="px-3 pt-2">{loading ? <p className="py-6 text-center text-sm text-muted">…</p> : <FilterSections defs={defs} draft={draft} onChange={change} />}</div>
+        </BottomSheet>
+      </div>
+    );
+  }
 
   return (
     <div className="mb-6">

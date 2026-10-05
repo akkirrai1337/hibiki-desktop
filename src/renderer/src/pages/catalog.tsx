@@ -3,7 +3,7 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
-import { Radio } from "lucide-react";
+import { Radio, Search } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
 import { AnimeCard, PosterGrid, PosterGridSkeleton } from "@/components/AnimeCard";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -13,6 +13,8 @@ import { sortLabel } from "@/lib/catalogSort";
 import { CatalogFilters } from "@/components/CatalogFilters";
 import { useCatalogIntentStore } from "@/stores/catalogIntentStore";
 import { activeFilterCount, toSearchRequestFilters, type SearchFilters } from "@/lib/searchFilters";
+import { isMobile } from "@/lib/mobile";
+import { useSpotlightStore } from "@/stores/spotlightStore";
 import type { AnimeTitle } from "@shared/types";
 
 // What "browse" can be sorted by is the source's business: it declares its own orders in
@@ -104,7 +106,18 @@ export function CatalogBrowsePage() {
   }, [catalogAutoLoad, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return (
-    <div className="min-h-full bg-app-bg px-8 py-8 pb-16">
+    <div className="min-h-full bg-app-bg px-8 py-8 pb-16 mobile:px-4 mobile:pb-6 mobile:pt-3">
+      {/* Phone: the search lives here, at the top of the catalog tab - a field that opens the same
+          search panel the desktop title bar opens. */}
+      {isMobile && (
+        <button
+          onClick={() => useSpotlightStore.getState().setOpen(true)}
+          className="mb-3 flex h-12 w-full items-center gap-3 rounded-2xl border border-border bg-app-popover px-4 text-left text-[15px] text-muted active:bg-text/[.06]"
+        >
+          <Search className="h-5 w-5 shrink-0" strokeWidth={2} />
+          <span className="truncate">{t("catalog.searchPlaceholder")}</span>
+        </button>
+      )}
       {sources.isLoading && <PosterGridSkeleton count={15} />}
       {sources.isError && <ErrorBanner message={(sources.error as Error).message} />}
       {sources.data?.length === 0 && <EmptySources />}
@@ -157,14 +170,19 @@ function SortMenu({ mode, modes, onChange }: { mode: string | undefined; modes: 
 const GRID_COLUMNS_DEFAULT = 5;
 const GRID_COLUMNS_XL = 6;
 const GRID_XL_QUERY = "(min-width: 1280px)";
-const GRID_GAP_Y = 24; // px, matches PosterGrid's own `gap-y-6`
+const GRID_GAP_Y = isMobile ? 20 : 24; // px, matches PosterGrid's own `gap-y-6` (`mobile:gap-y-5`)
 
 /** Same column-count rule as PosterGrid (grid-cols-5, xl:grid-cols-6) - kept in sync
  * manually since VirtualGrid needs the count as a number (to group items into rows) rather than
  * just a CSS class. */
 function useGridColumnCount(): number {
+  // A phone always has three, matching PosterGrid's `mobile:grid-cols-3`.
   const [columns, setColumns] = useState(() => (typeof window !== "undefined" && window.matchMedia(GRID_XL_QUERY).matches ? GRID_COLUMNS_XL : GRID_COLUMNS_DEFAULT));
   useEffect(() => {
+    if (isMobile) {
+      setColumns(3);
+      return;
+    }
     const mql = window.matchMedia(GRID_XL_QUERY);
     const onChange = () => setColumns(mql.matches ? GRID_COLUMNS_XL : GRID_COLUMNS_DEFAULT);
     onChange();
@@ -206,7 +224,7 @@ function VirtualGrid({ items }: { items: AnimeTitle[] }) {
     // A rough guess (poster + two-line title + meta row, at a typical card width) - corrected per
     // row against its real rendered height via `measureElement` below, so this only matters for
     // the very first estimate before anything's actually been measured.
-    estimateSize: () => 380,
+    estimateSize: () => (isMobile ? 240 : 380),
     overscan: 4,
     gap: GRID_GAP_Y,
   });
@@ -230,7 +248,7 @@ function VirtualGrid({ items }: { items: AnimeTitle[] }) {
             data-index={virtualRow.index}
             style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${virtualRow.start}px)` }}
           >
-            <div className="grid gap-x-4" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
+            <div className="grid gap-x-4 mobile:gap-x-3" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
               {rows[virtualRow.index].map((item) => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}
             </div>
           </div>
