@@ -1209,9 +1209,19 @@ function MobileTitleChrome({ posterUrl, siteUrl }: { posterUrl?: string | null; 
   // Dense enough to read over the page's text once it scrolls underneath, not only over artwork.
   const button = "flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white ring-1 ring-white/10 backdrop-blur-md active:bg-black/80";
   return <>
-    <div className="absolute inset-x-0 -z-10 overflow-hidden" style={{ top: "calc(-1 * var(--safe-top))", height: "calc(19rem + var(--safe-top))" }}>
+    {/* Dissolves into whatever is behind the page (a mask, as the profile banner does) - a fade to the
+        plain background colour cut off hard against a background theme's own tint. */}
+    <div
+      className="absolute inset-x-0 -z-10 overflow-hidden"
+      style={{
+        top: "calc(-1 * var(--safe-top))",
+        height: "calc(19rem + var(--safe-top))",
+        maskImage: "linear-gradient(to bottom, #000 50%, transparent)",
+        WebkitMaskImage: "linear-gradient(to bottom, #000 50%, transparent)",
+      }}
+    >
       {posterUrl && <img src={posterUrl} alt="" className="h-full w-full object-cover object-[center_22%] opacity-75" />}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-[rgb(var(--color-bg)/0.25)] to-[rgb(var(--color-bg))]" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/25 to-black/50" />
     </div>
     <div className="pointer-events-none fixed inset-x-0 z-40 flex justify-between px-3" style={{ top: "calc(0.375rem + var(--safe-top))" }}>
       <button
