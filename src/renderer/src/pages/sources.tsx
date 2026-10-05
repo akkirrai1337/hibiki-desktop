@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isMobile } from "@/lib/mobile";
+import { MobilePageHeader } from "@/components/MobilePageHeader";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
@@ -296,7 +298,8 @@ export function SourcesPage() {
 
   return (
     <div className="flex min-h-full flex-col bg-app-bg">
-      <div className="px-8 pt-8">
+      <div className="px-8 pt-8 mobile:px-4 mobile:pt-2">
+        {isMobile && <MobilePageHeader title={t("nav.sources")} parent="/profile" />}
         <div className="flex gap-1 border-b border-border">
           <TabButton layoutId="sourcesTabIndicator" active={tab === "extensions"} onClick={() => setTab("extensions")}>{t("sources.tabs.extensions")}</TabButton>
           <TabButton layoutId="sourcesTabIndicator" active={tab === "repositories"} onClick={() => setTab("repositories")}>{t("sources.tabs.repositories")}</TabButton>
@@ -312,7 +315,7 @@ export function SourcesPage() {
                 transition={{ duration: 0.15 }}
                 className="flex flex-1 items-center gap-2"
               >
-                <div className="relative flex-1 max-w-sm">
+                <div className="relative flex-1 max-w-sm mobile:max-w-none">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" strokeWidth={2} />
                   <input
                     value={query}
@@ -366,7 +369,7 @@ export function SourcesPage() {
         </div>
       </div>
 
-      <div className="flex-1 px-8 pb-12 pt-6">
+      <div className="flex-1 px-8 pb-12 pt-6 mobile:px-4 mobile:pb-6 mobile:pt-4">
         <AnimatePresence mode="wait" initial={false}>
           {tab === "extensions" ? (
             <motion.div

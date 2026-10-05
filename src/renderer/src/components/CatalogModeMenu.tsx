@@ -27,7 +27,8 @@ export function CatalogModeMenu<T extends string>({
   // Closes on a press outside or Escape. There is deliberately no full-screen backdrop for this: it
   // would swallow the mouse wheel, and with the menu open the page behind it could not be scrolled.
   useEffect(() => {
-    if (!open) return;
+    // The phone's sheet closes itself (scrim, Back, drag); this would close it on the tap that picks.
+    if (!open || isMobile) return;
     const onPointerDown = (event: PointerEvent) => {
       if (!root.current?.contains(event.target as Node)) setOpen(false);
     };

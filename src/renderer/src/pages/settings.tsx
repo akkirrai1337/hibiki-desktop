@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { MemoryStick, ArrowDownToLine, ArrowUpDown, Ban, Check, CheckCircle2, ChevronDown, ChevronUp, DatabaseBackup, FileText, FolderOpen, Home, Info, Languages, MessageCircle, MonitorPlay, Moon, Palette, RefreshCw, RotateCcw, ScrollText, SlidersHorizontal, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { isMobile } from "@/lib/mobile";
+import { MobilePageHeader } from "@/components/MobilePageHeader";
 import { Switch } from "@/components/Switch";
 import { SUPPORTED_LOCALES, setLocale } from "@/lib/i18n";
 import { SKIP_TIMER_MAX_SECONDS, SKIP_TIMER_MIN_SECONDS, WATCHED_THRESHOLD_MAX_PERCENT, WATCHED_THRESHOLD_MIN_PERCENT, usePlayerPrefsStore } from "@/stores/playerPrefsStore";
@@ -301,11 +303,13 @@ function SettingsCategoryButton({ active, icon: Icon, label, onClick }: { active
       onClick={onClick}
       className={cn(
         "relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-muted transition-colors hover:bg-text/[.05] hover:text-text",
+        // Phone: a chip in a row, not a line in a rail.
+        "mobile:w-auto mobile:shrink-0 mobile:gap-2 mobile:rounded-full mobile:bg-text/[.05] mobile:px-3.5",
         active && "text-text",
       )}
     >
-      <span className={cn("absolute -left-3 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-accent transition-opacity", active ? "opacity-100" : "opacity-0")} />
-      {active && <span className="absolute inset-0 rounded-lg bg-text/[.08]" />}
+      <span className={cn("absolute -left-3 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-accent transition-opacity mobile:hidden", active ? "opacity-100" : "opacity-0")} />
+      {active && <span className="absolute inset-0 rounded-lg bg-text/[.08] mobile:rounded-full mobile:bg-accent/20" />}
       <span className="relative z-10 shrink-0"><Icon className="h-[17px] w-[17px]" strokeWidth={2} /></span>
       <span className="relative z-10 truncate">{label}</span>
     </button>
@@ -373,20 +377,21 @@ function DiagnosticsSection() {
         <p className="text-sm font-semibold text-text">{t("settings.diagnostics.export")}</p>
         <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.diagnostics.exportHint")}</p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <button
+          {/* Saving the log and opening its folder go through the desktop's file dialogs and file manager. */}
+          {!isMobile && <button
             onClick={handleExport}
             disabled={busy}
             className="rounded-lg bg-text/[.08] px-3 py-1.5 text-sm font-semibold text-text transition-colors hover:bg-text/[.14] disabled:opacity-50"
           >
             {t("settings.diagnostics.exportAction")}
-          </button>
-          <button
+          </button>}
+          {!isMobile && <button
             onClick={() => hibiki.logs.openFolder()}
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-muted transition-colors hover:bg-text/[.06]"
           >
             <FolderOpen className="h-3.5 w-3.5" strokeWidth={2} />
             {t("settings.diagnostics.openFolder")}
-          </button>
+          </button>}
           <button
             onClick={() => setExpanded((value) => !value)}
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-muted transition-colors hover:bg-text/[.06]"
@@ -421,7 +426,8 @@ function DiagnosticsSection() {
         )}
       </SettingsRow>
     </SettingsSection>
-    <MemoryDiagnostics />
+    {/* Electron's own processes and its GPU switch - nothing of the kind to show on the phone. */}
+    {!isMobile && <MemoryDiagnostics />}
     </>
   );
 }
@@ -701,7 +707,8 @@ export function SettingsPage() {
     { id: "general" as const, label: t("settings.general"), icon: SlidersHorizontal },
     { id: "player" as const, label: t("settings.player.title"), icon: MonitorPlay },
     ...(hasSource ? [{ id: "home" as const, label: t("settings.home.title"), icon: Home }] : []),
-    { id: "data" as const, label: t("settings.data.title"), icon: DatabaseBackup },
+    // Backups write and read a file through the desktop's save/open dialogs; the phone has none yet.
+    ...(isMobile ? [] : [{ id: "data" as const, label: t("settings.data.title"), icon: DatabaseBackup }]),
     { id: "diagnostics" as const, label: t("settings.diagnostics.title"), icon: ScrollText },
   ];
   const [category, setCategory] = useState<(typeof categories)[number]["id"]>("appearance");
@@ -710,13 +717,14 @@ export function SettingsPage() {
   // no longer exists in the rail.
   const activeCategory = categories.some((c) => c.id === category) ? category : categories[0].id;
 
-  return <div className="flex h-full bg-app-bg">
-    <nav className="flex w-56 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border px-3 py-8">
+  return <div className="flex h-full bg-app-bg mobile:h-auto mobile:min-h-full mobile:flex-col">
+    {isMobile && <div className="px-4 pt-2"><MobilePageHeader title={t("nav.settings")} parent="/profile" /></div>}
+    <nav className="flex w-56 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border px-3 py-8 mobile:[scrollbar-width:none] mobile:w-auto mobile:flex-row mobile:gap-1.5 mobile:overflow-x-auto mobile:border-r-0 mobile:px-4 mobile:pb-2 mobile:pt-0">
       {categories.map((c) => (
         <SettingsCategoryButton key={c.id} active={activeCategory === c.id} icon={c.icon} label={c.label} onClick={() => setCategory(c.id)} />
       ))}
     </nav>
-    <div className="min-w-0 flex-1 overflow-y-auto p-8">
+    <div className="min-w-0 flex-1 overflow-y-auto p-8 mobile:overflow-visible mobile:px-4 mobile:pb-6 mobile:pt-3">
     {/* Not centered (`mx-auto`) - a wide window would then float this column in the middle of
         whatever's left of the rail, forcing a long mouse trip from the category just clicked over
         to the settings it opened. Left-aligned right next to the rail instead, same as the rail
@@ -812,14 +820,15 @@ export function SettingsPage() {
         </SettingsRow>
 
         <SettingsGroup>
-          <SettingsToggleRow
+          {/* Discord and the app's own updater are desktop programs; the phone has neither. */}
+          {!isMobile && <SettingsToggleRow
             icon={<MessageCircle className="h-4 w-4" strokeWidth={2} />}
             title={t("settings.discord.enabled")}
             hint={t("settings.discord.hint")}
             checked={discordRpcEnabled}
             onChange={setDiscordRpcEnabled}
-          />
-          {discordRpcEnabled && (
+          />}
+          {!isMobile && discordRpcEnabled && (
             <SettingsToggleRow
               indent
               title={t("settings.discord.ignoreNsfw")}
@@ -835,13 +844,13 @@ export function SettingsPage() {
             checked={catalogAutoLoad}
             onChange={setCatalogAutoLoad}
           />
-          <SettingsToggleRow
+          {!isMobile && <SettingsToggleRow
             icon={<RefreshCw className="h-4 w-4" strokeWidth={2} />}
             title={t("settings.autoUpdate")}
             hint={t("settings.autoUpdateHint")}
             checked={autoUpdate}
             onChange={setAutoUpdate}
-          />
+          />}
         </SettingsGroup>
       </SettingsSection>
       )}

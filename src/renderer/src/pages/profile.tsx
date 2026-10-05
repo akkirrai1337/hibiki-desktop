@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { AnimatePresence, motion } from "motion/react";
-import { Pencil, User, Check, Film, Library, Clock, CheckCircle2, Gauge, Sparkles, Trash2, X } from "lucide-react";
+import { Pencil, User, Check, Film, Library, Clock, CheckCircle2, Gauge, Radio, Settings, Sparkles, Trash2, X } from "lucide-react";
 import { hibiki, profileBannerUrl } from "@/lib/hibiki";
 import { Modal } from "@/components/Modal";
 import { animeTitle } from "@/components/AnimeCard";
@@ -14,6 +14,9 @@ import { useProfileStore } from "@/stores/profileStore";
 import { useUiStore } from "@/stores/uiStore";
 import { useAchievementsStore } from "@/stores/achievementsStore";
 import { cn } from "@/lib/cn";
+import { isMobile } from "@/lib/mobile";
+import { useSourceUpdateCount } from "@/lib/sourceUpdates";
+import { MobileShortcutRow } from "@/components/MobilePageHeader";
 import { LIBRARY_CATEGORY_ICONS, LIBRARY_CATEGORY_LABEL_KEYS } from "@/lib/libraryCategories";
 import { AchievementGrid } from "@/components/AchievementCards";
 import { ACHIEVEMENT_TIER_BY_ID } from "@/lib/achievements";
@@ -22,7 +25,8 @@ import { ACTIVITY_DAYS, buildActivitySeries, computeStreaks, StreakBadge, type S
 import type { DailyActivity, LibraryEntry, XpEvent } from "@shared/types";
 
 const RECENT_LIMIT = 5;
-const CONTINUE_LIMIT = 4;
+// Three on a phone: four posters across its width are too small to tell apart.
+const CONTINUE_LIMIT = isMobile ? 3 : 4;
 // Just needs to be well past any realistic account age - listDailyActivity's own "days" param is
 // a plain cutoff (now - days), not a page size, so this is a cheap way to ask for "everything"
 // without a dedicated lifetime-totals endpoint. Matches useAchievementUnlocks's own copy of this
@@ -132,6 +136,7 @@ export function ProfilePage() {
   // useAchievementUnlocks), so in practice this only actually shows on a genuinely cold first
   // load, not once per profile visit.
   const isLoading = libraryQuery.isLoading || activityQuery.isLoading || lifetimeActivityQuery.isLoading || xpEventsQuery.isLoading;
+  const sourceUpdateCount = useSourceUpdateCount();
   if (isLoading) return <ProfileSkeleton />;
 
   return (
@@ -151,11 +156,17 @@ export function ProfilePage() {
       {/* A 4th column only kicks in once the window is wide enough to actually give it room
           (2xl, 1536px+) - below that, XP history just stacks under achievements inside their
           shared column instead of squeezing into its own sliver. */}
-      <div className="grid max-w-6xl grid-cols-1 gap-8 px-8 pt-8 lg:grid-cols-3 2xl:max-w-[1600px] 2xl:grid-cols-4">
-        <div className="space-y-8 lg:col-span-2">
+      <div className="grid max-w-6xl grid-cols-1 gap-8 px-8 pt-8 lg:grid-cols-3 2xl:max-w-[1600px] 2xl:grid-cols-4 mobile:gap-7 mobile:px-4 mobile:pt-5">
+        <div className="space-y-8 lg:col-span-2 mobile:space-y-7">
+          {/* Phone: settings and sources live under the profile tab (the sidebar's own entries on desktop). */}
+          {isMobile && <div className="-mb-2"><MobileShortcutRow items={[
+            { to: "/settings", label: t("nav.settings"), icon: Settings },
+            { to: "/sources", label: t("nav.sources"), icon: Radio, badge: sourceUpdateCount },
+          ]} /></div>}
           {/* The streak card moved up next to the name (see StreakBadge in ProfileHeader) - this
-              slot now shows library size instead of just dropping to 3 cards. */}
-          <div className="grid grid-cols-5 gap-4">
+              slot now shows library size instead of just dropping to 3 cards. On a phone the five
+              cards are a row the thumb scrolls. */}
+          <div className="grid grid-cols-5 gap-4 mobile:[scrollbar-width:none] mobile:-mx-4 mobile:flex mobile:gap-2.5 mobile:overflow-x-auto mobile:px-4 mobile:[&>*]:w-[34vw] mobile:[&>*]:shrink-0">
             <StatCard icon={Film} label={t("profile.statCompletedTitles")} value={completedTitlesCount} />
             <StatCard icon={Library} label={t("profile.statLibrarySize")} value={entries.length} />
             <StatCard icon={Clock} label={t("profile.statWatchTime")} value={t("profile.hours", { hours: (totalWatchedMs / 3_600_000).toFixed(1) })} />
@@ -244,7 +255,7 @@ function ClearXpHistoryDialog({ onConfirm, onDismiss }: { onConfirm: () => void;
 function ProfileSkeleton() {
   return (
     <div className="min-h-full animate-pulse bg-app-bg pb-16">
-      <div className="border-b border-border px-8 pb-8 pt-10">
+      <div className="border-b border-border px-8 pb-8 pt-10 mobile:px-4">
         <div className="flex items-center gap-5">
           <div className="h-20 w-20 shrink-0 rounded-full bg-text/[.06]" />
           <div className="min-w-0 flex-1">
@@ -253,9 +264,9 @@ function ProfileSkeleton() {
           </div>
         </div>
       </div>
-      <div className="grid max-w-6xl grid-cols-1 gap-8 px-8 pt-8 lg:grid-cols-3 2xl:max-w-[1600px] 2xl:grid-cols-4">
+      <div className="grid max-w-6xl grid-cols-1 gap-8 px-8 pt-8 lg:grid-cols-3 2xl:max-w-[1600px] 2xl:grid-cols-4 mobile:px-4">
         <div className="space-y-8 lg:col-span-2">
-          <div className="grid grid-cols-5 gap-4">
+          <div className="grid grid-cols-5 gap-4 mobile:grid-cols-3">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="rounded-2xl border border-border bg-text/[.03] p-4">
                 <div className="h-5 w-5 rounded bg-text/[.08]" />
@@ -341,7 +352,7 @@ function ProfileHeader({
           than pinned to its bottom - a taller banner used to leave the avatar/name hugging the
           bottom edge with a lot of dead space above them instead of sitting in the middle of it. */}
       <div
-        className="relative flex w-full items-center gap-5 px-8 py-8"
+        className="relative flex w-full items-center gap-5 px-8 py-8 mobile:gap-4 mobile:px-4 mobile:py-6"
         style={bannerFilename ? ({ "--color-text": "244 244 245", "--color-muted": "161 161 170" } as React.CSSProperties) : undefined}
       >
         <AvatarPicker avatarDataUrl={avatarDataUrl} onChange={onAvatarChange} />
@@ -422,7 +433,7 @@ function BannerActions({ filename, onChange }: { filename: string | null; onChan
         disabled={busy}
         aria-label={t("profile.editBanner")}
         title={t("profile.editBanner")}
-        className="pointer-events-auto absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg bg-black/40 text-text opacity-0 transition-opacity hover:bg-black/60 group-hover/header:opacity-100"
+        className="pointer-events-auto absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg bg-black/40 text-text opacity-0 transition-opacity hover:bg-black/60 group-hover/header:opacity-100 mobile:opacity-100"
       >
         <Pencil className="h-4 w-4" strokeWidth={2.25} />
       </button>
@@ -432,7 +443,7 @@ function BannerActions({ filename, onChange }: { filename: string | null; onChan
           onClick={onClear}
           aria-label={t("profile.removeBanner")}
           title={t("profile.removeBanner")}
-          className="pointer-events-auto absolute right-14 top-3 flex h-8 w-8 items-center justify-center rounded-lg bg-black/40 text-text opacity-0 transition-opacity hover:bg-black/60 group-hover/header:opacity-100"
+          className="pointer-events-auto absolute right-14 top-3 flex h-8 w-8 items-center justify-center rounded-lg bg-black/40 text-text opacity-0 transition-opacity hover:bg-black/60 group-hover/header:opacity-100 mobile:opacity-100"
         >
           <X className="h-4 w-4" strokeWidth={2.25} />
         </button>
@@ -623,7 +634,7 @@ function NameEditor({ name, onChange, streak, playStreakOnMount }: { name: strin
       <StreakBadge current={streak.current} best={streak.best} atRisk={streak.atRisk} playOnMount={playStreakOnMount} />
       <button onClick={() => { setDraft(name); setEditing(true); }} aria-label={t("profile.editName")} className="group flex min-w-0 items-center gap-2">
         <h1 className="select-text truncate text-2xl font-bold text-text">{name}</h1>
-        <Pencil className="h-4 w-4 shrink-0 text-muted/70 opacity-0 transition-opacity group-hover:opacity-100" strokeWidth={2} />
+        <Pencil className="h-4 w-4 shrink-0 text-muted/70 opacity-0 transition-opacity group-hover:opacity-100 mobile:opacity-100" strokeWidth={2} />
       </button>
     </div>
   );

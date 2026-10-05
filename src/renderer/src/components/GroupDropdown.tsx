@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
 import { Check, ChevronDown, Mic } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { BottomSheet, SheetOption } from "@/components/BottomSheet";
+import { isMobile } from "@/lib/mobile";
 import type { PlaybackGroup } from "@shared/types";
 
 // A comfortable default cap - but the button can sit anywhere in the viewport (this dropdown gets
@@ -15,6 +18,7 @@ const DROPDOWN_VIEWPORT_MARGIN = 16;
 // picker (previously a wall of pill buttons there, one per dub, which didn't scale past a handful
 // of translation teams the way this dropdown already did).
 export function GroupDropdown({ groups, activeGroupId, onSelect, align = "left" }: { groups: PlaybackGroup[]; activeGroupId?: string; onSelect: (id: string) => void; align?: "left" | "right" }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [placement, setPlacement] = useState<{ direction: "down" | "up"; maxHeight: number }>({ direction: "down", maxHeight: DROPDOWN_MAX_HEIGHT });
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -27,7 +31,8 @@ export function GroupDropdown({ groups, activeGroupId, onSelect, align = "left" 
   // pattern the player's own settings menu and TitleBar's filters panel already use) closes it
   // just the same without ever intercepting scroll.
   useEffect(() => {
-    if (!open) return;
+    // The phone's sheet closes itself (scrim, Back, drag); this would close it on the tap that picks.
+    if (!open || isMobile) return;
     const onPointerDown = (e: PointerEvent) => {
       if (e.target instanceof Node && (buttonRef.current?.contains(e.target) || panelRef.current?.contains(e.target))) return;
       setOpen(false);
@@ -49,6 +54,24 @@ export function GroupDropdown({ groups, activeGroupId, onSelect, align = "left" 
     }
     setOpen((v) => !v);
   };
+
+  // Phone: the same button; the dubs in a sheet from the bottom edge, where a long list has room.
+  if (isMobile) {
+    return (
+      <>
+        <button type="button" onClick={() => setOpen(true)} className="flex min-w-0 max-w-full items-center gap-2 rounded-full bg-text/[.07] px-3.5 py-2 text-[13px] font-semibold text-text/85 active:bg-text/[.12]">
+          <Mic className="h-4 w-4 shrink-0 text-muted" strokeWidth={2} />
+          <span className="truncate">{active.title}{active.qualityLabel ? ` · ${active.qualityLabel}` : ""}</span>
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted" strokeWidth={2} />
+        </button>
+        <BottomSheet open={open} onClose={() => setOpen(false)} title={<span className="flex items-baseline gap-2">{t("detail.downloadDialog.translation")}<span className="text-sm font-semibold tabular-nums text-muted">{groups.length}</span></span>}>
+          {groups.map((g) => (
+            <SheetOption key={g.id} label={g.title} detail={g.qualityLabel ?? undefined} selected={g.id === active.id} onClick={() => { onSelect(g.id); setOpen(false); }} />
+          ))}
+        </BottomSheet>
+      </>
+    );
+  }
 
   return (
     <div className="relative inline-block">

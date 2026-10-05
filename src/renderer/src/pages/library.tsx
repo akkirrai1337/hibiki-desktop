@@ -3,11 +3,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
 import * as ContextMenu from "@radix-ui/react-context-menu";
-import { Bookmark, Trash2, TriangleAlert } from "lucide-react";
+import { Bookmark, Download, History, Trash2, TriangleAlert } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
 import { AnimeCard, type AnimeCardSource } from "@/components/AnimeCard";
 import { usePopoverTheme } from "@/lib/usePopoverTheme";
 import { cn } from "@/lib/cn";
+import { isMobile } from "@/lib/mobile";
+import { MobileShortcutRow } from "@/components/MobilePageHeader";
 import { ALL_LIBRARY_CATEGORIES, LIBRARY_CATEGORY_ICONS, LIBRARY_CATEGORY_LABEL_KEYS } from "@/lib/libraryCategories";
 import type { LibraryCategory, LibraryEntry } from "@shared/types";
 
@@ -28,9 +30,17 @@ export function LibraryPage() {
   const visible = filter === "all" ? entries : entries.filter((e) => e.category === filter);
 
   return (
-    <div className="min-h-full bg-app-bg px-8 py-8 pb-16">
+    <div className="min-h-full bg-app-bg px-8 py-8 pb-16 mobile:px-4 mobile:pb-6 mobile:pt-4">
+      {/* Phone: the tab's name, and the history and downloads it holds (the sidebar's own entries on desktop). */}
+      {isMobile && <>
+        <h1 className="mb-4 text-[26px] font-bold tracking-[-.02em] text-text">{t("library.title")}</h1>
+        <MobileShortcutRow items={[
+          { to: "/history", label: t("history.title"), icon: History },
+          { to: "/downloads", label: t("downloads.title"), icon: Download },
+        ]} />
+      </>}
       {libraryQuery.isError && <ErrorBanner message={(libraryQuery.error as Error).message} />}
-      <div className="mb-6 flex flex-wrap gap-2">
+      <div className="mb-6 flex flex-wrap gap-2 mobile:[scrollbar-width:none] mobile:-mx-4 mobile:mb-4 mobile:flex-nowrap mobile:overflow-x-auto mobile:px-4">
         <CategoryChip active={filter === "all"} onClick={() => setFilter("all")} label={t("library.filterAll")} count={entries.length} />
         {ALL_LIBRARY_CATEGORIES.map((category) => (
           <CategoryChip
@@ -48,7 +58,7 @@ export function LibraryPage() {
         // nothing in this one.
         <EmptyState text={entries.length === 0 ? t("library.empty") : t("library.categoryEmpty")} />
       ) : (
-        <div className="grid grid-cols-5 gap-x-4 gap-y-6">
+        <div className="grid grid-cols-5 gap-x-4 gap-y-6 mobile:grid-cols-3 mobile:gap-x-3 mobile:gap-y-5">
           {visible.map((entry) => (
             <LibraryCard key={`${entry.sourceId}:${entry.animeId}`} entry={entry} source={sourceById.get(entry.sourceId)} />
           ))}
@@ -124,7 +134,7 @@ function CategoryChip({
     <button
       onClick={onClick}
       className={cn(
-        "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+        "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors mobile:shrink-0 mobile:rounded-full mobile:px-3.5 mobile:py-2",
         active ? "bg-accent text-accent-fg" : "bg-text/[.05] text-muted hover:bg-text/[.08] hover:text-text",
       )}
     >
@@ -137,7 +147,7 @@ function CategoryChip({
 
 function EmptyState({ text }: { text: string }) {
   return (
-    <div className="flex min-h-[calc(100vh-220px)] items-center justify-center">
+    <div className="flex min-h-[calc(100vh-220px)] items-center justify-center mobile:min-h-[40vh]">
       <div className="max-w-sm text-center">
         <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-text/[.06]">
           <Bookmark className="h-6 w-6 text-muted" strokeWidth={1.75} />

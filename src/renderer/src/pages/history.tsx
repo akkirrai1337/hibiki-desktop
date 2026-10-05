@@ -1,4 +1,6 @@
 import { useMemo } from "react";
+import { isMobile } from "@/lib/mobile";
+import { MobilePageHeader } from "@/components/MobilePageHeader";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -29,8 +31,8 @@ export function HistoryPage() {
   const sourceById = useMemo(() => new Map((sources.data ?? []).map((s) => [s.id, s])), [sources.data]);
 
   return (
-    <div className="min-h-full bg-app-bg px-8 py-8 pb-16">
-      <h1 className="mb-6 text-xl font-bold tracking-[-.02em] text-text">{t("history.title")}</h1>
+    <div className="min-h-full bg-app-bg px-8 py-8 pb-16 mobile:px-4 mobile:pb-6 mobile:pt-2">
+      {isMobile ? <MobilePageHeader title={t("history.title")} parent="/library" /> : <h1 className="mb-6 text-xl font-bold tracking-[-.02em] text-text">{t("history.title")}</h1>}
       {entries.length === 0 ? (
         <div className="flex min-h-[calc(100vh-220px)] items-center justify-center">
           <div className="max-w-sm text-center">
@@ -41,7 +43,7 @@ export function HistoryPage() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-4 xl:grid-cols-4">
+        <div className="grid grid-cols-3 gap-4 xl:grid-cols-4 mobile:grid-cols-2 mobile:gap-3">
           {entries.map((entry) => {
             const { sourceId, titleId, episodeId } = entry.progress;
             return (
