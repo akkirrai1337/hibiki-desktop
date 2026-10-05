@@ -243,6 +243,11 @@
   },
   "library": {
     "title": "Бібліотека",
+    "segments": {
+      "saved": "Збережене",
+      "history": "Історія",
+      "downloads": "Завантаження"
+    },
     "empty": "Поки що порожньо",
     "filterAll": "Усі",
     "categoryEmpty": "Тут поки що порожньо",

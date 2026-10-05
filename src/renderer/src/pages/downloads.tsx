@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { isMobile } from "@/lib/mobile";
-import { MobilePageHeader } from "@/components/MobilePageHeader";
+import { LibrarySegments } from "@/components/MobilePageHeader";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -57,8 +57,8 @@ export function DownloadsPage() {
   };
 
   return (
-    <div className="min-h-full bg-app-bg px-8 py-8 pb-16 mobile:px-4 mobile:pb-6 mobile:pt-2">
-      {isMobile ? <MobilePageHeader title={t("downloads.title")} parent="/library" /> : <h1 className="mb-6 text-xl font-bold tracking-[-.02em] text-text">{t("downloads.title")}</h1>}
+    <div className="min-h-full bg-app-bg px-8 py-8 pb-16 mobile:px-4 mobile:pb-6 mobile:pt-4">
+      {isMobile ? <LibrarySegments active="/downloads" /> : <h1 className="mb-6 text-xl font-bold tracking-[-.02em] text-text">{t("downloads.title")}</h1>}
       {groups.length === 0 ? (
         <div className="flex min-h-[calc(100vh-220px)] items-center justify-center">
           <div className="max-w-sm text-center">

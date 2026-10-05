@@ -243,6 +243,11 @@
   },
   "library": {
     "title": "Library",
+    "segments": {
+      "saved": "Saved",
+      "history": "History",
+      "downloads": "Downloads"
+    },
     "empty": "Nothing here yet",
     "filterAll": "All",
     "categoryEmpty": "Nothing here yet",

@@ -197,6 +197,11 @@
   },
   "library": {
     "title": "Библиотека",
+    "segments": {
+      "saved": "Сохранённое",
+      "history": "История",
+      "downloads": "Загрузки"
+    },
     "empty": "Пока пусто",
     "filterAll": "Все",
     "categoryEmpty": "Здесь пока пусто",

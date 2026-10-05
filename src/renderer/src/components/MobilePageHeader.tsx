@@ -1,11 +1,11 @@
 import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { cn } from "@/lib/cn";
 
 /**
- * Phone only: the top of a screen one level inside a tab (history and downloads under the library,
- * settings and sources under the profile) - its name, with the way back to the tab beside it.
+ * Phone only: the top of a screen one level inside a tab (settings and sources under the profile) -
+ * its name, with the way back to the tab beside it.
  */
 export function MobilePageHeader({ title, parent }: { title: string; parent: "/library" | "/profile" }) {
   const { t } = useTranslation();
@@ -31,31 +31,37 @@ export function MobilePageHeader({ title, parent }: { title: string; parent: "/l
   );
 }
 
-export interface MobileShortcut {
-  to: "/history" | "/downloads" | "/settings" | "/sources";
-  label: string;
-  icon: LucideIcon;
-  badge?: number;
-}
+const LIBRARY_SEGMENTS = [
+  { to: "/library", labelKey: "library.segments.saved" },
+  { to: "/history", labelKey: "library.segments.history" },
+  { to: "/downloads", labelKey: "library.segments.downloads" },
+] as const;
 
-/** Phone only: the screens a tab holds besides its own, as a row of wide buttons at its top. */
-export function MobileShortcutRow({ items }: { items: MobileShortcut[] }) {
+/**
+ * Phone only: the top of the library tab - its name, and a switch between what it holds: saved
+ * titles, watch history and downloads, as three views of one place rather than screens to visit.
+ * Switching replaces the entry, so Back leaves the tab instead of stepping through the switches.
+ */
+export function LibrarySegments({ active }: { active: (typeof LIBRARY_SEGMENTS)[number]["to"] }) {
+  const { t } = useTranslation();
   return (
-    <div className="mb-5 grid grid-cols-2 gap-2.5">
-      {items.map((item) => (
-        <Link
-          key={item.to}
-          to={item.to}
-          className="relative flex min-h-[3.75rem] items-center gap-2.5 rounded-2xl border border-border bg-text/[.04] px-3 py-2.5 active:bg-text/[.08]"
-        >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent-text">
-            <item.icon className="h-[18px] w-[18px]" strokeWidth={2} />
-          </span>
-          {/* Two lines rather than an ellipsis: half a phone's width is not much for "Watch history". */}
-          <span className="line-clamp-2 min-w-0 flex-1 text-[13px] font-semibold leading-tight text-text">{item.label}</span>
-          {item.badge ? <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-white">{item.badge > 9 ? "9+" : item.badge}</span> : null}
-        </Link>
-      ))}
+    <div className="mb-4">
+      <h1 className="mb-3.5 text-[26px] font-bold tracking-[-.02em] text-text">{t("library.title")}</h1>
+      <div className="grid grid-cols-3 rounded-full bg-text/[.06] p-1">
+        {LIBRARY_SEGMENTS.map((segment) => (
+          <Link
+            key={segment.to}
+            to={segment.to}
+            replace
+            className={cn(
+              "truncate rounded-full px-2 py-2 text-center text-[13px] font-semibold transition-colors",
+              segment.to === active ? "bg-app-popover text-text shadow-[0_1px_4px_rgba(0,0,0,0.35)]" : "text-muted",
+            )}
+          >
+            {t(segment.labelKey)}
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }
