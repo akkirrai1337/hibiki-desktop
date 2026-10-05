@@ -10,7 +10,7 @@ export function Modal({ onDismiss, children }: { onDismiss: () => void; children
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 mobile:z-[90]"
       onClick={onDismiss}
     >
       {/* No `scale` - see LibraryButton in anime.$sourceId.$animeId.tsx for why. */}

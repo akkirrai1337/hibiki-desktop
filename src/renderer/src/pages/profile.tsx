@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { AnimatePresence, motion } from "motion/react";
-import { Pencil, User, Check, Film, Library, Clock, CheckCircle2, Gauge, Radio, Settings, Sparkles, Trash2, X } from "lucide-react";
+import { Pencil, User, Check, ChevronRight, Film, Library, Clock, CheckCircle2, Gauge, Radio, Settings, Sparkles, Trash2, X } from "lucide-react";
 import { hibiki, profileBannerUrl } from "@/lib/hibiki";
 import { Modal } from "@/components/Modal";
 import { animeTitle } from "@/components/AnimeCard";
@@ -16,7 +16,7 @@ import { useAchievementsStore } from "@/stores/achievementsStore";
 import { cn } from "@/lib/cn";
 import { isMobile } from "@/lib/mobile";
 import { useSourceUpdateCount } from "@/lib/sourceUpdates";
-import { MobileShortcutRow } from "@/components/MobilePageHeader";
+import { BottomSheet } from "@/components/BottomSheet";
 import { LIBRARY_CATEGORY_ICONS, LIBRARY_CATEGORY_LABEL_KEYS } from "@/lib/libraryCategories";
 import { AchievementGrid } from "@/components/AchievementCards";
 import { ACHIEVEMENT_TIER_BY_ID } from "@/lib/achievements";
@@ -25,8 +25,7 @@ import { ACTIVITY_DAYS, buildActivitySeries, computeStreaks, StreakBadge, type S
 import type { DailyActivity, LibraryEntry, XpEvent } from "@shared/types";
 
 const RECENT_LIMIT = 5;
-// Three on a phone: four posters across its width are too small to tell apart.
-const CONTINUE_LIMIT = isMobile ? 3 : 4;
+const CONTINUE_LIMIT = 4;
 // Just needs to be well past any realistic account age - listDailyActivity's own "days" param is
 // a plain cutoff (now - days), not a page size, so this is a cheap way to ask for "everything"
 // without a dedicated lifetime-totals endpoint. Matches useAchievementUnlocks's own copy of this
@@ -136,8 +135,38 @@ export function ProfilePage() {
   // useAchievementUnlocks), so in practice this only actually shows on a genuinely cold first
   // load, not once per profile visit.
   const isLoading = libraryQuery.isLoading || activityQuery.isLoading || lifetimeActivityQuery.isLoading || xpEventsQuery.isLoading;
-  const sourceUpdateCount = useSourceUpdateCount();
   if (isLoading) return <ProfileSkeleton />;
+
+  if (isMobile) {
+    return (
+      <>
+        <MobileProfileLayout
+          header={
+            <div className="flex items-end gap-3.5">
+              <AvatarPicker avatarDataUrl={avatarDataUrl} onChange={setAvatarDataUrl} />
+              <div className="min-w-0 flex-1 pb-1.5"><NameEditor name={name ?? DEFAULT_NAME} onChange={setName} streak={{ current: currentStreak, best: bestStreak, atRisk: streakAtRisk }} playStreakOnMount={playStreakOnMount} /></div>
+            </div>
+          }
+          bannerFilename={bannerFilename}
+          onBannerChange={setBannerFilename}
+          levelProgress={levelProgress}
+          watchedMs={totalWatchedMs}
+          episodes={totalCompleted}
+          titles={completedTitlesCount}
+          weeklyPace={weeklyPace}
+          librarySize={entries.length}
+          activitySeries={activitySeries}
+          achievements={achievements}
+          xpEvents={xpEventsQuery.data ?? []}
+          onClearXpHistory={() => setClearHistoryOpen(true)}
+          recent={recent}
+        />
+        <AnimatePresence>
+          {clearHistoryOpen && <ClearXpHistoryDialog onConfirm={clearXpHistory} onDismiss={() => setClearHistoryOpen(false)} />}
+        </AnimatePresence>
+      </>
+    );
+  }
 
   return (
     <div className="min-h-full bg-app-bg pb-16">
@@ -156,17 +185,11 @@ export function ProfilePage() {
       {/* A 4th column only kicks in once the window is wide enough to actually give it room
           (2xl, 1536px+) - below that, XP history just stacks under achievements inside their
           shared column instead of squeezing into its own sliver. */}
-      <div className="grid max-w-6xl grid-cols-1 gap-8 px-8 pt-8 lg:grid-cols-3 2xl:max-w-[1600px] 2xl:grid-cols-4 mobile:gap-7 mobile:px-4 mobile:pt-5">
-        <div className="space-y-8 lg:col-span-2 mobile:space-y-7">
-          {/* Phone: settings and sources live under the profile tab (the sidebar's own entries on desktop). */}
-          {isMobile && <div className="-mb-2"><MobileShortcutRow items={[
-            { to: "/settings", label: t("nav.settings"), icon: Settings },
-            { to: "/sources", label: t("nav.sources"), icon: Radio, badge: sourceUpdateCount },
-          ]} /></div>}
+      <div className="grid max-w-6xl grid-cols-1 gap-8 px-8 pt-8 lg:grid-cols-3 2xl:max-w-[1600px] 2xl:grid-cols-4">
+        <div className="space-y-8 lg:col-span-2">
           {/* The streak card moved up next to the name (see StreakBadge in ProfileHeader) - this
-              slot now shows library size instead of just dropping to 3 cards. On a phone the five
-              cards are a row the thumb scrolls. */}
-          <div className="grid grid-cols-5 gap-4 mobile:[scrollbar-width:none] mobile:-mx-4 mobile:flex mobile:gap-2.5 mobile:overflow-x-auto mobile:px-4 mobile:[&>*]:w-[34vw] mobile:[&>*]:shrink-0">
+              slot now shows library size instead of just dropping to 3 cards. */}
+          <div className="grid grid-cols-5 gap-4">
             <StatCard icon={Film} label={t("profile.statCompletedTitles")} value={completedTitlesCount} />
             <StatCard icon={Library} label={t("profile.statLibrarySize")} value={entries.length} />
             <StatCard icon={Clock} label={t("profile.statWatchTime")} value={t("profile.hours", { hours: (totalWatchedMs / 3_600_000).toFixed(1) })} />
@@ -233,6 +256,151 @@ export function ProfilePage() {
       </AnimatePresence>
     </div>
   );
+}
+
+/**
+ * The phone's profile - its own layout, not the desktop page squeezed: a banner header with the
+ * avatar over its edge and the level under the name; the three numbers that matter in one card;
+ * the month's activity; achievements as a row of badges; and the rest (XP history, recently added,
+ * settings, sources) as rows that open what they name.
+ */
+function MobileProfileLayout({
+  header,
+  bannerFilename,
+  onBannerChange,
+  levelProgress,
+  watchedMs,
+  episodes,
+  titles,
+  weeklyPace,
+  librarySize,
+  activitySeries,
+  achievements,
+  xpEvents,
+  onClearXpHistory,
+  recent,
+}: {
+  header: React.ReactNode;
+  bannerFilename: string | null;
+  onBannerChange: (filename: string | null) => void;
+  levelProgress: LevelProgress;
+  watchedMs: number;
+  episodes: number;
+  titles: number;
+  weeklyPace: number;
+  librarySize: number;
+  activitySeries: DailyActivity[];
+  achievements: ReturnType<typeof useAchievementsStore.getState>["achievements"];
+  xpEvents: XpEvent[];
+  onClearXpHistory: () => void;
+  recent: LibraryEntry[];
+}) {
+  const { t, i18n } = useTranslation();
+  const sourceUpdateCount = useSourceUpdateCount();
+  const [sheet, setSheet] = useState<"achievements" | "xp" | "recent" | null>(null);
+  const unlocked = achievements.filter((a) => a.unlocked).length;
+  // Earned first, then the nearest to done - the same order as the full list.
+  const badges = useMemo(() => [...achievements].sort((a, b) => Number(b.unlocked) - Number(a.unlocked) || b.current / b.target - a.current / a.target), [achievements]);
+
+  return (
+    <div className="min-h-full bg-app-bg pb-4">
+      <div className="relative -mt-[var(--safe-top)]">
+        <div className="relative overflow-hidden bg-gradient-to-br from-accent/25 via-text/[.04] to-transparent" style={{ height: "calc(9rem + var(--safe-top))" }}>
+          <BannerMedia filename={bannerFilename} />
+          <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-[rgb(var(--color-bg))] to-transparent" />
+          <div className="absolute inset-x-0 bottom-0" style={{ top: "var(--safe-top)" }}>
+            <BannerActions filename={bannerFilename} onChange={onBannerChange} />
+          </div>
+        </div>
+        <div className="relative -mt-12 px-4">{header}</div>
+      </div>
+
+      <div className="space-y-3 px-4 pt-4">
+        <div className="mb-1"><LevelBar levelProgress={levelProgress} /></div>
+
+        <div className="grid grid-cols-3 divide-x divide-border rounded-2xl border border-border bg-text/[.03] py-3.5 text-center">
+          <MobileStat value={t("profile.hours", { hours: (watchedMs / 3_600_000).toFixed(1) })} label={t("profile.statWatchTime")} />
+          <MobileStat value={episodes} label={t("profile.episodesCompleted")} />
+          <MobileStat value={titles} label={t("profile.statCompletedTitles")} />
+        </div>
+        <p className="px-1 text-xs text-muted">
+          {t("profile.statPace")}: {t("common.episodesShort", { count: weeklyPace })} · {t("profile.statLibrarySize")}: {librarySize}
+        </p>
+
+        <section className="rounded-2xl border border-border bg-text/[.03] p-3.5">
+          <h2 className="mb-3 text-sm font-bold text-text">{t("profile.activityTitle")}</h2>
+          <ActivityBars series={activitySeries} locale={i18n.language} />
+        </section>
+
+        <section className="pt-2">
+          <button onClick={() => setSheet("achievements")} className="mb-2.5 flex w-full items-center justify-between">
+            <h2 className="text-[15px] font-bold text-text">{t("profile.achievementsTitle")}</h2>
+            <span className="flex items-center gap-0.5 text-xs font-semibold text-muted">{unlocked} / {achievements.length}<ChevronRight className="h-4 w-4" strokeWidth={2.25} /></span>
+          </button>
+          <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4">
+            {badges.map((a) => (
+              <button key={a.id} onClick={() => setSheet("achievements")} className="flex w-[4.25rem] shrink-0 flex-col items-center gap-1.5">
+                {/* A ring filled as far as the next tier is done - the same progress the full list shows. */}
+                <span className="rounded-full p-[2px]" style={{ background: `conic-gradient(rgb(var(--color-accent)) ${Math.min(1, a.current / Math.max(1, a.target)) * 360}deg, rgb(var(--color-text) / 0.08) 0deg)` }}>
+                  <span className={cn("flex h-[52px] w-[52px] items-center justify-center rounded-full bg-app-bg", a.unlocked ? "text-accent-text" : "text-muted/60")}>
+                    <a.icon className="h-6 w-6" strokeWidth={1.9} />
+                  </span>
+                </span>
+                <span className={cn("line-clamp-2 text-center text-[11px] leading-tight", a.unlocked ? "text-text/85" : "text-muted/60")}>{t(a.titleKey)}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <div className="overflow-hidden rounded-2xl border border-border bg-text/[.03]">
+          <MobileMenuRow icon={Sparkles} label={t("profile.xpHistoryTitle")} detail={xpEvents.length || undefined} onClick={() => setSheet("xp")} />
+          <MobileMenuRow icon={Clock} label={t("profile.recentTitle")} detail={recent.length || undefined} onClick={() => setSheet("recent")} />
+        </div>
+        <div className="overflow-hidden rounded-2xl border border-border bg-text/[.03]">
+          <MobileMenuRow icon={Settings} label={t("nav.settings")} to="/settings" />
+          <MobileMenuRow icon={Radio} label={t("nav.sources")} to="/sources" badge={sourceUpdateCount} />
+        </div>
+      </div>
+
+      <BottomSheet open={sheet === "achievements"} onClose={() => setSheet(null)} title={t("profile.achievementsTitle")}>
+        <div className="px-2"><AchievementGrid achievements={achievements} /></div>
+      </BottomSheet>
+      <BottomSheet
+        open={sheet === "xp"}
+        onClose={() => setSheet(null)}
+        title={t("profile.xpHistoryTitle")}
+        footer={xpEvents.length > 0 ? <button onClick={onClearXpHistory} className="w-full rounded-full py-2.5 text-sm font-semibold text-rose-400 active:bg-text/[.06]">{t("profile.xpHistoryClear")}</button> : undefined}
+      >
+        {xpEvents.length === 0 ? <p className="px-4 py-6 text-center text-sm text-muted">{t("profile.xpHistoryEmpty")}</p> : xpEvents.map((event) => <XpHistoryRow key={event.id} event={event} locale={i18n.language} />)}
+      </BottomSheet>
+      <BottomSheet open={sheet === "recent"} onClose={() => setSheet(null)} title={t("profile.recentTitle")}>
+        {recent.length === 0 ? <p className="px-4 py-6 text-center text-sm text-muted">{t("profile.recentEmpty")}</p> : recent.map((entry) => <RecentRow key={`${entry.sourceId}:${entry.animeId}`} entry={entry} locale={i18n.language} />)}
+      </BottomSheet>
+    </div>
+  );
+}
+
+function MobileStat({ value, label }: { value: string | number; label: string }) {
+  return (
+    <div className="min-w-0 px-2">
+      <p className="truncate text-[19px] font-bold tabular-nums text-text">{value}</p>
+      <p className="mt-0.5 line-clamp-2 text-[11px] leading-tight text-muted">{label}</p>
+    </div>
+  );
+}
+
+function MobileMenuRow({ icon: Icon, label, detail, badge, to, onClick }: { icon: typeof Film; label: string; detail?: number; badge?: number; to?: "/settings" | "/sources"; onClick?: () => void }) {
+  const body = (
+    <>
+      <Icon className="h-[19px] w-[19px] shrink-0 text-accent-text" strokeWidth={2} />
+      <span className="min-w-0 flex-1 truncate text-[15px] text-text">{label}</span>
+      {badge ? <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-white">{badge > 9 ? "9+" : badge}</span> : null}
+      {detail ? <span className="text-sm tabular-nums text-muted">{detail}</span> : null}
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted" strokeWidth={2.25} />
+    </>
+  );
+  const className = "flex min-h-[3.25rem] w-full items-center gap-3.5 border-t border-border px-4 text-left first:border-t-0 active:bg-text/[.06]";
+  return to ? <Link to={to} className={className}>{body}</Link> : <button type="button" onClick={onClick} className={className}>{body}</button>;
 }
 
 function ClearXpHistoryDialog({ onConfirm, onDismiss }: { onConfirm: () => void; onDismiss: () => void }) {
@@ -352,7 +520,7 @@ function ProfileHeader({
           than pinned to its bottom - a taller banner used to leave the avatar/name hugging the
           bottom edge with a lot of dead space above them instead of sitting in the middle of it. */}
       <div
-        className="relative flex w-full items-center gap-5 px-8 py-8 mobile:gap-4 mobile:px-4 mobile:py-6"
+        className="relative flex w-full items-center gap-5 px-8 py-8"
         style={bannerFilename ? ({ "--color-text": "244 244 245", "--color-muted": "161 161 170" } as React.CSSProperties) : undefined}
       >
         <AvatarPicker avatarDataUrl={avatarDataUrl} onChange={onAvatarChange} />
@@ -482,7 +650,7 @@ function LevelBar({ levelProgress }: { levelProgress: LevelProgress }) {
   const percent = Math.min(100, (levelProgress.xpIntoLevel / levelProgress.xpForLevel) * 100);
   const tier = levelTierFor(levelProgress.level);
   return (
-    <div className="mt-2.5 flex max-w-xs items-center gap-2.5">
+    <div className="mt-2.5 flex max-w-xs items-center gap-2.5 mobile:mt-0 mobile:max-w-none">
       <span
         className={cn("relative shrink-0 rounded-md px-2 py-0.5 text-xs font-bold transition-colors duration-500", tier.legendary && "legendary-glow")}
         style={{ background: tier.bg, color: tier.text }}
@@ -712,7 +880,7 @@ function ActivityBars({ series, locale }: { series: DailyActivity[]; locale: str
             <p className="text-muted">{t("profile.activityMinutes", { count: Math.round(hoveredDay.watchedMs / 60_000) })}</p>
           </div>
         )}
-        <div className="flex h-36 items-end gap-1.5">
+        <div className="flex h-36 items-end gap-1.5 mobile:h-24 mobile:gap-1">
           {series.map((d, i) => (
             <motion.div
               key={d.date}
@@ -732,7 +900,7 @@ function ActivityBars({ series, locale }: { series: DailyActivity[]; locale: str
           ))}
         </div>
       </div>
-      <div className="mt-2 flex gap-1.5">
+      <div className="mt-2 flex gap-1.5 mobile:gap-1">
         {series.map((d, i) => (
           <div key={d.date} className="flex-1 text-center text-[10px] text-muted/70">
             {(i % 5 === 0 || i === series.length - 1) ? shortDayLabel(d.date, locale) : ""}

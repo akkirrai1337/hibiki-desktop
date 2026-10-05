@@ -301,7 +301,8 @@ function RootLayoutContent() {
             className={cn(
               "no-scrollbar min-h-0 overflow-y-auto",
               // Phone: clear of the status bar above and the floating tab bar below.
-              "mobile:pb-[var(--tabbar-space)] mobile:pt-[var(--safe-top)]",
+              // Never sideways: one over-wide line (a long link in a comment) must not let the page pan.
+              "mobile:overflow-x-hidden mobile:pb-[var(--tabbar-space)] mobile:pt-[var(--safe-top)]",
               isActive ? "flex-1" : "hidden",
             )}
           >
@@ -319,7 +320,7 @@ function RootLayoutContent() {
         {!(pathname in PERSISTED_PAGES) && (
           // The player fills its box itself (own black background, own fullscreen) and must not scroll
           // inside it; every other param route (anime details) scrolls here as before.
-          <div className={cn("min-h-0 flex-1", isWatching ? "bg-black" : "no-scrollbar overflow-y-auto mobile:pb-[var(--tabbar-space)] mobile:pt-[var(--safe-top)]")} data-scroll-restoration-id="app-main" data-player-fullscreen-root={isWatching ? "" : undefined}>
+          <div className={cn("min-h-0 flex-1", isWatching ? "bg-black" : "no-scrollbar overflow-y-auto mobile:overflow-x-hidden mobile:pb-[var(--tabbar-space)] mobile:pt-[var(--safe-top)]")} data-scroll-restoration-id="app-main" data-player-fullscreen-root={isWatching ? "" : undefined}>
             <Outlet />
           </div>
         )}

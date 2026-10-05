@@ -126,7 +126,7 @@ function Comment({
             {new Date(comment.createdAt).toLocaleDateString(i18n.language, { day: "numeric", month: "short", year: "numeric" })}
           </span>
         </div>
-        <div className="mt-1 select-text whitespace-pre-wrap text-sm leading-relaxed text-text/90">
+        <div className="mt-1 select-text whitespace-pre-wrap text-sm leading-relaxed [overflow-wrap:anywhere] text-text/90">
           <CommentText text={comment.text} />
         </div>
 
