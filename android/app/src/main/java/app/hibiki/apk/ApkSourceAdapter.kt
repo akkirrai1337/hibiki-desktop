@@ -193,7 +193,8 @@ class ApkSourceAdapter(
             put("id", url)
             put("sourceId", id)
             put("originalName", title)
-            put("posterUrl", anime.thumbnail_url ?: JSONObject.NULL)
+            // Through the app, with the source's headers and cookies (see ApkImageProxy).
+            put("posterUrl", ApkImageProxy.wrap(id, anime.thumbnail_url) ?: JSONObject.NULL)
             put("pageUrl", pageUrl ?: JSONObject.NULL)
             put("status", when (anime.status) {
                 SAnime.ONGOING -> "ongoing"
