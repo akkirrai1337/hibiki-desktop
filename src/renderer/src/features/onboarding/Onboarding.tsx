@@ -87,7 +87,7 @@ function SourcesStep() {
         <p className="mt-2 text-sm text-muted">{t("onboarding.sources.description")}</p>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-border bg-text/[.03]">
-        <Suspense fallback={null}><SourcesPage /></Suspense>
+        <Suspense fallback={null}><SourcesPage embedded /></Suspense>
       </div>
     </div>
   );

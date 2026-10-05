@@ -113,7 +113,9 @@ function repositoryDisplayName(url: string): string {
   return match ? `${match[1]}/${match[2]}` : url;
 }
 
-export function SourcesPage() {
+/** `embedded`: shown inside another screen (Settings' category, onboarding) - on the phone that
+ * screen already has the header and the side padding. */
+export function SourcesPage({ embedded = false }: { embedded?: boolean } = {}) {
   // Which source's settings screen is open, if any. One at a time: the screen is modal, and a
   // source is identified by id so it survives the list refreshing underneath it.
   const [settingsSourceId, setSettingsSourceId] = useState<string | null>(null);
@@ -297,9 +299,9 @@ export function SourcesPage() {
   }
 
   return (
-    <div className="flex min-h-full flex-col bg-app-bg">
-      <div className="px-8 pt-8 mobile:px-4 mobile:pt-2">
-        {isMobile && <MobilePageHeader title={t("nav.sources")} parent="/settings" />}
+    <div className={cn("flex min-h-full flex-col bg-app-bg", embedded && "mobile:min-h-0 mobile:bg-transparent")}>
+      <div className={cn("px-8 pt-8 mobile:px-4 mobile:pt-2", embedded && "mobile:pt-0")}>
+        {isMobile && !embedded && <MobilePageHeader title={t("nav.sources")} parent="/settings" />}
         <div className="flex gap-1 border-b border-border">
           <TabButton layoutId="sourcesTabIndicator" active={tab === "extensions"} onClick={() => setTab("extensions")}>{t("sources.tabs.extensions")}</TabButton>
           <TabButton layoutId="sourcesTabIndicator" active={tab === "repositories"} onClick={() => setTab("repositories")}>{t("sources.tabs.repositories")}</TabButton>

@@ -1,12 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { MemoryStick, ArrowDownToLine, ArrowUpDown, Ban, Check, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, DatabaseBackup, FileText, FolderOpen, Home, Info, Languages, MessageCircle, MonitorPlay, Moon, Palette, Radio, RefreshCw, RotateCcw, ScrollText, SlidersHorizontal, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
+import { MemoryStick, ArrowDownToLine, ArrowUpDown, Ban, Check, CheckCircle2, ChevronDown, ChevronUp, DatabaseBackup, FileText, FolderOpen, Home, Info, Languages, MessageCircle, MonitorPlay, Moon, Palette, Radio, RefreshCw, RotateCcw, ScrollText, SlidersHorizontal, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { isMobile } from "@/lib/mobile";
 import { MobilePageHeader } from "@/components/MobilePageHeader";
-import { Link } from "@tanstack/react-router";
-import { useSourceUpdateCount } from "@/lib/sourceUpdates";
 import { Switch } from "@/components/Switch";
 import { SUPPORTED_LOCALES, setLocale } from "@/lib/i18n";
 import { SKIP_TIMER_MAX_SECONDS, SKIP_TIMER_MIN_SECONDS, WATCHED_THRESHOLD_MAX_PERCENT, WATCHED_THRESHOLD_MIN_PERCENT, usePlayerPrefsStore } from "@/stores/playerPrefsStore";
@@ -16,6 +14,9 @@ import { sortLabel } from "@/lib/catalogSort";
 import { SelectDropdown } from "@/components/SelectDropdown";
 import { hibiki, type LogEntry } from "@/lib/hibiki";
 import type { MemorySnapshot } from "@shared/types";
+
+// Loaded with its category, not with Settings itself (the desktop never shows it here).
+const SourcesPage = lazy(() => import("@/pages/sources").then((module) => ({ default: module.SourcesPage })));
 
 // One category's worth of rows, spaced apart - no heading of its own: the category rail's own
 // label already names it, and repeating that text here just duplicated it right above the content
@@ -707,6 +708,9 @@ export function SettingsPage() {
   const hasSource = (sourcesQuery.data?.length ?? 0) > 0;
   const categories = [
     { id: "appearance" as const, label: t("settings.appearance.title"), icon: Palette },
+    // Phone: where the anime comes from is part of the app's setup, as an Android user expects -
+    // the whole Sources screen, as one more category. The desktop keeps it in the sidebar.
+    ...(isMobile ? [{ id: "sources" as const, label: t("nav.sources"), icon: Radio }] : []),
     { id: "general" as const, label: t("settings.general"), icon: SlidersHorizontal },
     { id: "player" as const, label: t("settings.player.title"), icon: MonitorPlay },
     ...(hasSource ? [{ id: "home" as const, label: t("settings.home.title"), icon: Home }] : []),
@@ -721,10 +725,7 @@ export function SettingsPage() {
   const activeCategory = categories.some((c) => c.id === category) ? category : categories[0].id;
 
   return <div className="flex h-full bg-app-bg mobile:h-auto mobile:min-h-full mobile:flex-col">
-    {isMobile && <div className="px-4 pt-2">
-      <MobilePageHeader title={t("nav.settings")} parent="/profile" />
-      <MobileSourcesRow />
-    </div>}
+    {isMobile && <div className="px-4 pt-2"><MobilePageHeader title={t("nav.settings")} parent="/profile" /></div>}
     <nav className="flex w-56 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border px-3 py-8 mobile:[scrollbar-width:none] mobile:w-auto mobile:flex-row mobile:gap-1.5 mobile:overflow-x-auto mobile:border-r-0 mobile:px-4 mobile:pb-2 mobile:pt-0">
       {categories.map((c) => (
         <SettingsCategoryButton key={c.id} active={activeCategory === c.id} icon={c.icon} label={c.label} onClick={() => setCategory(c.id)} />
@@ -890,31 +891,11 @@ export function SettingsPage() {
       </SettingsSection>
       )}
 
+      {activeCategory === "sources" && <div className="-mx-4"><Suspense fallback={null}><SourcesPage embedded /></Suspense></div>}
       {activeCategory === "home" && <HomeSortSection />}
       {activeCategory === "data" && <BackupSection />}
       {activeCategory === "diagnostics" && <DiagnosticsSection />}
     </div>
     </div>
   </div>;
-}
-
-/**
- * Phone: where the anime comes from lives with the rest of the app's setup, first in the list - a
- * settings screen is where an Android user looks for it - with the same update badge the profile
- * corner button used to carry.
- */
-function MobileSourcesRow() {
-  const { t } = useTranslation();
-  const updates = useSourceUpdateCount();
-  return (
-    <Link to="/sources" className="mb-3 flex items-center gap-3.5 rounded-2xl border border-border bg-text/[.03] p-3.5 active:bg-text/[.06]">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-text/[.06] text-text"><Radio className="h-5 w-5" strokeWidth={2} /></span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-[15px] font-semibold text-text">{t("nav.sources")}</span>
-        <span className="block text-xs text-muted">{t("settings.sourcesHint")}</span>
-      </span>
-      {updates > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-white">{updates > 9 ? "9+" : updates}</span>}
-      <ChevronRight className="h-5 w-5 shrink-0 text-muted" strokeWidth={2} />
-    </Link>
-  );
 }
