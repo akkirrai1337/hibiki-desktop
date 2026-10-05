@@ -23,28 +23,34 @@ function tabFor(pathname: string): TabPath | null {
 }
 
 /**
- * The page colour behind the status bar once content scrolls under it, so the clock and icons stay
- * readable. It fades in over the first stretch of scrolling: at the top a page either has its own
- * background there or, like the home hero, artwork meant to run under the bar.
+ * The page colour behind the status bar, so nothing scrolls visibly under the clock and icons. Solid
+ * everywhere except the two screens whose artwork is meant to run under the bar (the home hero, a
+ * title's poster): there it fades in over the first stretch of scrolling, as the artwork leaves.
  */
 export function MobileStatusScrim() {
   const scrim = useRef<HTMLDivElement>(null);
+  const pathname = useRouterState({ select: (s) => (s.resolvedLocation ?? s.location).pathname });
+  const artwork = pathname === "/" || pathname.startsWith("/anime/");
+  const artworkRef = useRef(artwork);
+  artworkRef.current = artwork;
+  const opacityFor = (scrollTop: number) => (artworkRef.current ? Math.min(1, scrollTop / 160) : 1);
   useEffect(() => {
     // scroll does not bubble, but capturing on the document sees every page's own scroll box.
     const onScroll = (event: Event) => {
       const target = event.target;
       // Only a page's own vertical scroll box - not a poster row scrolled sideways.
       if (!(target instanceof HTMLElement) || !scrim.current || !target.matches("[data-page-scroll], [data-scroll-restoration-id]")) return;
-      scrim.current.style.opacity = String(Math.min(1, target.scrollTop / 160));
+      scrim.current.style.opacity = String(opacityFor(target.scrollTop));
     };
     document.addEventListener("scroll", onScroll, { capture: true, passive: true });
     return () => document.removeEventListener("scroll", onScroll, { capture: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reads the current screen through artworkRef
   }, []);
   // A page switch shows another scroll box, possibly scrolled elsewhere: start from its position.
-  const pathname = useRouterState({ select: (s) => (s.resolvedLocation ?? s.location).pathname });
   useEffect(() => {
     const box = document.querySelector<HTMLElement>(`[data-page-scroll="${pathname}"], [data-scroll-restoration-id="app-main"]`);
-    if (scrim.current) scrim.current.style.opacity = String(Math.min(1, (box?.scrollTop ?? 0) / 160));
+    if (scrim.current) scrim.current.style.opacity = String(opacityFor(box?.scrollTop ?? 0));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- opacityFor only reads refs
   }, [pathname]);
   return <div ref={scrim} aria-hidden className="pointer-events-none fixed inset-x-0 top-0 z-30 h-[var(--safe-top)] bg-app-bg opacity-0" />;
 }

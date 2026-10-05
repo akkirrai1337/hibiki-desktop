@@ -44,6 +44,12 @@
   --tabbar-space: calc(4.75rem + var(--safe-bottom));
   -webkit-tap-highlight-color: transparent;
 }
+/* A long press is the app's own (a card's menu): no browser preview of where a link or image leads. */
+.mobile a,
+.mobile img {
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+}
 
 .dark {
   --color-bg: 12 12 15;
