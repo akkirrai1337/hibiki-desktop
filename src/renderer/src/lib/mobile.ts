@@ -63,6 +63,9 @@ export function installBackButton(goBack: () => void, goUp: () => boolean): () =
 // stayed blank for the whole animation and only popped in after it - a flash on every switch.
 
 const TOP_LEVEL = new Set(["/", "/catalog", "/search", "/library", "/history", "/downloads", "/profile"]);
+// The library's three views share one switch at their top: picking one only slides that switch's
+// highlight (see LibrarySegments) - the page itself doesn't move.
+const LIBRARY_VIEWS = new Set(["/library", "/history", "/downloads"]);
 
 function historyIndex(): number {
   return (window.history.state as { __TSR_index?: number } | null)?.__TSR_index ?? 0;
@@ -78,6 +81,7 @@ export function usePageTransition(pathname: string): void {
     previous.current = { pathname, index };
     if (!from || from.pathname === pathname) return;
     if (pathname.startsWith("/watch/") || from.pathname.startsWith("/watch/")) return;
+    if (LIBRARY_VIEWS.has(pathname) && LIBRARY_VIEWS.has(from.pathname)) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const box = document.querySelector<HTMLElement>(`[data-page-scroll="${CSS.escape(pathname)}"]`)
       ?? document.querySelector<HTMLElement>('[data-scroll-restoration-id="app-main"]');
