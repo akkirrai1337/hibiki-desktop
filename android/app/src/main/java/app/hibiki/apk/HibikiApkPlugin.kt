@@ -83,9 +83,10 @@ class HibikiApkPlugin : Plugin() {
     }
 
     /**
-     * Downloads an extension APK and installs it into the app. It is loaded at once if its signer is
-     * already trusted for this package (an update); otherwise the page asks the person and calls
-     * trust() with the fingerprint returned here.
+     * Downloads an extension APK and installs it into the app. Installing it from a repository the
+     * person added is their go-ahead, so on a first install its signer becomes the trusted one for
+     * the package (as the Kotlin app trusts by repository); an update signed by anyone else is
+     * refused before it replaces anything.
      */
     @PluginMethod
     fun install(call: PluginCall) = run(call) {
@@ -98,14 +99,22 @@ class HibikiApkPlugin : Plugin() {
                 check(response.isSuccessful) { "Download failed: HTTP ${response.code}" }
                 downloaded.outputStream().use { out -> response.body.byteStream().copyTo(out) }
             }
+            val incoming = ApkExtensionStore.inspect(context, downloaded) ?: throw IllegalStateException("The file is not an Aniyomi anime extension")
+            val trusted = ApkExtensionStore.trustedFingerprint(context, incoming.packageName)
+            if (trusted != null && trusted != incoming.signingFingerprint) {
+                throw IllegalStateException("${incoming.name}: the update is signed by someone else than the installed version - not installed")
+            }
             val installed = ApkExtensionStore.install(context, downloaded, expected)
+            if (trusted == null && installed.signingFingerprint != null) {
+                ApkExtensionStore.trust(context, installed.packageName, installed.signingFingerprint)
+            }
             ApkSourceRegistry.refresh(context)
             JSObject().apply {
                 put("packageName", installed.packageName)
                 put("name", installed.name)
                 put("versionName", installed.versionName)
                 put("fingerprint", installed.signingFingerprint)
-                put("trusted", installed.isTrusted)
+                put("trusted", true)
             }
         } finally {
             downloaded.delete()

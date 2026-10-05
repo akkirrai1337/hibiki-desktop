@@ -6,6 +6,7 @@ import { androidBrowser } from "./browser";
 import { createAndroidDb } from "./db";
 import { AndroidExtensionHost } from "./extensionHost";
 import { HibikiApk, HibikiFiles, HibikiNet } from "./native";
+import { Capacitor } from "@capacitor/core";
 import { androidDownloadTransfer, androidFiles, androidHttp, androidSecureStore } from "./transports";
 
 type Listener = (payload: unknown) => void;
@@ -80,7 +81,21 @@ export async function createAndroidPlatform(version: string): Promise<{ platform
     },
     extensionHost: new AndroidExtensionHost(androidFiles),
     apkSources: {
-      list: async () => (await HibikiApk.list()).sources,
+      list: async () => {
+        const { sources, extensions } = await HibikiApk.list();
+        // The icon is the APK's own, saved beside it; the page reaches app files through Capacitor's server.
+        const iconOf = new Map(extensions.map((extension) => [extension.packageName, extension.iconPath]));
+        return sources.map((source) => {
+          const icon = iconOf.get(source.packageName);
+          return { ...source, iconUrl: icon ? Capacitor.convertFileSrc(icon) : null };
+        });
+      },
+      install: async (url, packageName) => {
+        await HibikiApk.install({ url, packageName });
+      },
+      uninstall: async (packageName) => {
+        await HibikiApk.uninstall({ packageName });
+      },
       // The calls ExtensionRuntime makes of a source, answered by HibikiApkPlugin.
       call: async (sourceId, method, args) => {
         switch (method) {

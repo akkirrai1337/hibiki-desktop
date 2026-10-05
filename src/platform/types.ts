@@ -239,8 +239,12 @@ export interface Platform {
  * arguments and result shapes - so nothing above it can tell the two apart.
  */
 export interface ApkSourcesPort {
-  list(): Promise<SourceInfo[]>;
+  list(): Promise<Array<SourceInfo & { packageName: string }>>;
   call(sourceId: string, method: string, args: unknown[]): Promise<unknown>;
+  /** Downloads the package's APK and installs it; the signer is trusted on a first install, and an
+   * update signed by anyone else is refused. */
+  install(url: string, packageName: string): Promise<void>;
+  uninstall(packageName: string): Promise<void>;
 }
 
 // --- Extension workers -------------------------------------------------------------------------

@@ -155,7 +155,7 @@ export function isApkSource(sourceId: string): boolean {
 export class ExtensionRuntime {
   private readonly extensions = new Map<string, LoadedExtension>();
   /** The platform's own sources (APK sources on Android), as of the last reload. */
-  private apkSources: SourceInfo[] = [];
+  private apkSources: Array<SourceInfo & { packageName: string }> = [];
   private readonly resolvers = new Map<string, ResolverManifest>();
   private readonly resolverHealth = new Map<string, ResolverHealth>();
   private readonly inFlightReads = new Map<string, Promise<unknown>>();
@@ -819,7 +819,15 @@ export class ExtensionRuntime {
   }
 
   installedVersions(): Map<string, string> {
-    return new Map([...this.extensions].map(([id, { manifest }]) => [id, manifest.version]));
+    return new Map([
+      ...[...this.extensions].map(([id, { manifest }]): [string, string] => [id, manifest.version]),
+      ...this.apkSources.map((source): [string, string] => [source.id, source.version]),
+    ]);
+  }
+
+  /** The package an installed APK source comes in (sources of one package go together). */
+  apkPackageOf(sourceId: string): string | null {
+    return this.apkSources.find((source) => source.id === sourceId)?.packageName ?? null;
   }
 
   /** Resolvers aren't user-installable, so they never appear in list() - but the Sources screen

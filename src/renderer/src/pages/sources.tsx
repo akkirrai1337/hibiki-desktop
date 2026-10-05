@@ -699,6 +699,8 @@ function ExtensionCard({
                 {languageBadge(extension.lang)} · {versionLabel}
                 {extension.isNsfw && <span className="ml-1 font-bold text-rose-400">· {t("sources.nsfwBadge")}</span>}
               </p>
+              {/* An Aniyomi extension (Android): runs natively, installed as one package with its sibling sources. */}
+              {extension.apkPackage && <span title={extension.apkPackage} className="shrink-0 rounded bg-text/[.08] px-1 py-px text-[9.5px] font-bold tracking-wide text-muted">APK</span>}
               {extension.capabilities.length > 0 && (
                 <div className="flex shrink-0 items-center gap-1">
                   {shownCapabilities.map((capability) => {

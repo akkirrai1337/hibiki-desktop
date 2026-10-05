@@ -105,7 +105,7 @@ export interface ApkExtensionEntry {
 }
 
 export interface HibikiApkPlugin {
-  list(): Promise<{ sources: SourceInfo[]; extensions: ApkExtensionEntry[] }>;
+  list(): Promise<{ sources: Array<SourceInfo & { packageName: string }>; extensions: ApkExtensionEntry[] }>;
   refresh(): Promise<{ sources: SourceInfo[]; extensions: ApkExtensionEntry[] }>;
   install(options: { url: string; packageName?: string }): Promise<{ packageName: string; name: string; versionName: string; fingerprint: string; trusted: boolean }>;
   trust(options: { packageName: string; fingerprint: string }): Promise<{ sources: SourceInfo[]; extensions: ApkExtensionEntry[] }>;

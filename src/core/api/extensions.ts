@@ -2,7 +2,7 @@ import type { HibikiApi } from "@shared/hibikiApi";
 import { IPC } from "@shared/ipc";
 import type { InstalledVersions, MarketplaceExtension, SourceInfo } from "@shared/types";
 import { fetchExtensionFiles, fetchRepositoryIndex } from "../marketplace";
-import { isRetiredResolver, type ExtensionRuntime } from "../extensions/runtime";
+import { isApkSource, isRetiredResolver, type ExtensionRuntime } from "../extensions/runtime";
 import { logger } from "../logger";
 import { getPlatform } from "../platform";
 
@@ -97,6 +97,14 @@ function notifyChanged(): void {
 export function createExtensionsApi(runtime: ExtensionRuntime): Pick<HibikiApi["sources"], "install" | "uninstall" | "installedVersions"> {
   return {
     async install(extension: MarketplaceExtension, originUrl: string): Promise<SourceInfo[]> {
+      if (extension.apkPackage) {
+        const port = getPlatform().apkSources;
+        if (!port) throw new Error("APK sources are only supported on Android");
+        await port.install(extension.manifestUrl, extension.apkPackage);
+        await runtime.reload();
+        notifyChanged();
+        return runtime.list();
+      }
       const { manifestJson, jsPayload } = await fetchExtensionFiles(extension);
       await runtime.install(extension.id, manifestJson, jsPayload, originUrl);
       await installResolverDependencies(extension.resolverDependencies, originUrl, runtime);
@@ -111,6 +119,14 @@ export function createExtensionsApi(runtime: ExtensionRuntime): Pick<HibikiApi["
     }),
 
     async uninstall(id: string): Promise<SourceInfo[]> {
+      const apkPackage = isApkSource(id) ? runtime.apkPackageOf(id) : null;
+      if (apkPackage) {
+        // The whole package goes: its other sources (a mirror, say) were installed with it.
+        await getPlatform().apkSources?.uninstall(apkPackage);
+        await runtime.reload();
+        notifyChanged();
+        return runtime.list();
+      }
       await runtime.uninstall(id);
       notifyChanged();
       return runtime.list();

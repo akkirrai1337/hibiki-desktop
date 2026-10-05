@@ -43,15 +43,59 @@ async function getText(url: string, label: string): Promise<string> {
   return response.body;
 }
 
+/** The Aniyomi APK repository the Android build starts with, beside DEFAULT_REPOSITORY_URL. */
+export const DEFAULT_APK_REPOSITORY_URL = "https://raw.githubusercontent.com/yuzono/anime-repo/repo/index.min.json";
+
+interface AniyomiIndexEntry {
+  name: string;
+  pkg: string;
+  apk: string;
+  lang?: string;
+  version?: string;
+  nsfw?: number;
+  sources?: Array<{ name: string; lang?: string; id: string; baseUrl?: string }>;
+}
+
 export async function fetchRepositoryIndex(url: string): Promise<MarketplaceExtension[]> {
   const text = await getText(url, "Repository index");
-  let parsed: { schemaVersion?: number; extensions?: MarketplaceExtension[] };
+  let parsed: unknown;
   try {
     parsed = JSON.parse(text);
   } catch {
     throw new Error("Repository index is invalid");
   }
-  return parsed.extensions ?? [];
+  // An Aniyomi/Mihon-style repository: an array of APK entries (index.min.json beside apk/ and icon/).
+  if (Array.isArray(parsed)) return apkIndexEntries(url, parsed as AniyomiIndexEntry[]);
+  return (parsed as { extensions?: MarketplaceExtension[] }).extensions ?? [];
+}
+
+/**
+ * An APK repository's entries as marketplace entries - one per source (the ids are the ones the
+ * installed source will have, "apk:<Aniyomi id>"), all pointing at their package's APK. Only a
+ * platform that runs APK sources can use them.
+ */
+function apkIndexEntries(indexUrl: string, entries: AniyomiIndexEntry[]): MarketplaceExtension[] {
+  if (!getPlatform().apkSources) throw new Error("APK repositories (Aniyomi extensions) are only supported on Android");
+  const resolve = (path: string) => new URL(path, indexUrl).toString();
+  return entries.flatMap((entry) => {
+    if (!entry.pkg || !entry.apk) return [];
+    const extensionName = entry.name.replace(/^(Aniyomi|Tachiyomi): /, "");
+    const sources = entry.sources?.length ? entry.sources : [];
+    return sources.map((source): MarketplaceExtension => ({
+      id: `apk:${source.id}`,
+      name: sources.length > 1 ? source.name : extensionName,
+      version: entry.version ?? "0",
+      website: source.baseUrl ?? null,
+      iconUrl: resolve(`icon/${entry.pkg}.png`),
+      lang: source.lang ?? entry.lang ?? "all",
+      capabilities: ["PLAYBACK"],
+      resolverDependencies: [],
+      isNsfw: entry.nsfw === 1,
+      type: "source",
+      manifestUrl: resolve(`apk/${entry.apk}`),
+      apkPackage: entry.pkg,
+    }));
+  });
 }
 
 export async function fetchRepositoryResult(url: string): Promise<RepositoryFetchResult> {

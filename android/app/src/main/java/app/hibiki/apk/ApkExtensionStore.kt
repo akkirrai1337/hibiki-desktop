@@ -133,6 +133,9 @@ object ApkExtensionStore {
     fun isTrusted(context: Context, packageName: String, fingerprint: String): Boolean =
         trustPrefs(context).getString(packageName, null) == fingerprint
 
+    /** The signer trusted for [packageName], if any. */
+    fun trustedFingerprint(context: Context, packageName: String): String? = trustPrefs(context).getString(packageName, null)
+
     fun trust(context: Context, packageName: String, fingerprint: String) {
         trustPrefs(context).edit().putString(packageName, fingerprint).apply()
     }
