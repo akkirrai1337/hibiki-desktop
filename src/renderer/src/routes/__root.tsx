@@ -230,7 +230,7 @@ function RootLayoutContent() {
         const route = router.routesById[id];
         if (route) void Promise.resolve(router.loadRouteChunk(route)).catch(() => undefined);
       }
-    }, 1500);
+    }, 300);
     return () => window.clearTimeout(timer);
   }, [router]);
   const mountedPages = pathname in PERSISTED_PAGES && !visited.includes(pathname) ? [...visited, pathname] : visited;

@@ -104,21 +104,41 @@ export function usePageTransition(pathname: string): void {
 
     // A page shown for the first time can take longer to lay out and draw than the whole animation,
     // which then ran out before anything was on screen - no transition at all. So the page is first
-    // drawn as the animation's first frame, and the animation starts once that frame is up.
+    // drawn as the animation's first frame, and the animation starts once that frame is up. A page
+    // whose code is still loading shows its empty stand-in (aria-busy, see PageShellFallback) - the
+    // animation waits for the real page, or it would play on the stand-in and the page pop in after.
     box.style.opacity = String(start.opacity);
     if (start.transform) box.style.transform = String(start.transform);
     const reset = () => {
       box.style.opacity = "";
       box.style.transform = "";
     };
-    let frame = requestAnimationFrame(() => {
+    let frame = 0;
+    let observer: MutationObserver | null = null;
+    let giveUp = 0;
+    const play = () => {
+      observer?.disconnect();
+      clearTimeout(giveUp);
       frame = requestAnimationFrame(() => {
-        pending.current = null;
-        reset();
-        box.animate([start, { opacity: 1, transform: "none" }], options);
+        frame = requestAnimationFrame(() => {
+          pending.current = null;
+          reset();
+          box.animate([start, { opacity: 1, transform: "none" }], options);
+        });
       });
-    });
+    };
+    const loading = () => box.querySelector(':scope > [aria-busy="true"]') !== null;
+    if (loading()) {
+      observer = new MutationObserver(() => { if (!loading()) play(); });
+      observer.observe(box, { childList: true });
+      // Never left half-faded if the page takes unusually long.
+      giveUp = window.setTimeout(play, 1500);
+    } else {
+      play();
+    }
     pending.current = () => {
+      observer?.disconnect();
+      clearTimeout(giveUp);
       cancelAnimationFrame(frame);
       reset();
     };
