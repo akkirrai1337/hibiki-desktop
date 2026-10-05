@@ -310,7 +310,8 @@ function MobileProfileLayout({
         <div
           className="relative overflow-hidden bg-gradient-to-br from-accent/25 via-text/[.04] to-transparent"
           style={{
-            height: "calc(10rem + var(--safe-top))",
+            // Without a banner there is nothing to show up there: only the row of corner buttons.
+            height: bannerFilename ? "calc(10rem + var(--safe-top))" : "calc(3.75rem + var(--safe-top))",
             maskImage: "linear-gradient(to bottom, #000 45%, transparent)",
             WebkitMaskImage: "linear-gradient(to bottom, #000 45%, transparent)",
           }}
@@ -327,7 +328,7 @@ function MobileProfileLayout({
             </Link>
           </div>
         </div>
-        <div className="relative -mt-14 px-4">{header}</div>
+        <div className={cn("relative px-4", bannerFilename ? "-mt-14" : "mt-1")}>{header}</div>
       </div>
 
       <div className="space-y-3 px-4 pt-4">
