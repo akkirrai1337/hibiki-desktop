@@ -335,8 +335,16 @@ function EpisodeListPanel({ episodes, currentEpisodeId, onSelect, title, t }: {
   // there's no stale scroll position to worry about carrying over from a previous open.
   // useLayoutEffect, not useEffect, so this happens before the panel's first paint instead of as a
   // visible jump right after it.
+  // Only the list's own vertical scroller moves: scrollIntoView would also scroll every ancestor,
+  // and on the phone the panel mounts still slid off to the right, so it scrolled the whole
+  // (overflow-hidden) player sideways for a moment - the jerk when the episode list opened.
   useLayoutEffect(() => {
-    listRef.current?.querySelector('[data-selected="true"]')?.scrollIntoView({ block: "center" });
+    const item = listRef.current?.querySelector<HTMLElement>('[data-selected="true"]');
+    let box = item?.parentElement ?? null;
+    while (box && !/(auto|scroll)/.test(getComputedStyle(box).overflowY)) box = box.parentElement;
+    if (!item || !box) return;
+    const offset = item.getBoundingClientRect().top - box.getBoundingClientRect().top;
+    box.scrollTop += offset - (box.clientHeight - item.offsetHeight) / 2;
   }, []);
   return <div className="w-72 p-1.5 mobile:w-full mobile:p-2">
     <div className="px-2.5 py-1.5 text-sm font-semibold text-white mobile:py-2.5 mobile:text-base">{title}</div>

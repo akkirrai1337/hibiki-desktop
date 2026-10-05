@@ -15,6 +15,30 @@ import { HibikiApp } from "./native";
 
 declare const __APP_VERSION__: string;
 
+/**
+ * The "continue watching" frame: the playing video's own decoded pixels drawn to a small canvas,
+ * as the desktop main process does, never a screenshot with the controls on it. Streams go
+ * through the same-origin /_hibiki/stream route, so the canvas stays readable; a video that
+ * still taints it keeps the previous thumbnail.
+ */
+function captureVideoFrame(): string | null {
+  const videos = [...document.querySelectorAll("video")]
+    .filter((v) => v.readyState >= 2 && v.videoWidth && v.videoHeight && !v.seeking && v.getClientRects().length)
+    .sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight);
+  for (const video of videos) {
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = 400;
+      canvas.height = Math.max(1, Math.round((400 * video.videoHeight) / video.videoWidth));
+      const context = canvas.getContext("2d");
+      if (!context) continue;
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/jpeg", 0.8);
+    } catch { /* Cross-origin or protected video. */ }
+  }
+  return null;
+}
+
 export async function installAndroidHibiki(): Promise<void> {
   const version = __APP_VERSION__;
   const { platform, events, migrate } = await createAndroidPlatform(version);
@@ -41,7 +65,7 @@ export async function installAndroidHibiki(): Promise<void> {
       registerHeaderOrigin: async (sessionId, url) => platform.player.registerHeaderOrigin(sessionId, url),
       unregisterHeaders: async (sessionId) => platform.player.unregisterHeaders(sessionId),
       resolveStreamUrl: (url, headers) => platform.player.resolveFinalUrl(url, headers),
-      captureFrame: async () => null,
+      captureFrame: async () => captureVideoFrame(),
       streamUrl: (sessionId, url) => platform.player.playableUrl(sessionId, url),
     },
     // Desktop-only surfaces: present so the renderer's calls are harmless, hidden from the UI by
