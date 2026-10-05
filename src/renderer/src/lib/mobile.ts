@@ -30,8 +30,12 @@ export function useBackHandler(active: boolean, onBack: () => void): void {
   }, [active]);
 }
 
-/** Wires the Back key once, for the whole session. `goBack` steps the router's history. */
-export function installBackButton(goBack: () => void): () => void {
+/**
+ * Wires the Back key once, for the whole session. `goBack` steps the router's history; `goUp` is
+ * for a screen with nothing behind it (opened from a link, or the app restored onto it) - it moves
+ * to the screen above it and answers true, or answers false on the first screen, which leaves.
+ */
+export function installBackButton(goBack: () => void, goUp: () => boolean): () => void {
   const device = hibiki.device;
   if (!device) return () => {};
   return device.onBack(() => {
@@ -43,6 +47,6 @@ export function installBackButton(goBack: () => void): () => void {
     // TanStack's history numbers its entries; 0 is where this session started.
     const index = (window.history.state as { __TSR_index?: number } | null)?.__TSR_index ?? 0;
     if (index > 0) goBack();
-    else device.minimize();
+    else if (!goUp()) device.minimize();
   });
 }

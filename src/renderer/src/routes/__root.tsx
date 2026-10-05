@@ -70,7 +70,18 @@ function RootLayoutContent() {
   // On the phone the status/navigation bar icons follow the theme: light icons over the dark one.
   useEffect(() => { void hibiki.device?.setSystemBars({ style: theme }); }, [theme]);
   const router = useRouter();
-  useEffect(() => installBackButton(() => router.history.back()), [router]);
+  useEffect(() => installBackButton(
+    () => router.history.back(),
+    () => {
+      // Nothing behind this screen: the player goes up to its title, anything else to home.
+      const path = router.state.location.pathname;
+      if (path === "/") return false;
+      const watch = path.match(/^\/watch\/([^/]+)\/([^/]+)\//);
+      if (watch) void router.navigate({ to: "/anime/$sourceId/$animeId", params: { sourceId: decodeURIComponent(watch[1]), animeId: decodeURIComponent(watch[2]) }, replace: true });
+      else void router.navigate({ to: "/", replace: true });
+      return true;
+    },
+  ), [router]);
   const accentColor = useUiStore((s) => s.accentColor);
   // Depends on `theme` too, not just `accentColor` - see applyAccentColor's own comment for why
   // (--color-accent-text's white/black-vs-theme contrast fallback needs to know which theme is
@@ -187,6 +198,20 @@ function RootLayoutContent() {
   useEffect(() => {
     if (discordRpcEnabled && !isWatching) hibiki.discord.setIdlePresence();
   }, [discordRpcEnabled, isWatching]);
+  // Phone: watching is landscape, edge to edge without the system bars, and keeps the screen on;
+  // leaving the player hands all three back.
+  useEffect(() => {
+    const device = hibiki.device;
+    if (!device || !isWatching) return;
+    void device.setOrientation("landscape");
+    void device.setSystemBars({ hidden: true });
+    void device.keepAwake(true);
+    return () => {
+      void device.setOrientation("auto");
+      void device.setSystemBars({ hidden: false });
+      void device.keepAwake(false);
+    };
+  }, [isWatching]);
   // Kept mounted for the whole session (not just while the profile page is open) - an episode
   // finishing (the most common trigger, via the "finisher" family) happens on the watch page, not
   // profile, so the tier-crossing check this owns has to keep running regardless of where the user

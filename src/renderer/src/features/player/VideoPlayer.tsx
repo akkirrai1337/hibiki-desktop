@@ -37,6 +37,7 @@ import { cn } from "@/lib/cn";
 import { log } from "@/lib/log";
 import { PLAYBACK_SPEEDS, usePlayerPrefsStore } from "@/stores/playerPrefsStore";
 import { StreakBadge } from "@/components/StreakBadge";
+import { isMobile, useBackHandler } from "@/lib/mobile";
 
 // One entry in the subtitle picker, and what actually backs a rendered <track> - `url` is always
 // already a playable WebVTT source (a source's own .vtt passed through as-is, or an SRT/ASS
@@ -1675,6 +1676,17 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     else if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     return () => { if (hideTimerRef.current) clearTimeout(hideTimerRef.current); };
   }, [playing, scheduleHide]);
+  // Phone: nothing moves a mouse to keep the controls awake, so an open menu holds them up itself;
+  // shown controls (a tap) start the hide countdown the mouse would have started.
+  const menuOpenOnPhone = isMobile && (settingsOpen || episodeListOpen);
+  useEffect(() => {
+    if (!isMobile) return;
+    if (menuOpenOnPhone) {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      setControlsVisible(true);
+    } else if (controlsVisible && playing) scheduleHide();
+  }, [menuOpenOnPhone, controlsVisible, playing, scheduleHide]);
+  useBackHandler(settingsOpen || episodeListOpen, () => { setSettingsOpen(false); setEpisodeListOpen(false); });
 
   // Shared by the space-bar hold below and the mouse-hold handlers - same threshold and speed, so
   // holding the left button reads exactly like holding space.
@@ -1712,6 +1724,46 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     pointerHoldWasActiveRef.current = pointerHoldRef.current.active;
     endPointerHold();
   }, [endPointerHold]);
+
+  // --- the phone's taps: one shows or hides the controls; two quick ones on the left or right part
+  // of the screen seek 10s back or forward, and every further tap on that side while the "+10" is
+  // still up adds another 10s (YouTube's and Android's own players behave the same way). A lone
+  // tap waits out the double-tap window before it acts, or a double tap would flash the controls.
+  const MOBILE_SEEK_SECONDS = 10;
+  const DOUBLE_TAP_MS = 280;
+  const mobileTapRef = useRef<{ timer: ReturnType<typeof setTimeout> | null; at: number; side: "back" | "forward" | null; seekUntil: number }>({ timer: null, at: 0, side: null, seekUntil: 0 });
+  useEffect(() => () => { if (mobileTapRef.current.timer) clearTimeout(mobileTapRef.current.timer); }, []);
+  const onMobileTap = (e: React.MouseEvent) => {
+    const video = videoRef.current;
+    const box = containerRef.current?.getBoundingClientRect();
+    if (!box) return;
+    const x = (e.clientX - box.left) / box.width;
+    const side = x < 0.4 ? "back" : x > 0.6 ? "forward" : null;
+    const tap = mobileTapRef.current;
+    const now = Date.now();
+    const seek = (direction: "back" | "forward") => {
+      if (tap.timer) { clearTimeout(tap.timer); tap.timer = null; }
+      tap.seekUntil = now + SEEK_ACCUMULATION_WINDOW_MS;
+      tap.side = direction;
+      if (!video) return;
+      video.currentTime = direction === "back"
+        ? Math.max(0, video.currentTime - MOBILE_SEEK_SECONDS)
+        : Math.min(video.duration || Infinity, video.currentTime + MOBILE_SEEK_SECONDS);
+      flashSeek(direction, MOBILE_SEEK_SECONDS);
+    };
+    if (side && side === tap.side && (now < tap.seekUntil || (tap.timer && now - tap.at < DOUBLE_TAP_MS))) {
+      seek(side);
+      return;
+    }
+    if (tap.timer) clearTimeout(tap.timer);
+    tap.at = now;
+    tap.side = side;
+    tap.seekUntil = 0;
+    tap.timer = setTimeout(() => {
+      tap.timer = null;
+      setControlsVisible((visible) => !visible);
+    }, DOUBLE_TAP_MS);
+  };
 
   const togglePlay = useCallback(() => {
     const video = videoRef.current;
@@ -1926,22 +1978,158 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   const playedPercent = displayDuration ? (displayCurrentTime / displayDuration) * 100 : 0;
   const bufferedPercent = displayDuration ? (buffered / displayDuration) * 100 : 0;
 
+  // The two menus the controls open - one copy each, shown from the desktop bar or the phone's.
+  const episodeListPanel = episodesLoading || !episodes
+    ? <EpisodeListSkeleton title={t("detail.episodes")} />
+    : <EpisodeListPanel
+        episodes={episodes}
+        currentEpisodeId={currentEpisodeId}
+        onSelect={(episodeId) => {
+          setEpisodeListOpen(false);
+          if (episodeId === currentEpisodeId) return;
+          onSelectEpisode?.(episodeId);
+        }}
+        title={t("detail.episodes")}
+        t={t}
+      />;
+  const settingsMenu = <PlayerSettingsMenu
+    playbackSpeed={playbackSpeed}
+    onSelectSpeed={setPlaybackSpeed}
+    autoSkipSegments={autoSkipSegments}
+    onToggleAutoSkip={() => setAutoSkipSegments(!autoSkipSegments)}
+    autoPlayNextEpisode={autoPlayNextEpisode}
+    onToggleAutoPlay={() => setAutoPlayNextEpisode(!autoPlayNextEpisode)}
+    dubOptions={dubOptions ?? []}
+    selectedDubId={selectedDubId}
+    onOpenDub={() => onOpenEpisodes?.()}
+    dubLoading={episodesLoading ?? false}
+    onSelectDub={(id) => {
+      setSettingsOpen(false);
+      if (id === selectedDubId) return;
+      beginSourceSwitch();
+      onSelectDub?.(id);
+    }}
+    translationOptions={translationValues}
+    selectedTranslation={shownTranslation}
+    onSelectTranslation={selectTranslation}
+    playerOptions={playerValues}
+    selectedPlayerName={shownPlayerName}
+    onSelectPlayerName={selectPlayerName}
+    qualityOptions={qualityValues}
+    selectedQuality={shownQuality}
+    onSelectQuality={selectQuality}
+    qualityLocked={!!offlinePlayback}
+    subtitleOptions={subtitleOptions}
+    selectedSubtitleId={selectedSubtitleId}
+    onSelectSubtitle={setSelectedSubtitleId}
+    onAddSubtitleFile={() => subtitleFileInputRef.current?.click()}
+    t={t}
+  />;
+
+  // The phone's controls. The middle of the screen holds play/pause with the previous and next
+  // episode beside it; seeking ±10s is a double tap on either half (see onMobileTap), so it needs
+  // no buttons. The bar at the bottom is the time, the seek bar the thumb can grab anywhere along,
+  // and the menus. Volume is the phone's own keys, and the player is always full screen here.
+  const busy = isSwitching || buffering || !link || !!playbackError || !!unplayable;
+  const mobileMenuClass = "absolute bottom-full right-0 z-20 mb-2 max-h-[calc(100vh-5.5rem)] overflow-y-auto overscroll-contain rounded-xl border border-white/10 bg-[#1d1c22] shadow-2xl";
+  const mobileControls = <>
+    <div className={cn("pointer-events-none absolute inset-0 z-[5] flex items-center justify-center gap-12 transition-opacity duration-300", controlsVisible ? "opacity-100" : "opacity-0")}>
+      <button
+        onClick={(e) => { stop(e); onPrevEpisode?.(); }}
+        disabled={!onPrevEpisode}
+        aria-label={t("watch.player.previousEpisode", { defaultValue: "Previous episode" })}
+        className={cn("flex h-12 w-12 items-center justify-center rounded-full bg-black/40", controlsVisible && "pointer-events-auto", onPrevEpisode ? "text-white active:bg-black/60" : "text-white/25")}
+      >
+        <SkipBack className="h-6 w-6 fill-current" strokeWidth={1.5} />
+      </button>
+      {/* The spinner takes this spot while there is nothing to play yet. */}
+      <button
+        onClick={(e) => { stop(e); togglePlay(); wake(); }}
+        className={cn("flex h-16 w-16 items-center justify-center rounded-full bg-black/45 text-white active:bg-black/65", controlsVisible && !busy && "pointer-events-auto", busy && "invisible")}
+      >
+        {playing ? <Pause className="h-8 w-8 fill-current" strokeWidth={0} /> : <Play className="ml-1 h-8 w-8 fill-current" strokeWidth={0} />}
+      </button>
+      <button
+        onClick={(e) => { stop(e); onNextEpisode?.(); }}
+        disabled={!onNextEpisode}
+        aria-label={t("watch.player.nextEpisode", { defaultValue: "Next episode" })}
+        className={cn("flex h-12 w-12 items-center justify-center rounded-full bg-black/40", controlsVisible && "pointer-events-auto", onNextEpisode ? "text-white active:bg-black/60" : "text-white/25")}
+      >
+        <SkipForward className="h-6 w-6 fill-current" strokeWidth={1.5} />
+      </button>
+    </div>
+    <div
+      className={cn("absolute inset-x-0 bottom-0 z-[6] bg-gradient-to-t from-black/85 to-transparent pt-12 transition-opacity duration-300", controlsVisible ? "opacity-100" : "pointer-events-none opacity-0")}
+      style={{ paddingLeft: "max(1.25rem, var(--safe-left))", paddingRight: "max(1.25rem, var(--safe-right))", paddingBottom: "max(0.5rem, var(--safe-bottom))" }}
+      onClick={stop}
+    >
+      <div className="flex items-center gap-1">
+        <button onClick={(e) => { stop(e); toggleRemainingTime(); }} className="mr-auto px-1 py-2 text-[13px] font-medium tabular-nums text-zinc-200">
+          {showRemainingTime
+            ? `-${formatTime(Math.max(0, displayDuration - displayCurrentTime))}`
+            : `${formatTime(displayCurrentTime)} / ${formatTime(displayDuration)}`}
+        </button>
+        <button
+          onClick={(e) => { stop(e); setSelectedSubtitleId(selectedSubtitleId ? null : subtitleOptions[0].id); }}
+          disabled={subtitleOptions.length === 0}
+          aria-pressed={!!selectedSubtitleId}
+          className={cn("relative flex h-10 w-10 items-center justify-center", subtitleOptions.length === 0 ? "text-white/25" : "text-white")}
+        >
+          <Captions className="h-[21px] w-[21px]" strokeWidth={2} />
+          <span className={cn("absolute bottom-1.5 h-[2px] w-4 rounded-full bg-accent transition-opacity", selectedSubtitleId ? "opacity-100" : "opacity-0")} />
+        </button>
+        {(episodesLoading || !episodes || episodes.length > 1) && (
+          <div ref={episodeListRef} className="relative">
+            <button onClick={(e) => { stop(e); onOpenEpisodes?.(); setSettingsOpen(false); setEpisodeListOpen((v) => !v); }} className="flex h-10 w-10 items-center justify-center text-white">
+              <ListVideo className="h-[21px] w-[21px]" strokeWidth={2} />
+            </button>
+            {episodeListOpen && <div onClick={stop} className={mobileMenuClass}>{episodeListPanel}</div>}
+          </div>
+        )}
+        <div ref={settingsRef} className="relative">
+          <button onClick={(e) => { stop(e); setEpisodeListOpen(false); setSettingsOpen((v) => !v); }} className="flex h-10 w-10 items-center justify-center text-white">
+            <Settings className="h-[21px] w-[21px]" strokeWidth={2} />
+          </button>
+          {settingsOpen && <div onClick={stop} className={mobileMenuClass}>{settingsMenu}</div>}
+        </div>
+      </div>
+      {/* A tall strip to land a thumb on; the visible track stays thin, the thumb always shown. */}
+      <div className="relative">
+        {seeking && hoverRatio !== null && duration > 0 && (
+          <div className="absolute bottom-full mb-1 -translate-x-1/2 rounded-md bg-red-600 px-2 py-1 text-xs font-bold tabular-nums text-white shadow-lg" style={{ left: `${hoverRatio * 100}%` }}>
+            {formatTime(hoverRatio * duration)}
+          </div>
+        )}
+        <div ref={seekBarRef} onPointerDown={onSeekPointerDown} className="relative flex h-8 touch-none items-center">
+          <div className="relative h-[3px] w-full overflow-hidden rounded-full bg-white/25 shadow-[0_1px_3px_rgba(0,0,0,0.7)]">
+            <div className="absolute inset-y-0 left-0 bg-white/45" style={{ width: `${bufferedPercent}%` }} />
+            <div className="absolute inset-y-0 left-0 bg-red-600" style={{ width: `${playedPercent}%` }} />
+          </div>
+          <div className={cn("absolute -translate-x-1/2 rounded-full bg-red-600 shadow-[0_1px_4px_rgba(0,0,0,0.8)] transition-[width,height]", seeking ? "h-4 w-4" : "h-3 w-3")} style={{ left: `${playedPercent}%` }} />
+        </div>
+      </div>
+    </div>
+  </>;
+
   return (
     <div
       ref={containerRef}
       // The cursor goes with the controls (they only ever hide while playing), including over children
       // that set their own, like the draggable subtitle box.
       className={cn("group/player relative h-full w-full select-none overflow-hidden bg-black", !controlsVisible && "[&_*]:!cursor-none cursor-none")}
-      onMouseMove={wake}
+      // Not on the phone: a tap sends a compatibility mousemove first, which would show the controls
+      // just before the tap itself toggles them off again.
+      onMouseMove={isMobile ? undefined : wake}
       onPointerDown={onVideoPointerDown}
       onPointerUp={onVideoPointerUp}
       // A pointer that leaves the player (or gets cancelled by the OS) never sends pointerup here,
       // which would otherwise strand playback at 2x with the chip still showing.
       onPointerLeave={endPointerHold}
       onPointerCancel={endPointerHold}
-      onClick={() => {
+      onClick={(e) => {
         if (pointerHoldWasActiveRef.current) { pointerHoldWasActiveRef.current = false; return; }
-        togglePlay();
+        if (isMobile) onMobileTap(e);
+        else togglePlay();
       }}
     >
       <video ref={videoRef} crossOrigin="anonymous" autoPlay className="h-full w-full object-contain">
@@ -2141,7 +2329,13 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       {link && !sourceSwitching && !switchingSource && !buffering && activeSegment && dismissedSegmentKey !== segmentKey(activeSegment) && (
         <div
           onClick={stop}
-          className={cn("absolute right-6 z-10 flex items-center gap-2 transition-[bottom] duration-300", controlsVisible ? "bottom-[136px]" : "bottom-8")}
+          className={cn(
+            "absolute right-6 z-10 flex items-center gap-2 transition-[bottom] duration-300",
+            controlsVisible ? "bottom-[136px]" : "bottom-8",
+            // Phone: just above the seek bar while the controls are up, low on the screen otherwise.
+            isMobile && (controlsVisible ? "mobile:bottom-[5.75rem]" : "mobile:bottom-6"),
+          )}
+          style={isMobile ? { right: "max(1.25rem, var(--safe-right))" } : undefined}
         >
           {autoSkipSegments && (
             <button onClick={dismissSegmentPrompt} className="rounded-full bg-black/60 px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-black/75">
@@ -2155,7 +2349,11 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       )}
 
       {/* Top bar: back + title */}
-      <div className={cn("absolute inset-x-0 top-0 flex items-center gap-4 bg-gradient-to-b from-black/80 to-transparent px-6 pb-10 pt-5 transition-opacity duration-300", controlsVisible ? "opacity-100" : "pointer-events-none opacity-0")} onClick={stop}>
+      <div
+        className={cn("absolute inset-x-0 top-0 z-[6] flex items-center gap-4 bg-gradient-to-b from-black/80 to-transparent px-6 pb-10 pt-5 transition-opacity duration-300 mobile:pt-3", controlsVisible ? "opacity-100" : "pointer-events-none opacity-0")}
+        style={isMobile ? { paddingLeft: "max(1.25rem, var(--safe-left))", paddingRight: "max(1.25rem, var(--safe-right))" } : undefined}
+        onClick={stop}
+      >
         <button onClick={(e) => { stop(e); onBack(); }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20">
           <ArrowLeft className="h-[18px] w-[18px]" strokeWidth={2} />
         </button>
@@ -2166,7 +2364,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       </div>
 
       {/* Bottom control cluster */}
-      <div className={cn("absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-6 pb-4 pt-10 transition-opacity duration-300", controlsVisible ? "opacity-100" : "pointer-events-none opacity-0")} onClick={stop}>
+      {isMobile ? mobileControls : <div className={cn("absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-6 pb-4 pt-10 transition-opacity duration-300", controlsVisible ? "opacity-100" : "pointer-events-none opacity-0")} onClick={stop}>
         {/* Seek bar: transparent track, white = buffered, red = played */}
         <div className="relative" onMouseMove={onSeekAreaMouseMove} onMouseLeave={onSeekAreaMouseLeave}>
           {hoverRatio !== null && duration > 0 && (
@@ -2302,19 +2500,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
                 </button>
                 {episodeListOpen && (
                   <div onClick={stop} className="absolute bottom-full right-0 z-20 mb-3 overflow-hidden rounded-xl border border-white/10 bg-[#1d1c22] shadow-2xl">
-                    {episodesLoading || !episodes
-                      ? <EpisodeListSkeleton title={t("detail.episodes")} />
-                      : <EpisodeListPanel
-                          episodes={episodes}
-                          currentEpisodeId={currentEpisodeId}
-                          onSelect={(episodeId) => {
-                            setEpisodeListOpen(false);
-                            if (episodeId === currentEpisodeId) return;
-                            onSelectEpisode?.(episodeId);
-                          }}
-                          title={t("detail.episodes")}
-                          t={t}
-                        />}
+                    {episodeListPanel}
                   </div>
                 )}
               </div>
@@ -2334,39 +2520,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
               </button>
               {settingsOpen && (
                 <div onClick={stop} className="absolute bottom-full right-0 z-20 mb-3 overflow-hidden rounded-xl border border-white/10 bg-[#1d1c22] shadow-2xl">
-                  <PlayerSettingsMenu
-                    playbackSpeed={playbackSpeed}
-                    onSelectSpeed={setPlaybackSpeed}
-                    autoSkipSegments={autoSkipSegments}
-                    onToggleAutoSkip={() => setAutoSkipSegments(!autoSkipSegments)}
-                    autoPlayNextEpisode={autoPlayNextEpisode}
-                    onToggleAutoPlay={() => setAutoPlayNextEpisode(!autoPlayNextEpisode)}
-                    dubOptions={dubOptions ?? []}
-                    selectedDubId={selectedDubId}
-                    onOpenDub={() => onOpenEpisodes?.()}
-                    dubLoading={episodesLoading ?? false}
-                    onSelectDub={(id) => {
-                      setSettingsOpen(false);
-                      if (id === selectedDubId) return;
-                      beginSourceSwitch();
-                      onSelectDub?.(id);
-                    }}
-                    translationOptions={translationValues}
-                    selectedTranslation={shownTranslation}
-                    onSelectTranslation={selectTranslation}
-                    playerOptions={playerValues}
-                    selectedPlayerName={shownPlayerName}
-                    onSelectPlayerName={selectPlayerName}
-                    qualityOptions={qualityValues}
-                    selectedQuality={shownQuality}
-                    onSelectQuality={selectQuality}
-                    qualityLocked={!!offlinePlayback}
-                    subtitleOptions={subtitleOptions}
-                    selectedSubtitleId={selectedSubtitleId}
-                    onSelectSubtitle={setSelectedSubtitleId}
-                    onAddSubtitleFile={() => subtitleFileInputRef.current?.click()}
-                    t={t}
-                  />
+                  {settingsMenu}
                 </div>
               )}
             </div>
@@ -2375,7 +2529,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
             </button>
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
