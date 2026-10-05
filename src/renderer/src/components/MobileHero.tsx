@@ -7,6 +7,8 @@ import { cn } from "@/lib/cn";
 const INTERVAL_MS = 7000;
 // How far a finger has to travel, as a share of the hero's width, before letting go turns the slide.
 const SWIPE_THRESHOLD = 0.18;
+/** Sideways travel (px) under which a gesture still counts as a tap. */
+const TAP_SLOP = 16;
 
 const HERO_SLIDE_MASK: React.CSSProperties = {
   maskImage: "linear-gradient(to bottom, #000 35%, rgba(0,0,0,0.35) 72%, transparent)",
@@ -27,6 +29,7 @@ export function MobileHero({ slides, label, sourceName }: { slides: HeroSlide[];
   const drag = useRef<{ x: number; y: number; dx: number; horizontal: boolean | null } | null>(null);
   // Set by a swipe, so the click the browser sends after it does not also open the slide.
   const swiped = useRef(false);
+  const pendingTap = useRef<number | null>(null);
   useEffect(() => setIndex(0), [slideKey]);
 
   useEffect(() => {
@@ -75,6 +78,20 @@ export function MobileHero({ slides, label, sourceName }: { slides: HeroSlide[];
         const state = drag.current;
         drag.current = null;
         setTouching(false);
+        // A tap whose finger slid a little is still a tap: the button under it must open. The browser
+        // sends no click once the finger has moved past its own small slop, so the tap is clicked
+        // here - unless the browser's click turns up after all (see onClickCapture).
+        if (state && state.horizontal !== null && Math.hypot(event.clientX - state.x, event.clientY - state.y) < TAP_SLOP) {
+          place(0, true);
+          const target = (event.target as Element).closest<HTMLElement>("a, button");
+          if (target) {
+            pendingTap.current = window.setTimeout(() => {
+              pendingTap.current = null;
+              target.click();
+            }, 60);
+          }
+          return;
+        }
         if (!state?.horizontal) return;
         swiped.current = true;
         const width = event.currentTarget.clientWidth || 1;
@@ -88,6 +105,10 @@ export function MobileHero({ slides, label, sourceName }: { slides: HeroSlide[];
         place(0, true);
       }}
       onClickCapture={(event) => {
+        if (pendingTap.current !== null) {
+          window.clearTimeout(pendingTap.current);
+          pendingTap.current = null;
+        }
         if (!swiped.current) return;
         swiped.current = false;
         event.preventDefault();
