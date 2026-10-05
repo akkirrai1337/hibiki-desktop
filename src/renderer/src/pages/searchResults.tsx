@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { PullToRefresh, refetchFromFirstPage } from "@/components/PullToRefresh";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { Clock, Search, SlidersHorizontal, X } from "lucide-react";
@@ -32,8 +33,10 @@ function useSearchResults(query: string) {
   const filters = useSearchFiltersStore((s) => s.filters);
   const hasFilters = activeFilterCount(filters) > 0;
 
+  const queryClient = useQueryClient();
+  const resultsKey = ["searchResults", source?.id, longEnough ? query : "", filters];
   const results = useInfiniteQuery({
-    queryKey: ["searchResults", source?.id, longEnough ? query : "", filters],
+    queryKey: resultsKey,
     enabled: !!source && (longEnough || hasFilters),
     initialPageParam: 0,
     queryFn: ({ pageParam, signal }) =>
@@ -52,7 +55,9 @@ function useSearchResults(query: string) {
     return () => observer.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage, items.length]);
 
-  return { source, results, items, longEnough, hasFilters, sentinel };
+  const refresh = () => refetchFromFirstPage(queryClient, resultsKey);
+
+  return { source, results, items, longEnough, hasFilters, sentinel, refresh };
 }
 
 function DesktopSearchResults() {
@@ -89,7 +94,7 @@ function MobileSearchPage() {
   const urlQuery = typeof search.q === "string" ? search.q : "";
   const [value, setValue] = useState(urlQuery);
   const query = urlQuery.trim();
-  const { source, results, items, longEnough, hasFilters, sentinel } = useSearchResults(query);
+  const { source, results, items, longEnough, hasFilters, sentinel, refresh } = useSearchResults(query);
 
   // Typing settles into the URL after a pause; replace, so each keystroke is not a step for Back.
   // A URL changed from elsewhere (Back, a link) is taken into the field instead of overwritten.
@@ -128,6 +133,8 @@ function MobileSearchPage() {
 
   return (
     <div className="min-h-full bg-app-bg px-4 pb-6">
+      {/* Only while results are shown; settles below the search bar stuck to the top. */}
+      <PullToRefresh onRefresh={refresh} disabled={!(longEnough || hasFilters) || !source} offset={68} />
       {/* Stays at the top while the results scroll - the page's scroll box already starts under the
           status bar, so its top edge is the right place. */}
       <div className="mobile-sticky-backdrop sticky top-0 z-20 -mx-4 bg-app-bg px-4 pb-3 pt-3">

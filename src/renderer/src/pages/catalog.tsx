@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { PullToRefresh, refetchFromFirstPage } from "@/components/PullToRefresh";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
 import { Radio } from "lucide-react";
@@ -69,8 +70,10 @@ export function CatalogBrowsePage() {
   const mode = modes.find((m) => m.value === requestedMode)?.value ?? modes[0]?.value;
   const sort = mode;
 
+  const queryClient = useQueryClient();
+  const browseKey = ["catalog", source?.id, sort ?? "", filters];
   const browse = useInfiniteQuery({
-    queryKey: ["catalog", source?.id, sort ?? "", filters],
+    queryKey: browseKey,
     // Wait for the source's orders: asking before them would browse by an order nobody chose.
     enabled: !!source && settings.isFetched,
     initialPageParam: 0,
@@ -106,6 +109,7 @@ export function CatalogBrowsePage() {
 
   return (
     <div className="min-h-full bg-app-bg px-8 py-8 pb-16 mobile:px-4 mobile:pb-6 mobile:pt-3">
+      <PullToRefresh onRefresh={() => (source ? refetchFromFirstPage(queryClient, browseKey) : sources.refetch())} />
       {sources.isLoading && <PosterGridSkeleton count={15} />}
       {sources.isError && <ErrorBanner message={(sources.error as Error).message} />}
       {sources.data?.length === 0 && <EmptySources />}

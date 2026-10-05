@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { PullToRefresh } from "@/components/PullToRefresh";
 import { useTranslation } from "react-i18next";
 import { Play, Radio } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
@@ -108,7 +109,15 @@ export function CatalogPage() {
     if (!topGenre || topCount < MIN_GENRE_MATCHES) return null;
     return { genre: topGenre, items: items.filter((item) => item.genres?.includes(topGenre!)) };
   }, [poolTitles]);
+  const queryClient = useQueryClient();
+  const refreshHome = () => Promise.all([
+    sources.refetch(),
+    // Only with a source: without one these have nothing to ask (and are switched off).
+    ...(source ? [hero.refetch(), pool.refetch()] : []),
+    queryClient.invalidateQueries({ queryKey: ["recent-progress"] }),
+  ]);
   return <div className="min-h-full bg-app-bg pb-12">
+    <PullToRefresh onRefresh={refreshHome} />
     {sources.isLoading && <HeroSkeleton />}{sources.data?.length === 0 && <EmptySources />}{sources.isError && <ErrorBanner message={(sources.error as Error).message} className="m-8" />}
     {source && <>
       {heroSlides.length > 0
