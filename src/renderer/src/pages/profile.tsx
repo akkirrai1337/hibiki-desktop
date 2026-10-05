@@ -16,7 +16,7 @@ import { useAchievementsStore } from "@/stores/achievementsStore";
 import { cn } from "@/lib/cn";
 import { isMobile } from "@/lib/mobile";
 import { useSourceUpdateCount } from "@/lib/sourceUpdates";
-import { BottomSheet } from "@/components/BottomSheet";
+import { BottomSheet, SheetOption } from "@/components/BottomSheet";
 import { LIBRARY_CATEGORY_ICONS, LIBRARY_CATEGORY_LABEL_KEYS } from "@/lib/libraryCategories";
 import { AchievementGrid } from "@/components/AchievementCards";
 import { ACHIEVEMENT_TIER_BY_ID } from "@/lib/achievements";
@@ -586,6 +586,7 @@ function BannerActions({ filename, onChange, inline }: { filename: string | null
   const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const onPick = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -608,13 +609,26 @@ function BannerActions({ filename, onChange, inline }: { filename: string | null
     onChange(null);
   };
 
-  // Phone: the same two actions as round buttons in a row of the header's corner buttons.
+  // Phone: one round button among the header's corner buttons, so they cover as little of the
+  // banner as possible - it picks a banner straight away, or with one already set opens a sheet to
+  // change or remove it.
   if (inline) {
     return (
       <>
-        {filename && <button type="button" onClick={onClear} aria-label={t("profile.removeBanner")} className={MOBILE_CORNER_BUTTON}><X className="h-[18px] w-[18px]" strokeWidth={2.25} /></button>}
-        <button type="button" onClick={() => inputRef.current?.click()} disabled={busy} aria-label={t("profile.editBanner")} className={MOBILE_CORNER_BUTTON}><ImageUp className="h-[18px] w-[18px]" strokeWidth={2} /></button>
+        <button
+          type="button"
+          onClick={() => (filename ? setSheetOpen(true) : inputRef.current?.click())}
+          disabled={busy}
+          aria-label={t("profile.editBanner")}
+          className={MOBILE_CORNER_BUTTON}
+        >
+          <ImageUp className="h-[18px] w-[18px]" strokeWidth={2} />
+        </button>
         <input ref={inputRef} type="file" accept={[...ACCEPTED_BANNER_TYPES].join(",")} onChange={onPick} className="hidden" />
+        <BottomSheet open={sheetOpen} onClose={() => setSheetOpen(false)}>
+          <SheetOption icon={<ImageUp className="h-5 w-5" strokeWidth={2} />} label={t("profile.editBanner")} onClick={() => { setSheetOpen(false); inputRef.current?.click(); }} />
+          <SheetOption icon={<Trash2 className="h-5 w-5" strokeWidth={2} />} label={t("profile.removeBanner")} danger onClick={() => { setSheetOpen(false); void onClear(); }} />
+        </BottomSheet>
       </>
     );
   }

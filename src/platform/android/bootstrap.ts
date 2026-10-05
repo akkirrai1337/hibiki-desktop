@@ -52,10 +52,6 @@ export async function installAndroidHibiki(): Promise<void> {
   await runtime.reload();
   const core = createCoreApi(runtime);
   const nothing = () => () => {};
-  // The banner keeps one file name per type (banner.png, ...), so a new picture of the same type is
-  // the same URL: the version makes the WebView fetch it again instead of showing its cached copy.
-  let bannerVersion = Date.now();
-
   const api: HibikiApi = {
     ...core,
     sources: { ...core.sources, onChanged: (callback) => events.on(IPC.sourcesChanged, () => callback()) },
@@ -76,17 +72,9 @@ export async function installAndroidHibiki(): Promise<void> {
     zoom: { set() {}, get: () => 1 },
     profile: {
       ...core.profile,
-      setBanner: async (bytes, mimeType) => {
-        const filename = await core.profile.setBanner(bytes, mimeType);
-        bannerVersion = Date.now();
-        return filename;
-      },
-      clearBanner: async () => {
-        await core.profile.clearBanner();
-        bannerVersion = Date.now();
-      },
-      // Capacitor's own local server hands out files from the app's storage under this URL.
-      bannerUrl: (filename) => `${Capacitor.convertFileSrc(platform.files.join(platform.paths.profile, filename))}?v=${bannerVersion}`,
+      // Capacitor's own local server hands out files from the app's storage under this URL. Each
+      // banner has a name of its own (see core/api/profile.ts), so no cache-busting is needed.
+      bannerUrl: (filename) => Capacitor.convertFileSrc(platform.files.join(platform.paths.profile, filename)),
     },
     platform: "android",
     device: {

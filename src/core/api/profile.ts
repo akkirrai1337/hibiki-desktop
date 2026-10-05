@@ -26,7 +26,8 @@ async function clearExisting(): Promise<void> {
   } catch {
     return;
   }
-  await Promise.all(entries.filter((name) => name.startsWith("banner.")).map((name) => files.remove(files.join(paths.profile, name))));
+  // "banner." is how older versions named it, "banner-<time>." how they are named now.
+  await Promise.all(entries.filter((name) => name.startsWith("banner.") || name.startsWith("banner-")).map((name) => files.remove(files.join(paths.profile, name))));
 }
 
 /** The profile-banner part of `window.hibiki`. */
@@ -38,7 +39,9 @@ export function createProfileApi(): HibikiApi["profile"] {
       const { files, paths } = getPlatform();
       await files.mkdir(paths.profile);
       await clearExisting();
-      const filename = `banner.${extension}`;
+      // A new name every time: the same name for a new picture left the persisted filename (and so
+      // the page) unchanged, and the image cached under its old URL - replacing a banner did nothing.
+      const filename = `banner-${Date.now()}.${extension}`;
       await files.writeBytes(files.join(paths.profile, filename), new Uint8Array(bytes));
       return filename;
     },
