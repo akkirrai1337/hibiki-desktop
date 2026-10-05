@@ -525,8 +525,15 @@ function AnimeDetailPage() {
           transition moves the page's box, which carries fixed children along with it - they blinked
           out and back on every switch between titles. */}
       {isMobile && createPortal(
-        // The page's two actions, pinned under the thumb: keep it (library), and watch.
-        <div className="fixed inset-x-3 z-40 flex items-center gap-2.5" style={{ bottom: "calc(0.75rem + var(--safe-bottom))" }}>
+        // The page's two actions, pinned under the thumb: keep it (library), and watch. They need the
+        // title, so they arrive with it - rising in rather than popping up.
+        <motion.div
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.24, ease: [0.2, 0.8, 0.2, 1] }}
+          className="fixed inset-x-3 z-40 flex items-center gap-2.5"
+          style={{ bottom: "calc(0.75rem + var(--safe-bottom))" }}
+        >
           <LibraryButton category={libraryEntry?.category ?? null} onSelect={setLibraryCategory} onRemove={removeFromLibrary} />
           {continueTarget && activeGroup ? (
             <Link
@@ -540,7 +547,7 @@ function AnimeDetailPage() {
           ) : (
             <span className="flex h-[3.25rem] flex-1 items-center justify-center rounded-full bg-app-popover text-sm font-semibold text-muted shadow-[0_10px_30px_rgba(0,0,0,0.5)]">{t("detail.noEpisodes")}</span>
           )}
-        </div>,
+        </motion.div>,
         document.body,
       )}
       <AnimatePresence>
@@ -1258,7 +1265,17 @@ function MobileTitleChrome({ posterUrl, siteUrl }: { posterUrl?: string | null; 
       >
         <ArrowLeft className="h-5 w-5" strokeWidth={2.25} />
       </button>
-      {siteUrl && <a href={siteUrl} target="_blank" rel="noreferrer" aria-label={t("detail.openOnSite")} className={cn(button, "pointer-events-auto")}><ExternalLink className="h-[18px] w-[18px]" strokeWidth={2} /></a>}
+      {/* Known once the title has loaded: fades in then, beside the back button that is always there. */}
+      {siteUrl && <motion.a
+        href={siteUrl}
+        target="_blank"
+        rel="noreferrer"
+        aria-label={t("detail.openOnSite")}
+        initial={{ opacity: 0, scale: 0.85 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.2, ease: "easeOut" }}
+        className={cn(button, "pointer-events-auto")}
+      ><ExternalLink className="h-[18px] w-[18px]" strokeWidth={2} /></motion.a>}
     </div>, document.body)}
   </>;
 }

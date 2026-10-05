@@ -224,9 +224,15 @@ function RootLayoutContent() {
     if (!isMobile) return;
     const timer = window.setTimeout(() => {
       void Promise.all(Object.values(PERSISTED_PAGES).map((page) => page.preload())).catch(() => undefined);
+      // The title page's and the player's own code too (split per route): the first title opened
+      // otherwise slid in as an empty box while its chunk loaded - the transition looked skipped.
+      for (const id of ["/anime/$sourceId/$animeId", "/watch/$sourceId/$animeId/$groupId/$episodeId"] as const) {
+        const route = router.routesById[id];
+        if (route) void Promise.resolve(router.loadRouteChunk(route)).catch(() => undefined);
+      }
     }, 1500);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [router]);
   const mountedPages = pathname in PERSISTED_PAGES && !visited.includes(pathname) ? [...visited, pathname] : visited;
   // Discord presence outside the player: a single steady "using hibiki" line, not per-page text
   // (catalog/profile/settings/...) - that was tried and just read as noise. The watch page sets
