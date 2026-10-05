@@ -24,15 +24,33 @@ import { rememberSectionTitle, type BrowseSection } from "@/lib/sectionTitleMemo
 // Every static (paramless) route's own route component is a no-op (see index.tsx) - its real
 // content is one of these, kept alive here instead once first visited (see `visited` below). Lazy
 // imports keep every unvisited screen out of the startup bundle without changing that persistence.
-const PERSISTED_PAGES: Record<string, React.LazyExoticComponent<React.ComponentType>> = {
-  "/": lazy(() => import("@/pages/home").then((module) => ({ default: module.CatalogPage }))),
-  "/catalog": lazy(() => import("@/pages/catalog").then((module) => ({ default: module.CatalogBrowsePage }))),
-  "/library": lazy(() => import("@/pages/library").then((module) => ({ default: module.LibraryPage }))),
-  "/history": lazy(() => import("@/pages/history").then((module) => ({ default: module.HistoryPage }))),
-  "/downloads": lazy(() => import("@/pages/downloads").then((module) => ({ default: module.DownloadsPage }))),
-  "/profile": lazy(() => import("@/pages/profile").then((module) => ({ default: module.ProfilePage }))),
-  "/settings": lazy(() => import("@/pages/settings").then((module) => ({ default: module.SettingsPage }))),
-  "/sources": lazy(() => import("@/pages/sources").then((module) => ({ default: module.SourcesPage }))),
+type PersistedPage = React.ComponentType & { preload: () => Promise<unknown> };
+
+// React.lazy suspends on a page's first render even when its chunk is already loaded, and React
+// then holds the fallback (an empty page) on screen for a moment - on the phone, half a second of
+// blank in the middle of every first visit. Once `preload` has the module, a newly mounted page
+// renders it directly instead; the choice is made once per mount, so a page never swaps between
+// the two and remounts.
+function lazyPage(load: () => Promise<React.ComponentType>): PersistedPage {
+  let loaded: React.ComponentType | null = null;
+  const preload = () => load().then((component) => { loaded = component; return component; });
+  const Lazy = lazy(() => preload().then((component) => ({ default: component })));
+  function Page() {
+    const [Direct] = useState(() => loaded);
+    return Direct ? <Direct /> : <Lazy />;
+  }
+  return Object.assign(Page, { preload });
+}
+
+const PERSISTED_PAGES: Record<string, PersistedPage> = {
+  "/": lazyPage(() => import("@/pages/home").then((module) => module.CatalogPage)),
+  "/catalog": lazyPage(() => import("@/pages/catalog").then((module) => module.CatalogBrowsePage)),
+  "/library": lazyPage(() => import("@/pages/library").then((module) => module.LibraryPage)),
+  "/history": lazyPage(() => import("@/pages/history").then((module) => module.HistoryPage)),
+  "/downloads": lazyPage(() => import("@/pages/downloads").then((module) => module.DownloadsPage)),
+  "/profile": lazyPage(() => import("@/pages/profile").then((module) => module.ProfilePage)),
+  "/settings": lazyPage(() => import("@/pages/settings").then((module) => module.SettingsPage)),
+  "/sources": lazyPage(() => import("@/pages/sources").then((module) => module.SourcesPage)),
 };
 
 // A lazy page has no DOM of its own until its chunk arrives. Keep the same page background in
@@ -197,6 +215,15 @@ function RootLayoutContent() {
   // previous page already hidden and this one not there yet - just the app-wide theme gradient, which
   // read as a flash the first time each tab was opened (most visible with a custom theme).
   usePageTransition(pathname);
+  // Phone: load every tab's page code shortly after start, so a first visit renders at once (see
+  // lazyPage) instead of an empty screen in the middle of the page transition.
+  useEffect(() => {
+    if (!isMobile) return;
+    const timer = window.setTimeout(() => {
+      void Promise.all(Object.values(PERSISTED_PAGES).map((page) => page.preload())).catch(() => undefined);
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, []);
   const mountedPages = pathname in PERSISTED_PAGES && !visited.includes(pathname) ? [...visited, pathname] : visited;
   // Discord presence outside the player: a single steady "using hibiki" line, not per-page text
   // (catalog/profile/settings/...) - that was tried and just read as noise. The watch page sets
@@ -264,7 +291,7 @@ function RootLayoutContent() {
     <SearchSpotlight />
     <div className="flex min-h-0 flex-1">
       {!isMobile && <Sidebar />}
-      <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+      <main className="app-main-area relative flex min-h-0 min-w-0 flex-1 flex-col">
         {/* The router destroys a route's whole component tree on navigating away, which was silently
             resetting anything living in its component state one piece at a time (a carousel's slide,
             a scroll position, a random pool re-rolling on every visit) - patching each of those

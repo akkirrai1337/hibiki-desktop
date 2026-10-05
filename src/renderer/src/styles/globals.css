@@ -76,18 +76,18 @@ body,
 .bg-theme-active .bg-app-bg {
   background-color: rgb(var(--color-bg) / 0.8);
 }
-/* Phone: a page's scroll box pads itself clear of the status bar and the floating tab bar, and
-   those paddings lie outside the page's own (tinted) root - left alone they show the bare, brighter
-   gradient as a band under the tab bar. Paint the same tint into just those two strips; `local`
-   keeps them on the padding as the content scrolls. Param routes (search) scroll in the shared
-   app-main box instead - only when their root is the same tinted page, not the title page's own. */
-.mobile.bg-theme-active [data-page-scroll],
-.mobile.bg-theme-active [data-scroll-restoration-id="app-main"]:has(> .bg-app-bg) {
-  background:
-    linear-gradient(rgb(var(--color-bg) / 0.8), rgb(var(--color-bg) / 0.8)) top / 100% var(--safe-top) no-repeat local,
-    linear-gradient(rgb(var(--color-bg) / 0.8), rgb(var(--color-bg) / 0.8)) bottom / 100% var(--tabbar-space) no-repeat local;
+/* Phone: the theme's tint lives on <main> behind the pages, not on each page's own root. The
+   scroll boxes pad themselves clear of the status bar and the tab bar outside that root (which
+   left a bare, brighter band under the tab bar), and a page transition fades and slides the box -
+   with the tint on the page, the first frames of every transition flashed the bare gradient. */
+.mobile.bg-theme-active .app-main-area {
+  background-color: rgb(var(--color-bg) / 0.8);
 }
-/* The status-bar scrim over that top strip: translucent it would tint it a second time, so it
+.mobile.bg-theme-active [data-page-scroll] > .bg-app-bg,
+.mobile.bg-theme-active [data-scroll-restoration-id="app-main"] > .bg-app-bg {
+  background-color: transparent;
+}
+/* The status-bar scrim over the page: translucent it would tint it a second time, so it
    repaints the whole backdrop opaquely instead - the root's gradient (same viewport-sized box, same
    origin) under the same tint - and reads as the page itself. */
 .mobile.bg-theme-active .mobile-status-scrim {

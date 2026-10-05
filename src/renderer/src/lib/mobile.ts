@@ -59,6 +59,8 @@ export function installBackButton(goBack: () => void, goUp: () => boolean): () =
 // time the route resolves. Switching tabs (and the library's segments) is a short fade; going
 // deeper slides in from the right, going back from the left. Nothing for the player: the screen
 // turns on the way in and out, and a slide on top of that only reads as a stutter.
+// Never from fully transparent: the WebView does not draw a layer at opacity 0, so the new page
+// stayed blank for the whole animation and only popped in after it - a flash on every switch.
 
 const TOP_LEVEL = new Set(["/", "/catalog", "/search", "/library", "/history", "/downloads", "/profile"]);
 
@@ -82,14 +84,14 @@ export function usePageTransition(pathname: string): void {
     if (!box) return;
     if (TOP_LEVEL.has(pathname) && TOP_LEVEL.has(from.pathname)) {
       box.animate(
-        [{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }],
+        [{ opacity: 0.5, transform: "translateY(8px)" }, { opacity: 1, transform: "none" }],
         { duration: 170, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
       );
       return;
     }
     const back = index < from.index;
     box.animate(
-      [{ opacity: 0, transform: `translateX(${back ? -28 : 28}px)` }, { opacity: 1, transform: "none" }],
+      [{ opacity: 0.5, transform: `translateX(${back ? -32 : 32}px)` }, { opacity: 1, transform: "none" }],
       { duration: 240, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
     );
   }, [pathname]);
