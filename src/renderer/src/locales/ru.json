@@ -430,6 +430,8 @@
     "recentEmpty": "Пока ничего не добавлено",
     "episodesCompleted": "Эпизодов просмотрено",
     "activityTitle": "Активность за 30 дней",
+    "activityTitleShort": "Активность",
+    "activityMinutesShort": "{{count}} мин.",
     "activityEpisodes": "{{count}} эпизодов просмотрено",
     "activityMinutes": "{{count}} мин. просмотра",
     "hours": "{{hours}} ч",

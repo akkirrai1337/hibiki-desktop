@@ -344,8 +344,7 @@ function MobileProfileLayout({
         </p>
 
         <section className="rounded-2xl border border-border bg-text/[.03] p-3.5">
-          <h2 className="mb-3 text-sm font-bold text-text">{t("profile.activityTitle")}</h2>
-          <ActivityBars series={activitySeries} locale={i18n.language} />
+          <MobileActivityBars series={activitySeries} locale={i18n.language} />
         </section>
 
         <section className="pt-2">
@@ -897,6 +896,110 @@ function XpHistoryRow({ event, locale }: { event: XpEvent; locale: string }) {
         <span className="text-xs text-muted/70">{relativeDate(event.createdAt, t, locale)}</span>
       </div>
       <span className="shrink-0 text-[11px] font-semibold text-accent-text/80">+{event.xp} {t("profile.xp")}</span>
+    </div>
+  );
+}
+
+const WEEK = 7;
+
+/** "15-21 Sep", or "29 Sep - 5 Oct" across months. */
+function dayRange(fromKey: string, toKey: string, locale: string): string {
+  const toDate = (key: string) => {
+    const [y, m, d] = key.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  };
+  try {
+    return new Intl.DateTimeFormat(locale, { day: "numeric", month: "short" }).formatRange(toDate(fromKey), toDate(toKey));
+  } catch {
+    return `${shortDayLabel(fromKey, locale)} - ${shortDayLabel(toKey, locale)}`;
+  }
+}
+
+/**
+ * The phone's activity chart: a week at a time, today at the right edge, and swiped right for earlier
+ * weeks back to the start of the series. A tap on a day puts its numbers in the header, which hover
+ * did on desktop.
+ */
+function MobileActivityBars({ series, locale }: { series: DailyActivity[]; locale: string }) {
+  const { t } = useTranslation();
+  const scroller = useRef<HTMLDivElement>(null);
+  const [picked, setPicked] = useState<number | null>(null);
+  // By time watched: a day of half-watched episodes is activity too, and counted no episodes.
+  const max = Math.max(1, ...series.map((d) => d.watchedMs));
+  const pickedDay = picked !== null ? series[picked] : null;
+  // The first day in view, for the header's "15-21 Sep" while no day is picked.
+  const [firstShown, setFirstShown] = useState(Math.max(0, series.length - WEEK));
+
+  // Opens on the latest week.
+  useEffect(() => {
+    const el = scroller.current;
+    if (el) el.scrollLeft = el.scrollWidth;
+    setFirstShown(Math.max(0, series.length - WEEK));
+  }, [series.length]);
+
+  const onScroll = () => {
+    const el = scroller.current;
+    if (!el || el.scrollWidth <= el.clientWidth) return;
+    const column = el.scrollWidth / series.length;
+    setFirstShown(Math.min(Math.max(0, series.length - WEEK), Math.max(0, Math.round(el.scrollLeft / column))));
+  };
+  const shownFrom = series[firstShown];
+  const shownTo = series[Math.min(series.length - 1, firstShown + WEEK - 1)];
+
+  const dateOf = (key: string) => {
+    const [y, m, d] = key.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  };
+  const last = series.length - 1;
+
+  return (
+    <div>
+      <div className="mb-3 flex min-h-[1.25rem] items-baseline justify-between gap-3">
+        <h2 className="text-sm font-bold text-text">{t("profile.activityTitleShort")}</h2>
+        {pickedDay ? (
+          <span className="truncate text-xs text-muted">
+            {shortDayLabel(pickedDay.date, locale)} · {t("common.episodesShort", { count: pickedDay.completedCount })} · {t("profile.activityMinutesShort", { count: Math.round(pickedDay.watchedMs / 60_000) })}
+          </span>
+        ) : (
+          shownFrom && shownTo && <span className="truncate text-xs text-muted/70">{dayRange(shownFrom.date, shownTo.date, locale)}</span>
+        )}
+      </div>
+      <div
+        ref={scroller}
+        onScroll={onScroll}
+        className="no-scrollbar grid snap-x snap-mandatory grid-flow-col gap-1.5 overflow-x-auto overscroll-x-contain"
+        style={{ gridAutoColumns: `calc((100% - ${WEEK - 1} * 0.375rem) / ${WEEK})` }}
+      >
+        {series.map((d, i) => {
+          const date = dateOf(d.date);
+          const active = picked === i;
+          // Snap by weeks counted from today, so a swipe lands on whole weeks ending on today's weekday.
+          const snap = (last - i) % WEEK === WEEK - 1 || i === 0;
+          return (
+            <button
+              key={d.date}
+              type="button"
+              onClick={() => setPicked(active ? null : i)}
+              className={cn("flex flex-col items-stretch", snap && "snap-start")}
+            >
+              <div className="flex h-24 items-end px-1">
+                <motion.div
+                  initial={{ height: 0 }}
+                  animate={{ height: d.watchedMs > 0 ? `${Math.max(8, (d.watchedMs / max) * 100)}%` : 4 }}
+                  transition={{ duration: 0.35, ease: "easeOut" }}
+                  // The same fixed coral as the desktop chart (see ActivityBars).
+                  className={cn("w-full rounded-md", d.watchedMs === 0 && (active ? "bg-text/[.18]" : "bg-text/[.08]"))}
+                  style={d.watchedMs > 0 ? { backgroundColor: active ? "#FF7A86CC" : "#FF7A86" } : undefined}
+                />
+              </div>
+              <span className={cn("mt-2 text-[11px] leading-tight", i === last ? "font-bold text-text" : "text-muted/80")}>
+                {date.toLocaleDateString(locale, { weekday: "short" })}
+              </span>
+              <span className={cn("text-[11px] leading-tight", i === last ? "font-semibold text-text" : "text-muted/60")}>{date.getDate()}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

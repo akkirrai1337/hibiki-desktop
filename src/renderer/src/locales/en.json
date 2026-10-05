@@ -430,6 +430,8 @@
     "recentEmpty": "Nothing added yet",
     "episodesCompleted": "Episodes watched",
     "activityTitle": "Last 30 days",
+    "activityTitleShort": "Activity",
+    "activityMinutesShort": "{{count}} min",
     "activityEpisodes": "{{count}} episodes watched",
     "activityMinutes": "{{count}} min watched",
     "hours": "{{hours}}h",

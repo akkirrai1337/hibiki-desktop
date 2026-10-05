@@ -430,6 +430,8 @@
     "recentEmpty": "Поки що нічого не додано",
     "episodesCompleted": "Епізодів переглянуто",
     "activityTitle": "Активність за 30 днів",
+    "activityTitleShort": "Активність",
+    "activityMinutesShort": "{{count}} хв",
     "activityEpisodes": "{{count}} епізодів переглянуто",
     "activityMinutes": "{{count}} хв. перегляду",
     "hours": "{{hours}} год",
