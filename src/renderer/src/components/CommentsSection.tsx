@@ -55,7 +55,7 @@ export function CommentsSection({ source, animeId }: { source: SourceInfo; anime
   const comments = thread.data?.pages.flat() ?? [];
 
   return (
-    <section className="px-8 pt-10">
+    <section className="px-8 pt-10 mobile:px-4 mobile:pt-8">
       <h2 className="mb-4 flex items-center gap-2 text-xl font-bold tracking-[-.02em] text-text">
         <MessageSquare className="h-[18px] w-[18px] text-muted" strokeWidth={2} />
         {t("detail.comments.title")}

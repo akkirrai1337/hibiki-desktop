@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { AnimatePresence, motion } from "motion/react";
 import * as ContextMenu from "@radix-ui/react-context-menu";
-import { ArrowUpDown, ChevronRight, LayoutGrid, List, Mic, Play, Bookmark, Check, ChevronDown, Clock, Download, Eraser, ExternalLink, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
+import { ArrowLeft, ArrowUpDown, ChevronRight, LayoutGrid, List, Mic, Play, Bookmark, Check, ChevronDown, Clock, Download, Eraser, ExternalLink, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
 import { CommentsSection } from "@/components/CommentsSection";
 import { RatingButton, SourceRatings } from "@/components/RatingButton";
 import { hibiki } from "@/lib/hibiki";
@@ -19,6 +19,7 @@ import { GroupDropdown } from "@/components/GroupDropdown";
 import { HorizontalScrollRow } from "@/components/HorizontalScrollRow";
 import { SmoothImage } from "@/components/SmoothImage";
 import { cn } from "@/lib/cn";
+import { isMobile, useBackHandler } from "@/lib/mobile";
 import { ASSIGNABLE_LIBRARY_CATEGORIES, LIBRARY_CATEGORY_ICONS, LIBRARY_CATEGORY_LABEL_KEYS } from "@/lib/libraryCategories";
 import { STATUS_ID_ALIASES } from "@/lib/searchFilters";
 import { episodeFavoriteKey, useEpisodeFavoritesStore } from "@/stores/episodeFavoritesStore";
@@ -99,7 +100,7 @@ function dedupeById<T extends { id: string }>(items: T[]): T[] {
 // Same "6 full + a peek of the 7th" ratio the old hand-rolled version used (60px = 6 gaps of
 // gap-2.5/0.625rem, for a row that shows 7 cards' worth of width) - just expressed as a plain
 // Tailwind width class, like HorizontalScrollRow's other callers, instead of a CSS custom property.
-const RELATED_CARD_WIDTH_CLASSES = "w-[calc((100%-6*0.625rem)/6.2)]";
+const RELATED_CARD_WIDTH_CLASSES = "w-[calc((100%-6*0.625rem)/6.2)] mobile:w-[30vw]";
 
 // Both "other titles" sections of this page: "Связанные тайтлы" (franchiseAnime/relatedAnime, a
 // compact strip next to the watch/library actions) and "Похожие тайтлы" (similarAnime, under the
@@ -308,10 +309,13 @@ function AnimeDetailPage() {
   // swapping to it here while keeping the hardcoded text would silently break light mode's
   // contrast the moment a background theme also happens to be on. A flat, theme-independent dark
   // tint keeps that existing contrast intact while still letting the gradient show through it.
-  return <div className={cn("relative isolate min-h-full pb-16", backgroundTheme && "bg-black/70")}>
+  return <div className={cn("relative isolate min-h-full pb-16 mobile:pb-6", backgroundTheme && "bg-black/70")}>
+    {/* The phone's version of the backdrop: the poster across the top of the page, under the status
+        bar, scrolling away with it - plus the way back and out, floating over it. */}
+    {isMobile && <MobileTitleChrome posterUrl={anime?.posterUrl} siteUrl={anime ? anime.pageUrl || source?.website : undefined} />}
     {/* Skipped entirely once a background theme is active (see the comment on `backgroundTheme`
         above) - the flat tint above takes over instead. */}
-    {!backgroundTheme && (
+    {!backgroundTheme && !isMobile && (
       // `left: var(--sidebar-width)`, not `inset-x-0` - this used to run full window width behind
       // the sidebar too, which didn't matter while the sidebar was always fully opaque, but once it
       // can go translucent (the "app background" theme, see lib/theme.ts) this poster-tinted
@@ -341,8 +345,8 @@ function AnimeDetailPage() {
     {animeQuery.isError && <div className="p-8"><ErrorBanner message={(animeQuery.error as Error).message} /></div>}
     {anime && <>
       <Overview anime={anime} libraryCategory={libraryEntry?.category ?? null} onSetLibraryCategory={setLibraryCategory} onRemoveFromLibrary={removeFromLibrary} onPosterClick={() => setPosterPreviewOpen(true)} continueTarget={continueTarget ? { groupId: activeGroup!.id, episodeId: continueTarget.episode.id, label: continueTarget.label } : undefined} sourceId={sourceId} animeId={animeId} source={source} related={related} />
-      <div className="px-8 pt-6">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="px-8 pt-6 mobile:px-4 mobile:pt-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 mobile:mb-3 mobile:gap-2">
           <h2 className="flex items-baseline gap-2 text-xl font-bold tracking-[-.02em] text-text">
             {t("detail.episodes")}
             {activeGroup && <span className="text-sm font-semibold tabular-nums text-muted">{activeGroup.episodes.length}</span>}
@@ -385,7 +389,7 @@ function AnimeDetailPage() {
         {groupsQuery.isLoading && <div className="text-sm text-muted">{t("detail.loadingEpisodes")}</div>}
         {groupsQuery.isError && <ErrorBanner message={(groupsQuery.error as Error).message} />}
         {groups.length === 0 && !groupsQuery.isLoading && !groupsQuery.isError && <div className="text-sm text-muted">{t("detail.noEpisodesYet")}</div>}
-        {activeGroup && <div className={cn("grid gap-2.5", episodesView === "tiles" ? "grid-cols-[repeat(auto-fill,minmax(112px,1fr))]" : "grid-cols-[repeat(auto-fill,minmax(300px,1fr))]")}>
+        {activeGroup && <div className={cn("grid gap-2.5 mobile:gap-2", episodesView === "tiles" ? "grid-cols-[repeat(auto-fill,minmax(112px,1fr))] mobile:grid-cols-[repeat(auto-fill,minmax(72px,1fr))]" : "grid-cols-[repeat(auto-fill,minmax(300px,1fr))]")}>
           {(episodesNewestFirst ? [...activeGroup.episodes].reverse() : activeGroup.episodes).map((ep) => (
             <EpisodeChip
               key={ep.id}
@@ -431,12 +435,12 @@ function AnimeDetailPage() {
         </div>}
       </div>
       {screenshots.length > 0 && (
-        <div className="px-8 pt-10">
-          <h2 className="mb-4 text-xl font-bold tracking-[-.02em] text-text">{t("detail.screenshots")}</h2>
+        <div className="px-8 pt-10 mobile:px-4 mobile:pt-8">
+          <h2 className="mb-4 text-xl font-bold tracking-[-.02em] text-text mobile:mb-3 mobile:text-lg">{t("detail.screenshots")}</h2>
           <HorizontalScrollRow
             items={screenshots}
             getKey={(url) => url}
-            cardWidthClassName="w-[calc((100%-3*0.625rem)/3.3)]"
+            cardWidthClassName="w-[calc((100%-3*0.625rem)/3.3)] mobile:w-[72vw]"
             arrowAspectClassName="aspect-video"
             renderItem={(url) => (
               <button onClick={() => setScreenshotPreview(url)} className="group block w-full overflow-hidden rounded-xl bg-surface ring-1 ring-border">
@@ -448,16 +452,29 @@ function AnimeDetailPage() {
           />
         </div>
       )}
-      <div className="px-8 pt-10">
+      <div className="px-8 pt-10 mobile:px-4 mobile:pt-8">
         <TitleStrip
           items={similar}
           sourceId={sourceId}
-          heading={<h2 className="mb-4 text-xl font-bold tracking-[-.02em] text-text">{t("detail.similarTitles")}</h2>}
+          heading={<h2 className="mb-4 text-xl font-bold tracking-[-.02em] text-text mobile:mb-3 mobile:text-lg">{t("detail.similarTitles")}</h2>}
         />
       </div>
       {/* Last on the page, and only for a source that has them: comments are the one section here
           that is about the site rather than about the title. */}
       {source && <CommentsSection source={source} animeId={animeId} />}
+      {/* The phone keeps the page's one main action pinned under the thumb, where the tab bar sits on
+          other screens. */}
+      {isMobile && continueTarget && activeGroup && (
+        <Link
+          to="/watch/$sourceId/$animeId/$groupId/$episodeId"
+          params={{ sourceId, animeId, groupId: activeGroup.id, episodeId: continueTarget.episode.id }}
+          className="fixed inset-x-3 z-40 flex h-[3.25rem] items-center justify-center gap-2 rounded-full bg-white text-[15px] font-bold text-zinc-900 shadow-[0_10px_30px_rgba(0,0,0,0.5)] active:scale-[0.98]"
+          style={{ bottom: "calc(0.75rem + var(--safe-bottom))" }}
+        >
+          <Play className="ml-0.5 h-4 w-4 fill-current" strokeWidth={0} />
+          {continueTarget.label}
+        </Link>
+      )}
       <AnimatePresence>
         {downloadEpisode && (
           <DownloadDialog
@@ -717,7 +734,8 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
   const title = animeTitle(anime);
   const [descriptionOpen, setDescriptionOpen] = useState(false);
   const descriptionRef = useRef<HTMLParagraphElement>(null);
-  const [collapsedHeight] = useState(72);
+  // Phone: exactly three lines of its 13.5px/1.55 text, so the fold never cuts a line in half.
+  const [collapsedHeight] = useState(isMobile ? 63 : 72);
   const [maxHeight, setMaxHeight] = useState(collapsedHeight);
   useEffect(() => {
     const full = descriptionRef.current?.scrollHeight ?? collapsedHeight;
@@ -739,6 +757,49 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
   const nextEpisodeLabel = normalizedStatus === "ongoing" && anime.nextEpisodeAt && isUpcomingDay(anime.nextEpisodeAt)
     ? formatNextEpisode(anime.nextEpisodeAt, t, i18n.language)
     : null;
+
+  // Phone: the poster sits small beside the title, half over the artwork above (MobileTitleChrome),
+  // and everything else runs full width below - the desktop's two columns leave a phone's right
+  // one too narrow for a description or a row of buttons. Watching is the pinned button at the
+  // bottom of the page, and the site link floats over the artwork, so neither is repeated here.
+  if (isMobile) return <section className="px-4 pb-1 pt-[9.5rem]">
+    <div className="flex items-end gap-4">
+      <button
+        type="button"
+        onClick={onPosterClick}
+        disabled={!anime.posterUrl}
+        className="block aspect-[2/3] w-[104px] shrink-0 overflow-hidden rounded-xl bg-surface shadow-[0_14px_36px_rgba(0,0,0,.55)] ring-1 ring-border"
+      >
+        {anime.posterUrl ? <img src={anime.posterUrl} alt={title} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center px-2 text-center text-[11px] text-muted">{t("common.noPoster")}</div>}
+      </button>
+      <div className="min-w-0 flex-1 pb-0.5">
+        <h1 className="line-clamp-4 select-text text-[22px] font-bold leading-[1.12] tracking-[-.02em] text-text">{title}</h1>
+        <div className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs font-medium text-muted">
+          {anime.year ? <span>{anime.year}</span> : null}
+          {anime.type && <>{anime.year ? <Dot /> : null}<span className="uppercase">{anime.type}</span></>}
+          {episodesLabel && <><Dot /><span>{episodesLabel}</span></>}
+        </div>
+        {statusLabel && <span className={cn("mt-2 inline-block rounded-md px-1.5 py-0.5 text-[11px] font-semibold", anime.status === "ongoing" ? "bg-accent/15 text-accent-text" : "bg-text/10 text-muted")}>{statusLabel}</span>}
+      </div>
+    </div>
+    {(nextEpisodeLabel || (anime.ratings?.length ?? 0) > 0) && <div className="mt-3.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs font-medium text-muted">
+      {(anime.ratings?.length ?? 0) > 0 && <SourceRatings ratings={anime.ratings ?? []} />}
+      {nextEpisodeLabel && <span className="flex items-center gap-1 rounded-md bg-emerald-400/15 px-1.5 py-0.5 font-semibold text-emerald-500 dark:text-emerald-400"><Clock className="h-3 w-3" strokeWidth={2.5} />{nextEpisodeLabel}</span>}
+    </div>}
+    {/* One line the thumb scrolls, instead of genres wrapping into a block of chips. */}
+    {anime.genres && anime.genres.length > 0 && <div className="no-scrollbar -mx-4 mt-3.5 flex gap-1.5 overflow-x-auto px-4 [&>*]:shrink-0">{anime.genres.map((g) => <GenreChip key={g} genre={g} sourceId={sourceId} className={GENRE_CHIP_CLASS} />)}</div>}
+    {anime.description && <div className="mt-3.5 overflow-hidden transition-[max-height] duration-300 ease-in-out" style={{ maxHeight }}>
+      <p ref={descriptionRef} className="select-text text-[13.5px] leading-[1.55] text-muted">{anime.description}</p>
+    </div>}
+    {anime.description && <button onClick={() => setDescriptionOpen((v) => !v)} className="mt-1 inline-flex items-center gap-1 py-1 text-xs font-semibold text-text/70">{descriptionOpen ? t("common.hideDescription") : t("common.readDescription")}<ChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-300", descriptionOpen && "rotate-180")} strokeWidth={2.5} /></button>}
+    <div className="mt-3 flex items-center gap-2.5">
+      <LibraryButton category={libraryCategory} onSelect={onSetLibraryCategory} onRemove={onRemoveFromLibrary} />
+      {source && <RatingButton source={source} animeId={animeId} />}
+    </div>
+    {related.length > 0 && <div className="mt-7">
+      <RelatedList items={related} sourceId={sourceId} currentAnimeId={animeId} />
+    </div>}
+  </section>;
 
   // The blurred backdrop now lives once at the page level (see AnimeDetailPage) so it covers the
   // whole scrollable page, not just this section - this just needs its own border to separate it
@@ -811,6 +872,7 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
 // viewer drift away from the viewport after the details page has been scrolled.
 function PosterPreview({ posterUrl, title, onClose }: { posterUrl: string; title: string; onClose: () => void }) {
   const { t } = useTranslation();
+  useBackHandler(true, onClose);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -829,7 +891,7 @@ function PosterPreview({ posterUrl, title, onClose }: { posterUrl: string; title
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      className="fixed inset-x-0 bottom-0 top-10 z-[100] flex items-center justify-center bg-black/[.78] p-8 backdrop-blur-sm"
+      className="fixed inset-x-0 bottom-0 top-10 z-[100] flex items-center justify-center bg-black/[.78] p-8 backdrop-blur-sm mobile:top-0 mobile:px-4 mobile:pb-[calc(1rem+var(--safe-bottom))] mobile:pt-[calc(1rem+var(--safe-top))]"
       onClick={onClose}
     >
       <motion.div
@@ -860,6 +922,7 @@ function PosterPreview({ posterUrl, title, onClose }: { posterUrl: string; title
 function LibraryButton({ category, onSelect, onRemove }: { category: LibraryCategory | null; onSelect: (category: LibraryCategory) => void; onRemove: () => void }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  useBackHandler(open, () => setOpen(false));
   const Icon = category ? LIBRARY_CATEGORY_ICONS[category] : Bookmark;
   return (
     <div className="relative">
@@ -1013,6 +1076,7 @@ function DownloadDialog({
 // scrollable page instead of the window. This page no longer applies one, but the portal stays: it
 // keeps the dialog out of the page's own stacking and scroll context. Same as SearchFiltersPanel.
 function Modal({ onDismiss, children }: { onDismiss: () => void; children: React.ReactNode }) {
+  useBackHandler(true, onDismiss);
   return createPortal(
     <motion.div
       initial={{ opacity: 0 }}
@@ -1045,11 +1109,46 @@ function Dot() { return <span className="h-0.5 w-0.5 rounded-full bg-muted" />; 
 function ErrorBanner({ message }: { message: string }) { const { t } = useTranslation(); return <div className="flex items-start gap-3 rounded-2xl border border-rose-400/30 bg-rose-400/10 p-4 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/5 dark:text-rose-200"><TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} /><span>{t("common.loadFailed", { message })}</span></div>; }
 function DetailSkeleton() { return <div className="animate-pulse px-8 pb-12 pt-8"><div className="flex gap-7"><div className="aspect-[2/3] w-44 shrink-0 rounded-2xl bg-text/[.06] sm:w-52" /><div className="flex-1 pt-1"><div className="h-9 w-2/3 max-w-md rounded bg-text/[.08]" /><div className="mt-4 h-3 w-40 rounded bg-text/[.06]" /><div className="mt-5 h-3 w-full max-w-xl rounded bg-text/[.06]" /><div className="mt-2 h-3 w-4/5 max-w-xl rounded bg-text/[.06]" /><div className="mt-6 h-12 w-40 rounded-xl bg-text/[.08]" /></div></div></div>; }
 
+/**
+ * Phone only: the poster as artwork across the top of the title page, running under the status
+ * bar and fading into the page, plus round Back and open-on-site buttons that stay over it.
+ */
+function MobileTitleChrome({ posterUrl, siteUrl }: { posterUrl?: string | null; siteUrl?: string | null }) {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const navigate = useNavigate();
+  // Dense enough to read over the page's text once it scrolls underneath, not only over artwork.
+  const button = "flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white ring-1 ring-white/10 backdrop-blur-md active:bg-black/80";
+  return <>
+    <div className="absolute inset-x-0 -z-10 overflow-hidden" style={{ top: "calc(-1 * var(--safe-top))", height: "calc(19rem + var(--safe-top))" }}>
+      {posterUrl && <img src={posterUrl} alt="" className="h-full w-full object-cover object-[center_22%] opacity-75" />}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-[rgb(var(--color-bg)/0.25)] to-[rgb(var(--color-bg))]" />
+    </div>
+    <div className="pointer-events-none fixed inset-x-0 z-40 flex justify-between px-3" style={{ top: "calc(0.375rem + var(--safe-top))" }}>
+      <button
+        type="button"
+        aria-label={t("detail.back")}
+        className={cn(button, "pointer-events-auto")}
+        onClick={() => {
+          // Opened straight onto this page (a deep link) there is nothing behind it: home instead.
+          const index = (window.history.state as { __TSR_index?: number } | null)?.__TSR_index ?? 0;
+          if (index > 0) router.history.back();
+          else void navigate({ to: "/" });
+        }}
+      >
+        <ArrowLeft className="h-5 w-5" strokeWidth={2.25} />
+      </button>
+      {siteUrl && <a href={siteUrl} target="_blank" rel="noreferrer" aria-label={t("detail.openOnSite")} className={cn(button, "pointer-events-auto")}><ExternalLink className="h-[18px] w-[18px]" strokeWidth={2} /></a>}
+    </div>
+  </>;
+}
+
 // The title page's own look for a genre chip - see GenreChip for the shared open-the-catalog logic.
 const GENRE_CHIP_CLASS = "rounded-full border border-border bg-text/[.03] px-3 py-1 text-xs font-medium text-text/75 hover:border-accent/50 hover:bg-accent/[.06] hover:text-text";
 
-// Six fill two rows of the widest layout (three columns) and three of the usual two.
-const RELATED_COLLAPSED_COUNT = 6;
+// Six fill two rows of the widest layout (three columns) and three of the usual two. A phone's one
+// column shows three, or the list alone would fill the screen above the episodes.
+const RELATED_COLLAPSED_COUNT = isMobile ? 3 : 6;
 
 // The franchise around this title (seasons, films, spin-offs) as a short list of continuations, not a
 // second row of posters: what tells them apart is their type, year and status, which a poster with a
@@ -1064,11 +1163,11 @@ function RelatedList({ items, sourceId, currentAnimeId }: { items: RelatedAnimeT
   const visible = !expanded && currentIndex >= RELATED_COLLAPSED_COUNT ? [...shown.slice(0, RELATED_COLLAPSED_COUNT - 1), items[currentIndex]] : shown;
   return (
     <div>
-      <h2 className="mb-3 flex items-baseline gap-2 text-xl font-bold tracking-[-.02em] text-text">
+      <h2 className="mb-3 flex items-baseline gap-2 text-xl font-bold tracking-[-.02em] text-text mobile:text-lg">
         {t("detail.relatedTitles")}
         <span className="text-sm font-semibold tabular-nums text-muted">{items.length}</span>
       </h2>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(360px,1fr))] gap-2">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(360px,1fr))] gap-2 mobile:grid-cols-1">
         {visible.map((item) => {
           const isCurrent = item.id === currentAnimeId;
           const status = item.status ? (STATUS_ID_ALIASES[item.status] ?? item.status) : null;

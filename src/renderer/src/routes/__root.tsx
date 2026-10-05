@@ -300,6 +300,6 @@ function RootLayoutContent() {
         )}
       </main>
     </div>
-    {isMobile && !isWatching && <><MobileStatusScrim /><MobileTabBar /></>}
+    {isMobile && !isWatching && <><MobileStatusScrim />{!pathname.startsWith("/anime/") && <MobileTabBar />}</>}
   </div>;
 }

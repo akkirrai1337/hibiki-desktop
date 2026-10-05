@@ -47,7 +47,7 @@ export function MobileStatusScrim() {
   return <div ref={scrim} aria-hidden className="pointer-events-none fixed inset-x-0 top-0 z-30 h-[var(--safe-top)] bg-app-bg opacity-0" />;
 }
 
-/** Floating bar at the bottom of every screen except the player. */
+/** Floating bar at the bottom of every screen except the player and a title page (it pins its watch button there). */
 export function MobileTabBar() {
   const { t } = useTranslation();
   const navigate = useNavigate();

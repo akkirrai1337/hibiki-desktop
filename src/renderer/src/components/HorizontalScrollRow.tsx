@@ -81,7 +81,8 @@ export function HorizontalScrollRow<T>({
           can be computed against the poster's own aspect ratio, not the whole card including any
           caption below it) - purely for positioning now that the fade itself is a mask on the
           scroller rather than a second overlay layer here. */}
-      <div className={cn(cardWidthClassName, "pointer-events-none absolute inset-y-0 left-0 z-10")}>
+      {/* Arrows are for a mouse; on the phone the thumb scrolls the row. */}
+      <div className={cn(cardWidthClassName, "pointer-events-none absolute inset-y-0 left-0 z-10 mobile:hidden")}>
         <div className={cn("relative w-full", arrowAspectClassName)}>
           <button
             type="button"
@@ -104,7 +105,7 @@ export function HorizontalScrollRow<T>({
         onScroll={updateScrollState}
         style={{ maskImage, WebkitMaskImage: maskImage }}
         className={cn(
-          "flex gap-4 overflow-x-auto scroll-smooth px-1 pb-1",
+          "flex gap-4 overflow-x-auto scroll-smooth px-1 pb-1 mobile:gap-3",
           "[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden",
         )}
       >
@@ -114,7 +115,7 @@ export function HorizontalScrollRow<T>({
           </div>
         ))}
       </div>
-      <div className={cn(cardWidthClassName, "pointer-events-none absolute inset-y-0 right-0 z-10")}>
+      <div className={cn(cardWidthClassName, "pointer-events-none absolute inset-y-0 right-0 z-10 mobile:hidden")}>
         <div className={cn("relative w-full", arrowAspectClassName)}>
           <button
             type="button"
