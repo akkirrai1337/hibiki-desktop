@@ -1,10 +1,11 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { MemoryStick, ArrowDownToLine, ArrowUpDown, Ban, Check, CheckCircle2, ChevronDown, ChevronUp, DatabaseBackup, FileText, FolderOpen, Home, Info, Languages, MessageCircle, MonitorPlay, Moon, Palette, Radio, RefreshCw, RotateCcw, ScrollText, SlidersHorizontal, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
+import { MemoryStick, ArrowDownToLine, ArrowUpDown, Ban, Check, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, DatabaseBackup, FileText, FolderOpen, Home, Info, Languages, MessageCircle, MonitorPlay, Moon, Palette, Radio, RefreshCw, RotateCcw, ScrollText, SlidersHorizontal, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { isMobile } from "@/lib/mobile";
 import { MobilePageHeader } from "@/components/MobilePageHeader";
+import { BottomSheet, SheetOption } from "@/components/BottomSheet";
 import { Switch } from "@/components/Switch";
 import { SUPPORTED_LOCALES, setLocale } from "@/lib/i18n";
 import { SKIP_TIMER_MAX_SECONDS, SKIP_TIMER_MIN_SECONDS, WATCHED_THRESHOLD_MAX_PERCENT, WATCHED_THRESHOLD_MIN_PERCENT, usePlayerPrefsStore } from "@/stores/playerPrefsStore";
@@ -809,7 +810,7 @@ export function SettingsPage() {
 
       {activeCategory === "general" && (
       <SettingsSection>
-        <SettingsRow icon={<Languages className="h-[18px] w-[18px]" strokeWidth={2} />}>
+        {isMobile ? <MobileLanguagePicker /> : <SettingsRow icon={<Languages className="h-[18px] w-[18px]" strokeWidth={2} />}>
           <p className="mb-2.5 text-sm font-semibold text-text">{t("settings.language")}</p>
           <div className="flex flex-wrap gap-2">
             {SUPPORTED_LOCALES.map((locale) => (
@@ -825,7 +826,7 @@ export function SettingsPage() {
               </button>
             ))}
           </div>
-        </SettingsRow>
+        </SettingsRow>}
 
         <SettingsGroup>
           {/* Discord and the app's own updater are desktop programs; the phone has neither. */}
@@ -899,4 +900,38 @@ export function SettingsPage() {
     </div>
     </div>
   </div>;
+}
+
+/**
+ * Phone: the language as a row showing the current one, opening the list in a sheet - a row of
+ * one chip per language read as a fixed set, and stops fitting as languages are added.
+ */
+function MobileLanguagePicker() {
+  const { t, i18n } = useTranslation();
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} className="block w-full rounded-2xl text-left active:opacity-80">
+        <SettingsRow icon={<Languages className="h-[18px] w-[18px]" strokeWidth={2} />}>
+          <div className="flex min-h-9 items-center justify-between gap-3">
+            <span className="text-sm font-semibold text-text">{t("settings.language")}</span>
+            <span className="flex items-center gap-1 text-sm text-muted">
+              {t(`settings.languageNames.${i18n.language}`)}
+              <ChevronRight className="h-4 w-4" strokeWidth={2} />
+            </span>
+          </div>
+        </SettingsRow>
+      </button>
+      <BottomSheet open={open} onClose={() => setOpen(false)} title={t("settings.language")}>
+        {SUPPORTED_LOCALES.map((locale) => (
+          <SheetOption
+            key={locale}
+            label={t(`settings.languageNames.${locale}`)}
+            selected={i18n.language === locale}
+            onClick={() => { setLocale(locale); setOpen(false); }}
+          />
+        ))}
+      </BottomSheet>
+    </>
+  );
 }
