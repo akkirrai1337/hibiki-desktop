@@ -24,6 +24,7 @@ import { getPlatform } from "../platform";
 import { performNetFetch, performNetFetchAll } from "./netFetch";
 import { logger } from "../logger";
 import { ExtensionStorage } from "./extensionStorage";
+import { withTitleFacts } from "./titleFacts";
 
 const WORKER_TIMEOUT_MS = 30_000;
 const FILTER_TYPES = ["select", "multi", "tristate", "text", "range"];
@@ -378,9 +379,13 @@ export class ExtensionRuntime {
     const startedAt = Date.now();
     logger.debug("ext", `${sourceId}.${method}() start`);
     try {
-      const result = (await port.call(sourceId, method, args)) as T;
+      const raw = await port.call(sourceId, method, args);
       logger.debug("ext", `${sourceId}.${method}() ok in ${Date.now() - startedAt}ms`);
-      return result;
+      // Aniyomi extensions leave year, type, episode counts and the like as text in the name and
+      // description; they are read back into the title's fields here (see titleFacts.ts).
+      if (method === "getById") return withTitleFacts(raw as AnimeTitle) as T;
+      if (method === "search" || method === "latest") return (raw as AnimeTitle[]).map(withTitleFacts) as T;
+      return raw as T;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       logger.warn("ext", `${sourceId}.${method}() failed in ${Date.now() - startedAt}ms: ${message}`);
