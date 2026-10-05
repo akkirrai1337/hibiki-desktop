@@ -278,7 +278,12 @@ function AnimeDetailPage() {
       })()
     : [];
   const relatedIds = new Set(related.map((r) => r.id));
-  const screenshots = useMemo(() => [...new Set((anime?.screenshots ?? []).filter((url) => typeof url === "string" && url))], [anime?.screenshots]);
+  // A still the site won't serve (gone, or refused) leaves the row instead of a broken-image box.
+  const [failedScreenshots, setFailedScreenshots] = useState<ReadonlySet<string>>(() => new Set());
+  const screenshots = useMemo(
+    () => [...new Set((anime?.screenshots ?? []).filter((url) => typeof url === "string" && url && !failedScreenshots.has(url)))],
+    [anime?.screenshots, failedScreenshots],
+  );
   const similar = anime ? dedupeById(anime.similarAnime ?? []).filter((r) => r.id !== animeId && !relatedIds.has(r.id)) : [];
 
   const libraryEntry = libraryQuery.data?.find((e) => e.sourceId === sourceId && e.animeId === animeId);
@@ -314,7 +319,7 @@ function AnimeDetailPage() {
   // swapping to it here while keeping the hardcoded text would silently break light mode's
   // contrast the moment a background theme also happens to be on. A flat, theme-independent dark
   // tint keeps that existing contrast intact while still letting the gradient show through it.
-  return <div className={cn("relative isolate min-h-full pb-16 mobile:pb-6", backgroundTheme && "bg-black/70")}>
+  return <div className={cn("relative isolate min-h-full pb-16 mobile:pb-6", backgroundTheme && "bg-black/70 mobile:bg-transparent")}>
     {/* The phone's version of the backdrop: the poster across the top of the page, under the status
         bar, scrolling away with it - plus the way back and out, floating over it. */}
     {isMobile && <MobileTitleChrome posterUrl={anime?.posterUrl} siteUrl={anime ? anime.pageUrl || source?.website : undefined} />}
@@ -491,7 +496,13 @@ function AnimeDetailPage() {
             renderItem={(url) => (
               <button onClick={() => setScreenshotPreview(url)} className="group block w-full overflow-hidden rounded-xl bg-surface ring-1 ring-border">
                 <div className="aspect-video w-full">
-                  <SmoothImage src={url} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.035]" />
+                  <SmoothImage
+                    src={url}
+                    alt=""
+                    loading="lazy"
+                    onError={() => setFailedScreenshots((prev) => new Set(prev).add(url))}
+                    className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.035]"
+                  />
                 </div>
               </button>
             )}
@@ -1221,7 +1232,9 @@ function MobileTitleChrome({ posterUrl, siteUrl }: { posterUrl?: string | null; 
       }}
     >
       {posterUrl && <img src={posterUrl} alt="" className="h-full w-full object-cover object-[center_22%] opacity-75" />}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/25 to-black/50" />
+      {/* Dark only at the top, behind the status bar and the round buttons; below, a wash of the page's
+          own colour, so the title over it reads in either theme. */}
+      <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgb(0 0 0 / 0.45), rgb(var(--color-bg) / 0.3) 40%, rgb(var(--color-bg) / 0.65))" }} />
     </div>
     <div className="pointer-events-none fixed inset-x-0 z-40 flex justify-between px-3" style={{ top: "calc(0.375rem + var(--safe-top))" }}>
       <button
