@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AnimeTitle } from "@shared/types";
-import { parseDescriptionFacts, parseTitleName, withTitleFacts } from "./titleFacts";
+import { cleanStory, parseDescriptionFacts, parseTitleName, withTitleFacts } from "./titleFacts";
 
 const title = (fields: Partial<AnimeTitle>): AnimeTitle => ({ id: "1", sourceId: "apk:1", ...fields });
 
@@ -62,6 +62,18 @@ describe("parseDescriptionFacts", () => {
   it("leaves a story with a colon in it alone", () => {
     expect(parseDescriptionFacts("He said: no. Then the year: unknown, the type of man he was.")).toBeNull();
     expect(parseDescriptionFacts("Just a story without facts.")).toBeNull();
+  });
+});
+
+describe("cleanStory", () => {
+  it("cuts a franchise list and the site's guest notice off the story", () => {
+    const story = "Сын Наруто готов показать миру, насколько достоин батьки. Это аниме состоит из: Наруто - ТВ (220 эп.), первый сериал, адаптация манги, 2002 Наруто OVA-1 - OVA (1 эп.), дополнение к сериалу, 2003 Наруто (фильм первый) - п/ф, дополнение к сериалу, 2004 Информация Посетители, находящиеся в группе Гости, не могут оставлять комментарии к данной публикации.";
+    expect(cleanStory(story)).toBe("Сын Наруто готов показать миру, насколько достоин батьки.");
+  });
+
+  it("keeps a story that only mentions a heading-like word", () => {
+    const story = "Хронология: события идут после первого сезона, и герои - взрослые люди.";
+    expect(cleanStory(story)).toBe(story);
   });
 });
 

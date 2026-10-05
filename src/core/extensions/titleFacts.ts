@@ -149,6 +149,30 @@ export function parseTitleName(name: string): { russian?: string; original: stri
   return { original: base, available, total };
 }
 
+// Site furniture some extensions scrape along with the story.
+const BOILERPLATE = [
+  /\s*(Информация\s+)?Посетители,\s*находящиеся в группе Гости,\s*не могут оставлять комментарии к данной публикации\.?/giu,
+  /\s*(Внимание!?\s*)?Для того,? чтобы оставить комментарий,? (необходимо|нужно) (зарегистрироваться|авторизоваться)[^.]*\.?/giu,
+];
+
+// The heading of a franchise / watch-order list the site appends to the story.
+const LIST_HEADING = /((?:Это|Данное)\s+аниме\s+состоит\s+из|Порядок\s+просмотра|Хронология(?:\s+просмотра)?|Франшиза|Связанные\s+(?:аниме|тайтлы|релизы)|Watch\s+order|Franchise|Related\s+(?:anime|titles))\s*:/iu;
+// One entry of such a list: "Наруто - ТВ (220 эп.)", "... - п/ф", "... - OVA (1 эп.)".
+const LIST_ENTRY = /\s[-–—]\s*(?:ТВ|TV|OVA|ONA|п\/ф|к\/ф|фильм|спешл|special|movie|сериал)(?=$|[\s,.;:()])/giu;
+
+/** The story without site furniture and without a franchise list tacked onto its end. */
+export function cleanStory(story: string | null | undefined): string | null {
+  if (!story) return story ?? null;
+  let text = story;
+  for (const pattern of BOILERPLATE) text = text.replace(pattern, "");
+  const heading = LIST_HEADING.exec(text);
+  // Only a real list - at least two "Title - TYPE" entries after the heading; the cut starts at the heading.
+  if (heading && (text.slice(heading.index).match(LIST_ENTRY) ?? []).length >= 2) {
+    text = text.slice(0, heading.index);
+  }
+  return text.trim() || null;
+}
+
 /**
  * The same title with the facts its source left as text moved into its fields. Fields the source
  * did fill are kept as they are; an unparseable description or name is returned untouched.
@@ -163,8 +187,8 @@ export function withTitleFacts(title: AnimeTitle): AnimeTitle {
     if (name.total !== undefined && title.episodeCount == null) next.episodeCount = name.total;
   }
   const parsed = title.description ? parseDescriptionFacts(title.description) : null;
+  if (title.description) next.description = cleanStory(parsed ? parsed.story : title.description);
   if (parsed) {
-    next.description = parsed.story;
     for (const { field, value } of parsed.facts) {
       if (!value) continue;
       switch (field) {
