@@ -8,6 +8,11 @@ const INTERVAL_MS = 7000;
 // How far a finger has to travel, as a share of the hero's width, before letting go turns the slide.
 const SWIPE_THRESHOLD = 0.18;
 
+const HERO_SLIDE_MASK: React.CSSProperties = {
+  maskImage: "linear-gradient(to bottom, #000 35%, rgba(0,0,0,0.35) 72%, transparent)",
+  WebkitMaskImage: "linear-gradient(to bottom, #000 35%, rgba(0,0,0,0.35) 72%, transparent)",
+};
+
 /**
  * The phone's hero: the poster fills the top of the screen, running under the status bar, with the
  * title and the one action at the bottom where a thumb reaches. Slides follow the finger and turn
@@ -91,14 +96,18 @@ export function MobileHero({ slides, label, sourceName }: { slides: HeroSlide[];
     >
       <div ref={track} className="flex h-full will-change-transform">
         {slides.map((slide, i) => (
-          <div key={slide.key} className="relative h-full w-full shrink-0" aria-hidden={i !== index}>
+          // Each slide's artwork dissolves (a mask) into whatever is behind the page - a fade to the
+          // plain page colour cut off hard against a background theme. Per slide, not on the track:
+          // a mask clips to its box, and the track's other slides lie outside it.
+          <div key={slide.key} className="relative h-full w-full shrink-0" aria-hidden={i !== index} style={HERO_SLIDE_MASK}>
             {slide.posterUrl && <img src={slide.posterUrl} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover object-[center_18%]" />}
           </div>
         ))}
       </div>
-      {/* Status-bar legibility at the top; the page colour rising from the bottom under the text. */}
+      {/* Status-bar legibility at the top; under the text, a wash of the page colour that is gone
+          again by the bottom edge, so that edge meets the page with no seam. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/60 to-transparent" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[72%] bg-gradient-to-t from-[rgb(var(--color-bg))] via-[rgb(var(--color-bg)/0.82)] to-transparent" />
+      <div className="pointer-events-none absolute inset-0" style={{ background: "linear-gradient(to bottom, transparent 30%, rgb(var(--color-bg) / 0.6) 68%, rgb(var(--color-bg) / 0.35) 88%, transparent)" }} />
 
       <div className="absolute inset-x-0 bottom-0 px-4 pb-4">
         <div className="mb-2 flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[.14em] text-accent-text">

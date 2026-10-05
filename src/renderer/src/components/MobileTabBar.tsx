@@ -69,7 +69,7 @@ export function MobileTabBar() {
 
   return (
     <nav
-      className="fixed inset-x-3 z-40 flex h-14 items-stretch rounded-[1.75rem] border border-border bg-app-popover shadow-[0_8px_28px_rgba(0,0,0,0.45)]"
+      className="mobile-tabbar fixed inset-x-3 z-40 flex h-14 items-stretch rounded-[1.75rem] border border-border bg-app-popover shadow-[0_8px_28px_rgba(0,0,0,0.45)]"
       style={{ bottom: "calc(0.625rem + var(--safe-bottom))" }}
     >
       {tabs.map((tab) => {

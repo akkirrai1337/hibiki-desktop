@@ -3,7 +3,7 @@ import { createRootRoute, Outlet, useRouter, useRouterState } from "@tanstack/re
 import { useQuery } from "@tanstack/react-query";
 import { useUiStore } from "@/stores/uiStore";
 import { useKnownSourcesStore } from "@/stores/knownSourcesStore";
-import { applyAccentColor, applyBackgroundTheme, DEFAULT_MOBILE_ACCENT, BACKGROUND_THEME_PRESETS, CUSTOM_BACKGROUND_THEME_ID, customBackgroundGradientCss } from "@/lib/theme";
+import { applyAccentColor, applyBackgroundTheme, DEFAULT_MOBILE_ACCENT, DEFAULT_MOBILE_ACCENT_LIGHT, BACKGROUND_THEME_PRESETS, CUSTOM_BACKGROUND_THEME_ID, customBackgroundGradientCss } from "@/lib/theme";
 import { TitleBar } from "@/components/TitleBar";
 import { Sidebar } from "@/components/Sidebar";
 import { MobileStatusScrim, MobileTabBar } from "@/components/MobileTabBar";
@@ -133,8 +133,11 @@ function RootLayoutContent() {
   // Ctrl/Cmd +/-/0, and re-applying the saved factor on launch.
   useAppZoom();
 
-  // No pick yet: the CSS pink on desktop, white on the phone.
-  useEffect(() => { applyAccentColor(accentColor ?? (isMobile ? DEFAULT_MOBILE_ACCENT : null), theme); }, [accentColor, theme]);
+  // No pick yet: the CSS pink on desktop, white on the phone (black in its light theme).
+  useEffect(() => {
+    const mobileDefault = theme === "light" ? DEFAULT_MOBILE_ACCENT_LIGHT : DEFAULT_MOBILE_ACCENT;
+    applyAccentColor(accentColor ?? (isMobile ? mobileDefault : null), theme);
+  }, [accentColor, theme]);
   const backgroundTheme = useUiStore((s) => s.backgroundTheme);
   useEffect(() => { applyBackgroundTheme(backgroundTheme); }, [backgroundTheme, applyBackgroundTheme]);
   // Painted as this element's own `background-image`, sitting on top of its `bg-app-bg` background

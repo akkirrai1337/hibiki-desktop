@@ -3,8 +3,10 @@
 // row both have a single source of truth for it instead of a second hardcoded copy drifting from
 // the CSS one over time.
 export const DEFAULT_ACCENT = "#ec4899";
-// The phone app starts plain white instead; the desktop keeps its pink.
+// The phone app starts plain white instead (black in the light theme, where white would vanish);
+// the desktop keeps its pink.
 export const DEFAULT_MOBILE_ACCENT = "#ffffff";
+export const DEFAULT_MOBILE_ACCENT_LIGHT = "#000000";
 
 // A handful of ready-made options, Discord-picker style, alongside the free-form custom swatch -
 // covers the common picks without forcing everyone through the OS color dialog for a simple swap.
@@ -52,11 +54,18 @@ export function applyAccentColor(color: string | null, theme: "light" | "dark"):
     root.style.setProperty("--color-accent", triplet);
     const accentIsLight = isLight(triplet);
     root.style.setProperty("--color-accent-fg", accentIsLight ? ACCENT_FG_DARK : ACCENT_FG_LIGHT);
-    root.style.setProperty("--color-accent-text", accentIsLight === (theme === "light") ? "var(--color-text)" : triplet);
+    const blendsIn = accentIsLight === (theme === "light");
+    root.style.setProperty("--color-accent-text", blendsIn ? "var(--color-text)" : triplet);
+    // A selection filled with an accent that blends into the page (white on light, black on dark)
+    // would vanish the same way: it takes the text colour instead, with the page colour on it.
+    root.style.setProperty("--color-accent-solid", blendsIn ? "var(--color-text)" : triplet);
+    root.style.setProperty("--color-accent-solid-fg", blendsIn ? "var(--color-bg)" : accentIsLight ? ACCENT_FG_DARK : ACCENT_FG_LIGHT);
   } else {
     root.style.removeProperty("--color-accent");
     root.style.removeProperty("--color-accent-fg");
     root.style.removeProperty("--color-accent-text");
+    root.style.removeProperty("--color-accent-solid");
+    root.style.removeProperty("--color-accent-solid-fg");
   }
 }
 

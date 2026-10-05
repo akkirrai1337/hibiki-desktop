@@ -18,6 +18,8 @@ export default {
         accent: "rgb(var(--color-accent) / <alpha-value>)",
         "accent-fg": "rgb(var(--color-accent-fg) / <alpha-value>)",
         "accent-text": "rgb(var(--color-accent-text) / <alpha-value>)",
+        "accent-solid": "rgb(var(--color-accent-solid) / <alpha-value>)",
+        "accent-solid-fg": "rgb(var(--color-accent-solid-fg) / <alpha-value>)",
       },
       borderRadius: {
         xl: "0.875rem",

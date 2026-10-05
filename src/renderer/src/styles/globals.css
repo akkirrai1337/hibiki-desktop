@@ -31,6 +31,9 @@
      light mode, black in dark mode), where accent-colored text on an accent-tinted badge would
      otherwise have nothing to contrast against. */
   --color-accent-text: var(--color-accent);
+  /* A selection filled with the accent, and its text - see applyAccentColor. */
+  --color-accent-solid: var(--color-accent);
+  --color-accent-solid-fg: var(--color-accent-fg);
 }
 
 .mobile {
@@ -60,6 +63,9 @@
   --color-accent: 244 114 182;
   --color-accent-fg: 29 12 21;
   --color-accent-text: var(--color-accent);
+  /* A selection filled with the accent, and its text - see applyAccentColor. */
+  --color-accent-solid: var(--color-accent);
+  --color-accent-solid-fg: var(--color-accent-fg);
 }
 
 html,
@@ -104,6 +110,14 @@ body,
     linear-gradient(rgb(var(--color-bg) / 0.8), rgb(var(--color-bg) / 0.8)),
     var(--app-backdrop, none) 0 calc(-1 * var(--safe-top)) / 100vw 100vh no-repeat,
     rgb(var(--color-bg));
+}
+/* The phone's floating tab bar takes on the background theme too: the page's surface colour, half
+   see-through and blurred, instead of a plain slab over a tinted page. Blurring a small bar is
+   cheap, unlike the full-height layers the note below is about. */
+.mobile.bg-theme-active .mobile-tabbar {
+  background-color: rgb(var(--color-surface) / 0.55);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  backdrop-filter: blur(18px) saturate(1.4);
 }
 .bg-app-surface {
   background-color: rgb(var(--color-surface));

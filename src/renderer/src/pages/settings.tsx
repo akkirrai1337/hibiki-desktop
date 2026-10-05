@@ -9,7 +9,7 @@ import { Switch } from "@/components/Switch";
 import { SUPPORTED_LOCALES, setLocale } from "@/lib/i18n";
 import { SKIP_TIMER_MAX_SECONDS, SKIP_TIMER_MIN_SECONDS, WATCHED_THRESHOLD_MAX_PERCENT, WATCHED_THRESHOLD_MIN_PERCENT, usePlayerPrefsStore } from "@/stores/playerPrefsStore";
 import { useUiStore } from "@/stores/uiStore";
-import { ACCENT_PRESETS, BACKGROUND_THEME_PRESETS, CUSTOM_BACKGROUND_THEME_ID, customBackgroundGradientCss, DEFAULT_ACCENT, DEFAULT_MOBILE_ACCENT } from "@/lib/theme";
+import { ACCENT_PRESETS, BACKGROUND_THEME_PRESETS, CUSTOM_BACKGROUND_THEME_ID, customBackgroundGradientCss, DEFAULT_ACCENT, DEFAULT_MOBILE_ACCENT, DEFAULT_MOBILE_ACCENT_LIGHT } from "@/lib/theme";
 import { sortLabel } from "@/lib/catalogSort";
 import { SelectDropdown } from "@/components/SelectDropdown";
 import { hibiki, type LogEntry } from "@/lib/hibiki";
@@ -308,11 +308,12 @@ function SettingsCategoryButton({ active, icon: Icon, label, onClick }: { active
         "relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-muted transition-colors hover:bg-text/[.05] hover:text-text",
         // Phone: a chip in a row, not a line in a rail.
         "mobile:w-auto mobile:shrink-0 mobile:gap-2 mobile:rounded-full mobile:bg-text/[.05] mobile:px-3.5",
-        active && "text-text",
+        active && "text-text mobile:text-accent-solid-fg",
       )}
     >
       <span className={cn("absolute -left-3 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-accent transition-opacity mobile:hidden", active ? "opacity-100" : "opacity-0")} />
-      {active && <span className="absolute inset-0 rounded-lg bg-text/[.08] mobile:rounded-full mobile:bg-accent/20" />}
+      {/* Phone: the picked chip filled with the accent - a faint tint of it was lost on a light page. */}
+      {active && <span className="absolute inset-0 rounded-lg bg-text/[.08] mobile:rounded-full mobile:bg-accent-solid" />}
       <span className="relative z-10 shrink-0"><Icon className="h-[17px] w-[17px]" strokeWidth={2} /></span>
       <span className="relative z-10 truncate">{label}</span>
     </button>
@@ -693,7 +694,7 @@ export function SettingsPage() {
   const theme = useUiStore((s) => s.theme);
   const setTheme = useUiStore((s) => s.setTheme);
   const accentColor = useUiStore((s) => s.accentColor);
-  const defaultAccent = isMobile ? DEFAULT_MOBILE_ACCENT : DEFAULT_ACCENT;
+  const defaultAccent = isMobile ? (theme === "light" ? DEFAULT_MOBILE_ACCENT_LIGHT : DEFAULT_MOBILE_ACCENT) : DEFAULT_ACCENT;
   const setAccentColor = useUiStore((s) => s.setAccentColor);
   const backgroundTheme = useUiStore((s) => s.backgroundTheme);
   const setBackgroundTheme = useUiStore((s) => s.setBackgroundTheme);
