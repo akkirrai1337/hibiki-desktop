@@ -151,6 +151,7 @@ export function CatalogFilters({
         {/* What is picked applies when the sheet is done with - "Done", or closing it any other way. */}
         <BottomSheet
           open={open}
+          prewarm
           onClose={() => { apply(); setOpen(false); }}
           title={t("search.filters.button")}
           className="h-[85vh]"

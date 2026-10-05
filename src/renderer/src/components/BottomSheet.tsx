@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, animate, motion, useDragControls, useMotionValue, type MotionValue } from "motion/react";
+import { AnimatePresence, animate, motion, useDragControls, useIsPresent, useMotionValue, type MotionValue } from "motion/react";
 import { usePopoverTheme } from "@/lib/usePopoverTheme";
 import { useBackHandler } from "@/lib/mobile";
 import { cn } from "@/lib/cn";
@@ -8,7 +8,12 @@ import { cn } from "@/lib/cn";
 /**
  * The phone's menu and panel: rises from the bottom edge, where the thumb already is, over a scrim.
  * Closes by a tap on the scrim, by Back, or by pulling it down by its handle (or anywhere on its
- * header), or by pulling its body down while the body is scrolled to the top. Desktop keeps its own dropdowns and drawers; this is only used where `isMobile`.
+ * header), or by pulling its body down while the body is scrolled to the top. Desktop keeps its own
+ * dropdowns and drawers; this is only used where `isMobile`.
+ *
+ * `prewarm` builds the sheet hidden as soon as the page is idle and keeps it built while closed: a
+ * heavy body (the filters' hundreds of chips) otherwise took its first frames to create, and the
+ * rise started with a visible hitch.
  */
 export function BottomSheet({
   open,
@@ -17,6 +22,7 @@ export function BottomSheet({
   footer,
   children,
   className,
+  prewarm = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -25,16 +31,88 @@ export function BottomSheet({
   footer?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  prewarm?: boolean;
 }) {
   const popoverTheme = usePopoverTheme();
   const drag = useDragControls();
   const y = useMotionValue(0);
   useBackHandler(open, onClose);
 
+  // Prewarmed: built once the page is idle (or when first opened), then only hidden.
+  const [built, setBuilt] = useState(open);
+  const [hidden, setHidden] = useState(!open);
+  useEffect(() => {
+    if (open) {
+      setBuilt(true);
+      setHidden(false);
+    }
+  }, [open]);
+  useEffect(() => {
+    if (!prewarm || built) return;
+    const idle = window.requestIdleCallback?.(() => setBuilt(true), { timeout: 2000 });
+    const timer = idle === undefined ? window.setTimeout(() => setBuilt(true), 1000) : undefined;
+    return () => {
+      if (idle !== undefined) window.cancelIdleCallback(idle);
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [prewarm, built]);
+
+  const sheet = (props: React.ComponentProps<typeof motion.div>) => (
+    <motion.div
+      role="dialog"
+      aria-modal="true"
+      aria-hidden={!open || undefined}
+      transition={{ type: "spring", stiffness: 420, damping: 40 }}
+      drag="y"
+      dragListener={false}
+      dragControls={drag}
+      dragConstraints={{ top: 0, bottom: 0 }}
+      dragElastic={{ top: 0, bottom: 0.6 }}
+      onDragEnd={(_, info) => {
+        if (info.offset.y > CLOSE_DISTANCE || info.velocity.y > CLOSE_VELOCITY) onClose();
+      }}
+      style={{ ...popoverTheme, y, willChange: prewarm ? "transform" : undefined, paddingBottom: "var(--safe-bottom)" }}
+      className={cn("absolute inset-x-0 bottom-0 flex max-h-[85vh] flex-col rounded-t-[1.5rem] border-t border-border bg-app-popover", className)}
+      {...props}
+    >
+      <div className="shrink-0 touch-none select-none pb-1 pt-2.5" onPointerDown={(event) => drag.start(event)}>
+        <div className="mx-auto h-1 w-10 rounded-full bg-text/20" />
+        {title && <div className="px-5 pb-1 pt-3 text-[15px] font-bold text-text">{title}</div>}
+      </div>
+      <SheetBody y={y} onClose={onClose}>{children}</SheetBody>
+      {/* A visible rule, so the list reads as passing under the footer rather than ending in the
+          air. (A fade mask instead cost a GPU pass every frame of the rise.) */}
+      {footer && <div className="shrink-0 border-t border-text/10 px-4 py-3">{footer}</div>}
+    </motion.div>
+  );
+
+  if (prewarm) {
+    if (!built) return null;
+    return createPortal(
+      <div className={cn("fixed inset-0 z-[80]", !open && "pointer-events-none")} data-parked={hidden || undefined}>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: open ? 1 : 0 }}
+          transition={{ duration: 0.2 }}
+          onClick={onClose}
+          className="absolute inset-0 bg-black/55"
+        />
+        {sheet({
+          initial: { y: "100%" },
+          animate: open ? { y: 0 } : { y: "100%", transition: LEAVE },
+          onAnimationComplete: () => {
+            if (!open) setHidden(true);
+          },
+        })}
+      </div>,
+      document.body,
+    );
+  }
+
   return createPortal(
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[80]">
+        <SheetLayer>
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -43,40 +121,22 @@ export function BottomSheet({
             onClick={onClose}
             className="absolute inset-0 bg-black/55"
           />
-          <motion.div
-            role="dialog"
-            aria-modal="true"
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", stiffness: 420, damping: 40 }}
-            drag="y"
-            dragListener={false}
-            dragControls={drag}
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0, bottom: 0.6 }}
-            onDragEnd={(_, info) => {
-              if (info.offset.y > CLOSE_DISTANCE || info.velocity.y > CLOSE_VELOCITY) onClose();
-            }}
-            // Kept on its own layer for good: when the rise ended and the layer was dropped, Android's
-            // WebView painted one frame of the masked body without the sheet and the scrim under it.
-            style={{ ...popoverTheme, y, willChange: "transform", paddingBottom: "var(--safe-bottom)" }}
-            className={cn("absolute inset-x-0 bottom-0 flex max-h-[85vh] flex-col rounded-t-[1.5rem] border-t border-border bg-app-popover shadow-[0_-12px_40px_rgba(0,0,0,0.5)]", className)}
-          >
-            <div className="shrink-0 touch-none select-none pb-1 pt-2.5" onPointerDown={(event) => drag.start(event)}>
-              <div className="mx-auto h-1 w-10 rounded-full bg-text/20" />
-              {title && <div className="px-5 pb-1 pt-3 text-[15px] font-bold text-text">{title}</div>}
-            </div>
-            {/* The body fades out over its last 1.5rem instead of cutting rows mid-height at its edge; the
-                bottom padding is as tall, so the end of the list scrolls clear of the fade. */}
-            <SheetBody y={y} onClose={onClose} faded={!!footer}>{children}</SheetBody>
-            {footer && <div className="shrink-0 px-4 py-3">{footer}</div>}
-          </motion.div>
-        </div>
+          {sheet({ initial: { y: "100%" }, animate: { y: 0 }, exit: { y: "100%", transition: LEAVE } })}
+        </SheetLayer>
       )}
     </AnimatePresence>,
     document.body,
   );
+}
+
+// Leaves on a short curve: the spring's long settling tail kept the closed sheet on the page for most
+// of a second.
+const LEAVE = { duration: 0.22, ease: [0.4, 0, 1, 1] as const };
+
+/** The full-screen layer; lets touches through once the sheet is leaving, so the page under it scrolls at once. */
+function SheetLayer({ children }: { children: React.ReactNode }) {
+  const present = useIsPresent();
+  return <div className={cn("fixed inset-0 z-[80]", !present && "pointer-events-none")}>{children}</div>;
 }
 
 const CLOSE_DISTANCE = 90;
@@ -87,7 +147,7 @@ const CLOSE_VELOCITY = 500;
  * instead of the list, as the handle does; any other gesture scrolls. Touch events, not the pointer
  * drag, because the browser takes a vertical pan over and cancels the pointer once it starts.
  */
-function SheetBody({ y, onClose, faded, children }: { y: MotionValue<number>; onClose: () => void; faded: boolean; children: React.ReactNode }) {
+function SheetBody({ y, onClose, children }: { y: MotionValue<number>; onClose: () => void; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -139,11 +199,7 @@ function SheetBody({ y, onClose, faded, children }: { y: MotionValue<number>; on
   }, [y]);
 
   return (
-    <div
-      ref={ref}
-      className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-6"
-      style={faded ? { maskImage: "linear-gradient(to bottom, #000 calc(100% - 1.5rem), transparent)", WebkitMaskImage: "linear-gradient(to bottom, #000 calc(100% - 1.5rem), transparent)" } : undefined}
-    >
+    <div ref={ref} className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3">
       {children}
     </div>
   );

@@ -210,6 +210,7 @@ function MobileSearchPage() {
 
       <BottomSheet
         open={filtersOpen}
+        prewarm
         onClose={() => { apply(); setFiltersOpen(false); }}
         title={t("search.filters.button")}
         className="h-[85vh]"
