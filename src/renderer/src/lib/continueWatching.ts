@@ -134,11 +134,12 @@ export interface WatchHistoryEntry {
 // but deliberately NOT deduped by title: every episode with saved progress gets its own entry,
 // since the point of this page is "which episodes did I stop on", not "which titles". Anime
 // metadata is still fetched once per unique title (no reason to refetch it per episode).
-export function useWatchHistory(limit: number): { entries: WatchHistoryEntry[] } {
+export function useWatchHistory(limit: number): { entries: WatchHistoryEntry[]; loading: boolean } {
   const recent = useQuery({ queryKey: ["recent-progress", limit], queryFn: () => hibiki.progress.listRecent(limit) });
   const rows = recent.data ?? [];
   const titles = useCardTitles(rows);
   // Plain recompute every render, same reasoning as useContinueWatching's `slots` above.
   const entries = rows.map((progress) => ({ progress, anime: titles[`${progress.sourceId}:${progress.titleId}`] }));
-  return { entries };
+  // `loading` lets the page tell "nothing yet" from "nothing at all" instead of flashing the latter.
+  return { entries, loading: recent.isLoading };
 }

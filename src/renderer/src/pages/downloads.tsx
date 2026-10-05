@@ -59,7 +59,7 @@ export function DownloadsPage() {
   return (
     <div className="min-h-full bg-app-bg px-8 py-8 pb-16 mobile:px-4 mobile:pb-6 mobile:pt-4">
       {isMobile ? <LibrarySegments active="/downloads" /> : <h1 className="mb-6 text-xl font-bold tracking-[-.02em] text-text">{t("downloads.title")}</h1>}
-      {groups.length === 0 ? (
+      {episodesQuery.isLoading ? null : groups.length === 0 ? (
         <div className="flex min-h-[calc(100vh-220px)] items-center justify-center">
           <div className="max-w-sm text-center">
             <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-text/[.06]">

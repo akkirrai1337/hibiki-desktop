@@ -7,6 +7,7 @@ import { applyAccentColor, applyBackgroundTheme, BACKGROUND_THEME_PRESETS, CUSTO
 import { TitleBar } from "@/components/TitleBar";
 import { Sidebar } from "@/components/Sidebar";
 import { MobileStatusScrim, MobileTabBar } from "@/components/MobileTabBar";
+import { LibrarySegments } from "@/components/MobilePageHeader";
 import { installBackButton, isMobile } from "@/lib/mobile";
 import { SearchSpotlight } from "@/components/SearchSpotlight";
 import { AchievementToast } from "@/components/AchievementToast";
@@ -37,7 +38,11 @@ const PERSISTED_PAGES: Record<string, React.LazyExoticComponent<React.ComponentT
 // A lazy page has no DOM of its own until its chunk arrives. Keep the same page background in
 // place for that brief interval so the app-wide theme gradient never flashes through before the
 // page's `bg-app-bg` root mounts.
-function PageShellFallback() {
+function PageShellFallback({ path }: { path: string }) {
+  // Phone: the library's three views share their header, so it stays put while the next one loads.
+  if (isMobile && (path === "/library" || path === "/history" || path === "/downloads")) {
+    return <div className="min-h-full bg-app-bg px-4 pt-4" aria-busy="true"><LibrarySegments active={path} /></div>;
+  }
   return <div className="min-h-full bg-app-bg" aria-busy="true" />;
 }
 
@@ -306,7 +311,7 @@ function RootLayoutContent() {
               isActive ? "flex-1" : "hidden",
             )}
           >
-            <Suspense fallback={<PageShellFallback />}><Page /></Suspense>
+            <Suspense fallback={<PageShellFallback path={path} />}><Page /></Suspense>
           </div>;
         })}
         {/* Param routes (anime details, the player) aren't persisted above - a fresh mount every

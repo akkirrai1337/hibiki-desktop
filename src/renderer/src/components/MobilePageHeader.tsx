@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft } from "lucide-react";
@@ -44,6 +45,11 @@ const LIBRARY_SEGMENTS = [
  */
 export function LibrarySegments({ active }: { active: (typeof LIBRARY_SEGMENTS)[number]["to"] }) {
   const { t } = useTranslation();
+  // The other two views' code, fetched while this one is on screen, so switching to them is instant.
+  useEffect(() => {
+    void import("@/pages/history");
+    void import("@/pages/downloads");
+  }, []);
   return (
     <div className="mb-4">
       <div className="grid grid-cols-3 rounded-full bg-text/[.06] p-1">

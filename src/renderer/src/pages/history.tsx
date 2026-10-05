@@ -24,7 +24,7 @@ function relativeDate(epochMs: number, t: TFunction, locale: string): string {
 
 export function HistoryPage() {
   const { t, i18n } = useTranslation();
-  const { entries } = useWatchHistory(HISTORY_FETCH_LIMIT);
+  const { entries, loading } = useWatchHistory(HISTORY_FETCH_LIMIT);
   // Same ["sources"] query the home page uses for its own source badges - a cache hit here, and
   // the map shape WatchFrameCard expects.
   const sources = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });
@@ -33,7 +33,7 @@ export function HistoryPage() {
   return (
     <div className="min-h-full bg-app-bg px-8 py-8 pb-16 mobile:px-4 mobile:pb-6 mobile:pt-4">
       {isMobile ? <LibrarySegments active="/history" /> : <h1 className="mb-6 text-xl font-bold tracking-[-.02em] text-text">{t("history.title")}</h1>}
-      {entries.length === 0 ? (
+      {loading ? null : entries.length === 0 ? (
         <div className="flex min-h-[calc(100vh-220px)] items-center justify-center">
           <div className="max-w-sm text-center">
             <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-text/[.06]">
