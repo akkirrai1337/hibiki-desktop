@@ -1,5 +1,6 @@
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion, useDragControls } from "motion/react";
+import { AnimatePresence, animate, motion, useDragControls, useMotionValue, type MotionValue } from "motion/react";
 import { usePopoverTheme } from "@/lib/usePopoverTheme";
 import { useBackHandler } from "@/lib/mobile";
 import { cn } from "@/lib/cn";
@@ -7,7 +8,7 @@ import { cn } from "@/lib/cn";
 /**
  * The phone's menu and panel: rises from the bottom edge, where the thumb already is, over a scrim.
  * Closes by a tap on the scrim, by Back, or by pulling it down by its handle (or anywhere on its
- * header). Desktop keeps its own dropdowns and drawers; this is only used where `isMobile`.
+ * header), or by pulling its body down while the body is scrolled to the top. Desktop keeps its own dropdowns and drawers; this is only used where `isMobile`.
  */
 export function BottomSheet({
   open,
@@ -27,6 +28,7 @@ export function BottomSheet({
 }) {
   const popoverTheme = usePopoverTheme();
   const drag = useDragControls();
+  const y = useMotionValue(0);
   useBackHandler(open, onClose);
 
   return createPortal(
@@ -54,9 +56,9 @@ export function BottomSheet({
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.6 }}
             onDragEnd={(_, info) => {
-              if (info.offset.y > 90 || info.velocity.y > 500) onClose();
+              if (info.offset.y > CLOSE_DISTANCE || info.velocity.y > CLOSE_VELOCITY) onClose();
             }}
-            style={{ ...popoverTheme, paddingBottom: "var(--safe-bottom)" }}
+            style={{ ...popoverTheme, y, paddingBottom: "var(--safe-bottom)" }}
             className={cn("absolute inset-x-0 bottom-0 flex max-h-[85vh] flex-col rounded-t-[1.5rem] border-t border-border bg-app-popover shadow-[0_-12px_40px_rgba(0,0,0,0.5)]", className)}
           >
             <div className="shrink-0 touch-none select-none pb-1 pt-2.5" onPointerDown={(event) => drag.start(event)}>
@@ -65,18 +67,83 @@ export function BottomSheet({
             </div>
             {/* The body fades out over its last 1.5rem instead of cutting rows mid-height at its edge; the
                 bottom padding is as tall, so the end of the list scrolls clear of the fade. */}
-            <div
-              className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-6"
-              style={footer ? { maskImage: "linear-gradient(to bottom, #000 calc(100% - 1.5rem), transparent)", WebkitMaskImage: "linear-gradient(to bottom, #000 calc(100% - 1.5rem), transparent)" } : undefined}
-            >
-              {children}
-            </div>
+            <SheetBody y={y} onClose={onClose} faded={!!footer}>{children}</SheetBody>
             {footer && <div className="shrink-0 px-4 py-3">{footer}</div>}
           </motion.div>
         </div>
       )}
     </AnimatePresence>,
     document.body,
+  );
+}
+
+const CLOSE_DISTANCE = 90;
+const CLOSE_VELOCITY = 500;
+
+/**
+ * The sheet's scrolling body. A downward pull that starts with the body at its top moves the sheet
+ * instead of the list, as the handle does; any other gesture scrolls. Touch events, not the pointer
+ * drag, because the browser takes a vertical pan over and cancels the pointer once it starts.
+ */
+function SheetBody({ y, onClose, faded, children }: { y: MotionValue<number>; onClose: () => void; faded: boolean; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  useEffect(() => {
+    const body = ref.current;
+    if (!body) return;
+    let startY = 0;
+    let mode: "undecided" | "pull" | "scroll" = "scroll";
+    let last = { y: 0, t: 0 };
+    let velocity = 0;
+    const onStart = (event: TouchEvent) => {
+      startY = event.touches[0].clientY;
+      mode = body.scrollTop <= 0 ? "undecided" : "scroll";
+      last = { y: startY, t: event.timeStamp };
+      velocity = 0;
+    };
+    const onMove = (event: TouchEvent) => {
+      if (mode === "scroll") return;
+      const current = event.touches[0].clientY;
+      const dy = current - startY;
+      if (mode === "undecided") {
+        if (Math.abs(dy) < 4) return;
+        mode = dy > 0 && body.scrollTop <= 0 ? "pull" : "scroll";
+        if (mode === "scroll") return;
+      }
+      event.preventDefault();
+      const dt = event.timeStamp - last.t;
+      if (dt > 0) velocity = ((current - last.y) / dt) * 1000;
+      last = { y: current, t: event.timeStamp };
+      y.set(Math.max(0, dy));
+    };
+    const onEnd = () => {
+      if (mode !== "pull") return;
+      mode = "scroll";
+      if (y.get() > CLOSE_DISTANCE || velocity > CLOSE_VELOCITY) closeRef.current();
+      else animate(y, 0, { type: "spring", stiffness: 420, damping: 40 });
+    };
+    body.addEventListener("touchstart", onStart, { passive: true });
+    body.addEventListener("touchmove", onMove, { passive: false });
+    body.addEventListener("touchend", onEnd);
+    body.addEventListener("touchcancel", onEnd);
+    return () => {
+      body.removeEventListener("touchstart", onStart);
+      body.removeEventListener("touchmove", onMove);
+      body.removeEventListener("touchend", onEnd);
+      body.removeEventListener("touchcancel", onEnd);
+    };
+  }, [y]);
+
+  return (
+    <div
+      ref={ref}
+      className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-6"
+      style={faded ? { maskImage: "linear-gradient(to bottom, #000 calc(100% - 1.5rem), transparent)", WebkitMaskImage: "linear-gradient(to bottom, #000 calc(100% - 1.5rem), transparent)" } : undefined}
+    >
+      {children}
+    </div>
   );
 }
 
