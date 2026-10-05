@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { hibiki } from "@/lib/hibiki";
 
 /**
@@ -52,4 +52,45 @@ export function installBackButton(goBack: () => void, goUp: () => boolean): () =
     if (index > 0) goBack();
     else if (!goUp()) device.minimize();
   });
+}
+
+// --- page transitions ---------------------------------------------------------------------------
+// Only the incoming page moves - the outgoing one is already gone (hidden or unmounted) by the
+// time the route resolves. Switching tabs (and the library's segments) is a short fade; going
+// deeper slides in from the right, going back from the left. Nothing for the player: the screen
+// turns on the way in and out, and a slide on top of that only reads as a stutter.
+
+const TOP_LEVEL = new Set(["/", "/catalog", "/search", "/library", "/history", "/downloads", "/profile"]);
+
+function historyIndex(): number {
+  return (window.history.state as { __TSR_index?: number } | null)?.__TSR_index ?? 0;
+}
+
+/** Animates the page box that `pathname` shows, each time it changes (phone only). */
+export function usePageTransition(pathname: string): void {
+  const previous = useRef<{ pathname: string; index: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!isMobile) return;
+    const from = previous.current;
+    const index = historyIndex();
+    previous.current = { pathname, index };
+    if (!from || from.pathname === pathname) return;
+    if (pathname.startsWith("/watch/") || from.pathname.startsWith("/watch/")) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const box = document.querySelector<HTMLElement>(`[data-page-scroll="${CSS.escape(pathname)}"]`)
+      ?? document.querySelector<HTMLElement>('[data-scroll-restoration-id="app-main"]');
+    if (!box) return;
+    if (TOP_LEVEL.has(pathname) && TOP_LEVEL.has(from.pathname)) {
+      box.animate(
+        [{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }],
+        { duration: 170, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
+      );
+      return;
+    }
+    const back = index < from.index;
+    box.animate(
+      [{ opacity: 0, transform: `translateX(${back ? -28 : 28}px)` }, { opacity: 1, transform: "none" }],
+      { duration: 240, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
+    );
+  }, [pathname]);
 }

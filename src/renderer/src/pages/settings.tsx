@@ -9,7 +9,7 @@ import { Switch } from "@/components/Switch";
 import { SUPPORTED_LOCALES, setLocale } from "@/lib/i18n";
 import { SKIP_TIMER_MAX_SECONDS, SKIP_TIMER_MIN_SECONDS, WATCHED_THRESHOLD_MAX_PERCENT, WATCHED_THRESHOLD_MIN_PERCENT, usePlayerPrefsStore } from "@/stores/playerPrefsStore";
 import { useUiStore } from "@/stores/uiStore";
-import { ACCENT_PRESETS, BACKGROUND_THEME_PRESETS, CUSTOM_BACKGROUND_THEME_ID, customBackgroundGradientCss, DEFAULT_ACCENT } from "@/lib/theme";
+import { ACCENT_PRESETS, BACKGROUND_THEME_PRESETS, CUSTOM_BACKGROUND_THEME_ID, customBackgroundGradientCss, DEFAULT_ACCENT, DEFAULT_MOBILE_ACCENT } from "@/lib/theme";
 import { sortLabel } from "@/lib/catalogSort";
 import { SelectDropdown } from "@/components/SelectDropdown";
 import { hibiki, type LogEntry } from "@/lib/hibiki";
@@ -690,6 +690,7 @@ export function SettingsPage() {
   const theme = useUiStore((s) => s.theme);
   const setTheme = useUiStore((s) => s.setTheme);
   const accentColor = useUiStore((s) => s.accentColor);
+  const defaultAccent = isMobile ? DEFAULT_MOBILE_ACCENT : DEFAULT_ACCENT;
   const setAccentColor = useUiStore((s) => s.setAccentColor);
   const backgroundTheme = useUiStore((s) => s.backgroundTheme);
   const setBackgroundTheme = useUiStore((s) => s.setBackgroundTheme);
@@ -751,7 +752,7 @@ export function SettingsPage() {
           <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("settings.appearance.accentColorHint")}</p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {ACCENT_PRESETS.map((color) => (
-              <AccentSwatch key={color} color={color} active={(accentColor ?? DEFAULT_ACCENT) === color} onClick={() => setAccentColor(color === DEFAULT_ACCENT ? null : color)} />
+              <AccentSwatch key={color} color={color} active={(accentColor ?? defaultAccent) === color} onClick={() => setAccentColor(color === defaultAccent ? null : color)} />
             ))}
             {/* A relative wrapper around the native color input - the input itself is made invisible
                 but stays interactive and on top (opacity-0, not display:none), so clicking anywhere
@@ -759,7 +760,7 @@ export function SettingsPage() {
                 native input were the thing visibly clicked. */}
             <label className="relative flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full border border-dashed border-border text-muted transition-colors hover:border-accent/60 hover:text-text" title={t("settings.appearance.customColor")}>
               <Palette className="h-3.5 w-3.5" strokeWidth={2} />
-              <CustomAccentInput value={accentColor ?? DEFAULT_ACCENT} onCommit={setAccentColor} />
+              <CustomAccentInput value={accentColor ?? defaultAccent} onCommit={setAccentColor} />
             </label>
           </div>
         </SettingsRow>

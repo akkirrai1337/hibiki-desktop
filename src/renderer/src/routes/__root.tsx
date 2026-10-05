@@ -3,12 +3,12 @@ import { createRootRoute, Outlet, useRouter, useRouterState } from "@tanstack/re
 import { useQuery } from "@tanstack/react-query";
 import { useUiStore } from "@/stores/uiStore";
 import { useKnownSourcesStore } from "@/stores/knownSourcesStore";
-import { applyAccentColor, applyBackgroundTheme, BACKGROUND_THEME_PRESETS, CUSTOM_BACKGROUND_THEME_ID, customBackgroundGradientCss } from "@/lib/theme";
+import { applyAccentColor, applyBackgroundTheme, DEFAULT_MOBILE_ACCENT, BACKGROUND_THEME_PRESETS, CUSTOM_BACKGROUND_THEME_ID, customBackgroundGradientCss } from "@/lib/theme";
 import { TitleBar } from "@/components/TitleBar";
 import { Sidebar } from "@/components/Sidebar";
 import { MobileStatusScrim, MobileTabBar } from "@/components/MobileTabBar";
 import { LibrarySegments } from "@/components/MobilePageHeader";
-import { installBackButton, isMobile } from "@/lib/mobile";
+import { installBackButton, isMobile, usePageTransition } from "@/lib/mobile";
 import { SearchSpotlight } from "@/components/SearchSpotlight";
 import { AchievementToast } from "@/components/AchievementToast";
 import { useAchievementUnlocks } from "@/lib/achievementUnlocks";
@@ -115,7 +115,8 @@ function RootLayoutContent() {
   // Ctrl/Cmd +/-/0, and re-applying the saved factor on launch.
   useAppZoom();
 
-  useEffect(() => { applyAccentColor(accentColor, theme); }, [accentColor, theme]);
+  // No pick yet: the CSS pink on desktop, white on the phone.
+  useEffect(() => { applyAccentColor(accentColor ?? (isMobile ? DEFAULT_MOBILE_ACCENT : null), theme); }, [accentColor, theme]);
   const backgroundTheme = useUiStore((s) => s.backgroundTheme);
   useEffect(() => { applyBackgroundTheme(backgroundTheme); }, [backgroundTheme, applyBackgroundTheme]);
   // Painted as this element's own `background-image`, sitting on top of its `bg-app-bg` background
@@ -195,6 +196,7 @@ function RootLayoutContent() {
   // effect above only records it for the renders after. Waiting for it left one frame with the
   // previous page already hidden and this one not there yet - just the app-wide theme gradient, which
   // read as a flash the first time each tab was opened (most visible with a custom theme).
+  usePageTransition(pathname);
   const mountedPages = pathname in PERSISTED_PAGES && !visited.includes(pathname) ? [...visited, pathname] : visited;
   // Discord presence outside the player: a single steady "using hibiki" line, not per-page text
   // (catalog/profile/settings/...) - that was tried and just read as noise. The watch page sets

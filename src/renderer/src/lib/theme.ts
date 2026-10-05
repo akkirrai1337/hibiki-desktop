@@ -3,6 +3,8 @@
 // row both have a single source of truth for it instead of a second hardcoded copy drifting from
 // the CSS one over time.
 export const DEFAULT_ACCENT = "#ec4899";
+// The phone app starts plain white instead; the desktop keeps its pink.
+export const DEFAULT_MOBILE_ACCENT = "#ffffff";
 
 // A handful of ready-made options, Discord-picker style, alongside the free-form custom swatch -
 // covers the common picks without forcing everyone through the OS color dialog for a simple swap.
