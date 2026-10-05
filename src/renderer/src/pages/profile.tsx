@@ -305,9 +305,17 @@ function MobileProfileLayout({
   return (
     <div className="min-h-full bg-app-bg pb-4">
       <div className="relative -mt-[var(--safe-top)]">
-        <div className="relative overflow-hidden bg-gradient-to-br from-accent/25 via-text/[.04] to-transparent" style={{ height: "calc(9rem + var(--safe-top))" }}>
+        {/* Dissolves into whatever is behind the page - a mask, not a fade to the plain background
+            colour, which against a background theme left a hard edge right under the name row. */}
+        <div
+          className="relative overflow-hidden bg-gradient-to-br from-accent/25 via-text/[.04] to-transparent"
+          style={{
+            height: "calc(10rem + var(--safe-top))",
+            maskImage: "linear-gradient(to bottom, #000 45%, transparent)",
+            WebkitMaskImage: "linear-gradient(to bottom, #000 45%, transparent)",
+          }}
+        >
           <BannerMedia filename={bannerFilename} />
-          <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-[rgb(var(--color-bg))] to-transparent" />
           {/* What a new user looks for first - settings, and where the anime comes from - up in the
               corner where an app keeps them, with the banner's own edit beside. */}
           <div className="absolute right-3 flex items-center gap-2" style={{ top: "calc(0.5rem + var(--safe-top))" }}>
@@ -321,7 +329,7 @@ function MobileProfileLayout({
             </Link>
           </div>
         </div>
-        <div className="relative -mt-12 px-4">{header}</div>
+        <div className="relative -mt-14 px-4">{header}</div>
       </div>
 
       <div className="space-y-3 px-4 pt-4">
