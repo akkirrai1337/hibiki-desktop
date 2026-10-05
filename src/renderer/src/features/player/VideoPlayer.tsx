@@ -2011,6 +2011,10 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   const displayDuration = isSwitching && frozenDisplayRef.current ? frozenDisplayRef.current.duration : duration;
   const playedPercent = displayDuration ? (displayCurrentTime / displayDuration) * 100 : 0;
   const bufferedPercent = displayDuration ? (buffered / displayDuration) * 100 : 0;
+  // The phone's time labels keep one width for the whole episode: room for the longest value it can
+  // show (at least m:ss up to 99:59, plus the remaining-time minus on the right), so the seek bar
+  // between them doesn't jump when the duration arrives or the minutes gain a digit.
+  const timeLabelChars = Math.max(5, formatTime(displayDuration).length);
 
   // The two menus the controls open - one copy each, shown from the desktop bar or the phone's.
   const episodeListPanel = episodesLoading || !episodes
@@ -2119,7 +2123,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       onClick={stop}
     >
       <div className="flex items-center gap-3">
-        <span className="shrink-0 text-[13px] font-medium tabular-nums text-zinc-100">{formatTime(displayCurrentTime)}</span>
+        <span className="shrink-0 text-left text-[13px] font-medium tabular-nums text-zinc-100" style={{ minWidth: `${timeLabelChars}ch` }}>{formatTime(displayCurrentTime)}</span>
         {/* A tall strip to land a thumb on; the visible track stays thin, the thumb always shown. */}
         <div className="relative min-w-0 flex-1">
           {seeking && hoverRatio !== null && duration > 0 && (
@@ -2135,7 +2139,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
             <div className={cn("absolute -translate-x-1/2 rounded-full bg-red-600 shadow-[0_1px_4px_rgba(0,0,0,0.8)] transition-[width,height]", seeking ? "h-4 w-4" : "h-3 w-3")} style={{ left: `${playedPercent}%` }} />
           </div>
         </div>
-        <button onClick={(e) => { stop(e); toggleRemainingTime(); }} className="shrink-0 py-2 text-[13px] font-medium tabular-nums text-zinc-100">
+        <button onClick={(e) => { stop(e); toggleRemainingTime(); }} className="shrink-0 py-2 text-right text-[13px] font-medium tabular-nums text-zinc-100" style={{ minWidth: `${timeLabelChars + 1}ch` }}>
           {showRemainingTime ? `-${formatTime(Math.max(0, displayDuration - displayCurrentTime))}` : formatTime(displayDuration)}
         </button>
       </div>
