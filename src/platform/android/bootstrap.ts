@@ -74,7 +74,8 @@ export async function installAndroidHibiki(): Promise<void> {
       setSystemBars: async ({ hidden, style }) => {
         // "dark" bars carry light icons - the app's dark theme; "light" bars carry dark icons.
         if (style) await SystemBars.setStyle({ style: style === "dark" ? SystemBarsStyle.Dark : SystemBarsStyle.Light });
-        if (hidden !== undefined) await (hidden ? SystemBars.hide() : SystemBars.show());
+        // Hidden is the player's immersive full screen, which HibikiApp keeps applied across rotations.
+        if (hidden !== undefined) await HibikiApp.setImmersive({ value: hidden });
       },
       keepAwake: (on) => HibikiApp.keepAwake({ value: on }),
       setOrientation: (orientation) => HibikiApp.setOrientation({ value: orientation }),

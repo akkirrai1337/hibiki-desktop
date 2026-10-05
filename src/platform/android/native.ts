@@ -80,6 +80,7 @@ export interface HibikiResolverPlugin {
 export interface HibikiAppPlugin {
   minimize(): Promise<void>;
   keepAwake(options: { value: boolean }): Promise<void>;
+  setImmersive(options: { value: boolean }): Promise<void>;
   setOrientation(options: { value: "landscape" | "portrait" | "auto" }): Promise<void>;
 }
 

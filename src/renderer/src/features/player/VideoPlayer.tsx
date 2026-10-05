@@ -9,6 +9,8 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   FastForward,
   ListVideo,
   Loader2,
@@ -218,8 +220,8 @@ function ToggleRow({ label, checked, onChange }: { label: string; checked: boole
   // on the knob once checked, since --color-accent-fg is already this app's "contrasts against
   // --color-accent" token - a white accent's track gets a dark knob, everything else keeps the
   // classic white one it always had.
-  return <button onClick={onChange} className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-white/[.06]">
-    <span className="text-sm text-zinc-200">{label}</span>
+  return <button onClick={onChange} className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-white/[.06] mobile:px-2.5 mobile:py-3">
+    <span className="text-sm text-zinc-200 mobile:text-[15px]">{label}</span>
     {/* Flow layout + padding, not an absolutely-positioned knob: hand-placed `top`/`translate-x`
         offsets have to be re-derived every time the track's size changes, and the previous pair
         left the knob a pixel low and flush against the right edge when on. Sized to the track's
@@ -237,32 +239,32 @@ function ToggleRow({ label, checked, onChange }: { label: string; checked: boole
 // tap into a picker for it.
 function MenuRow({ label, value, onClick }: { label: string; value: string; onClick?: () => void }) {
   if (!onClick) {
-    return <div className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm text-zinc-500">
+    return <div className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm mobile:py-3 mobile:text-[15px] text-zinc-500">
       <span>{label}</span>
-      <span className="max-w-[7rem] truncate text-xs">{value}</span>
+      <span className="max-w-[7rem] truncate text-xs mobile:max-w-[11rem] mobile:text-sm">{value}</span>
     </div>;
   }
-  return <button onClick={onClick} className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm text-zinc-200 transition-colors hover:bg-white/[.06]">
+  return <button onClick={onClick} className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm mobile:py-3 mobile:text-[15px] text-zinc-200 transition-colors hover:bg-white/[.06]">
     <span>{label}</span>
     <span className="flex items-center gap-1 text-zinc-200">
-      <span className="max-w-[7rem] truncate text-xs">{value}</span>
+      <span className="max-w-[7rem] truncate text-xs mobile:max-w-[11rem] mobile:text-sm">{value}</span>
       <ChevronRight className="h-4 w-4 shrink-0 text-zinc-500" strokeWidth={2.5} />
     </span>
   </button>;
 }
 
 function ListPage({ title, options, selected, onSelect, onBack }: { title: string; options: string[]; selected: string | undefined; onSelect: (value: string) => void; onBack: () => void }) {
-  return <div className="w-56 p-1.5">
-    <button onClick={onBack} className="mb-1 flex w-full items-center gap-1 rounded-lg px-1.5 py-2 text-left text-sm font-semibold text-white transition-colors hover:bg-white/[.06]">
+  return <div className="w-56 p-1.5 mobile:w-full mobile:p-2">
+    <button onClick={onBack} className="mb-1 flex w-full items-center gap-1 rounded-lg px-1.5 py-2 text-left text-sm mobile:py-3 mobile:text-[15px] font-semibold text-white transition-colors hover:bg-white/[.06]">
       <ChevronLeft className="h-4 w-4 shrink-0" strokeWidth={2.5} />
       {title}
     </button>
-    <div className="max-h-64 overflow-y-auto">
+    <div className="max-h-64 overflow-y-auto mobile:max-h-none">
       {options.map((option) => (
         <button
           key={option}
           onClick={() => onSelect(option)}
-          className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-zinc-200 transition-colors hover:bg-white/[.06]"
+          className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm mobile:py-3 mobile:text-[15px] text-zinc-200 transition-colors hover:bg-white/[.06]"
         >
           <span className="truncate">{option}</span>
           {selected === option && <Check className="h-4 w-4 shrink-0 text-accent-text" strokeWidth={2.5} />}
@@ -288,13 +290,13 @@ function SubtitleListPage({
   onAdd: () => void;
   onBack: () => void;
 }) {
-  return <div className="w-56 p-1.5">
-    <button onClick={onBack} className="mb-1 flex w-full items-center gap-1 rounded-lg px-1.5 py-2 text-left text-sm font-semibold text-white transition-colors hover:bg-white/[.06]">
+  return <div className="w-56 p-1.5 mobile:w-full mobile:p-2">
+    <button onClick={onBack} className="mb-1 flex w-full items-center gap-1 rounded-lg px-1.5 py-2 text-left text-sm mobile:py-3 mobile:text-[15px] font-semibold text-white transition-colors hover:bg-white/[.06]">
       <ChevronLeft className="h-4 w-4 shrink-0" strokeWidth={2.5} />
       {title}
     </button>
-    <div className="max-h-64 overflow-y-auto">
-      <button onClick={() => onSelect(null)} className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-zinc-200 transition-colors hover:bg-white/[.06]">
+    <div className="max-h-64 overflow-y-auto mobile:max-h-none">
+      <button onClick={() => onSelect(null)} className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm mobile:py-3 mobile:text-[15px] text-zinc-200 transition-colors hover:bg-white/[.06]">
         <span className="truncate">{offLabel}</span>
         {selectedId === null && <Check className="h-4 w-4 shrink-0 text-accent-text" strokeWidth={2.5} />}
       </button>
@@ -302,7 +304,7 @@ function SubtitleListPage({
         <button
           key={option.id}
           onClick={() => onSelect(option.id)}
-          className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-zinc-200 transition-colors hover:bg-white/[.06]"
+          className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm mobile:py-3 mobile:text-[15px] text-zinc-200 transition-colors hover:bg-white/[.06]"
         >
           <span className="truncate">{option.label}</span>
           {selectedId === option.id && <Check className="h-4 w-4 shrink-0 text-accent-text" strokeWidth={2.5} />}
@@ -310,7 +312,7 @@ function SubtitleListPage({
       ))}
     </div>
     <div className="my-1 border-t border-white/[.08]" />
-    <button onClick={onAdd} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-zinc-200 transition-colors hover:bg-white/[.06]">
+    <button onClick={onAdd} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm mobile:py-3 mobile:text-[15px] text-zinc-200 transition-colors hover:bg-white/[.06]">
       <Plus className="h-4 w-4 shrink-0" strokeWidth={2.5} />
       <span className="truncate">{addLabel}</span>
     </button>
@@ -336,9 +338,9 @@ function EpisodeListPanel({ episodes, currentEpisodeId, onSelect, title, t }: {
   useLayoutEffect(() => {
     listRef.current?.querySelector('[data-selected="true"]')?.scrollIntoView({ block: "center" });
   }, []);
-  return <div className="w-72 p-1.5">
-    <div className="px-2.5 py-1.5 text-sm font-semibold text-white">{title}</div>
-    <div ref={listRef} className="max-h-72 overflow-y-auto">
+  return <div className="w-72 p-1.5 mobile:w-full mobile:p-2">
+    <div className="px-2.5 py-1.5 text-sm font-semibold text-white mobile:py-2.5 mobile:text-base">{title}</div>
+    <div ref={listRef} className="max-h-72 overflow-y-auto mobile:max-h-none">
       {episodes.map((episode) => {
         const selected = episode.id === currentEpisodeId;
         return (
@@ -347,7 +349,7 @@ function EpisodeListPanel({ episodes, currentEpisodeId, onSelect, title, t }: {
             data-selected={selected}
             onClick={() => onSelect(episode.id)}
             className={cn(
-              "flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
+              "flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm mobile:py-3 mobile:text-[15px] transition-colors",
               selected ? "text-white" : "text-zinc-200 hover:bg-white/[.06]",
             )}
           >
@@ -361,7 +363,7 @@ function EpisodeListPanel({ episodes, currentEpisodeId, onSelect, title, t }: {
 }
 
 function EpisodeListSkeleton({ title }: { title: string }) {
-  return <div className="w-72 p-1.5">
+  return <div className="w-72 p-1.5 mobile:w-full mobile:p-2">
     <div className="px-2.5 py-1.5 text-sm font-semibold text-white">{title}</div>
     <div className="space-y-1.5 p-1">
       {Array.from({ length: 7 }, (_, index) => <div key={index} className="h-8 animate-shimmer rounded-lg" />)}
@@ -430,7 +432,7 @@ function PlayerSettingsMenu({
   if (page === "dub") {
     // Keyed by title, like every other ListPage - two groups sharing a title would be
     // indistinguishable in the list anyway, so picking the first match loses nothing.
-    if (dubLoading) return <div className="w-56 p-1.5"><div className="mb-1 flex items-center gap-1 px-1.5 py-2 text-sm font-semibold text-white">{t("watch.settings.dub")}</div><div className="space-y-1.5 p-1">{Array.from({ length: 5 }, (_, index) => <div key={index} className="h-8 animate-shimmer rounded-lg" />)}</div></div>;
+    if (dubLoading) return <div className="w-56 p-1.5 mobile:w-full mobile:p-2"><div className="mb-1 flex items-center gap-1 px-1.5 py-2 text-sm font-semibold text-white">{t("watch.settings.dub")}</div><div className="space-y-1.5 p-1">{Array.from({ length: 5 }, (_, index) => <div key={index} className="h-8 animate-shimmer rounded-lg" />)}</div></div>;
     return <ListPage
       title={t("watch.settings.dub")}
       options={dubOptions.map((d) => d.title)}
@@ -466,7 +468,7 @@ function PlayerSettingsMenu({
   // either, this row would only ever announce that placeholder as if it meant something.
   const hideDubRow = dubOptions.length <= 1 && isGenericDubTitle(dubOptions[0]?.title);
 
-  return <div className="w-56 p-1.5">
+  return <div className="w-56 p-1.5 mobile:w-full mobile:p-2">
     {!hideDubRow && <MenuRow label={t("watch.settings.dub")} value={selectedDub?.title ?? "—"} onClick={() => { onOpenDub(); setPage("dub"); }} />}
     {translationOptions.length > 1 && <MenuRow label={t("watch.settings.translation")} value={selectedTranslation ?? "—"} onClick={() => setPage("translation")} />}
     {playerOptions.length > 0 && <MenuRow label={t("watch.settings.player")} value={selectedPlayerName ?? "—"} onClick={playerOptions.length > 1 ? () => setPage("player") : undefined} />}
@@ -2026,12 +2028,33 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     t={t}
   />;
 
+  // Subtitles, episodes and settings sit up top beside the title, where a phone player keeps them;
+  // their menus open as a panel down the right side of the screen.
+  const mobileTopActions = <div className="ml-auto flex shrink-0 items-center gap-1">
+    <button
+      onClick={(e) => { stop(e); setSelectedSubtitleId(selectedSubtitleId ? null : subtitleOptions[0].id); }}
+      disabled={subtitleOptions.length === 0}
+      aria-pressed={!!selectedSubtitleId}
+      className={cn("relative flex h-10 w-10 items-center justify-center rounded-full", subtitleOptions.length === 0 ? "text-white/25" : "text-white active:bg-white/10")}
+    >
+      <Captions className="h-[22px] w-[22px]" strokeWidth={2} />
+      <span className={cn("absolute bottom-1.5 h-[2px] w-4 rounded-full bg-accent transition-opacity", selectedSubtitleId ? "opacity-100" : "opacity-0")} />
+    </button>
+    {(episodesLoading || !episodes || episodes.length > 1) && (
+      <button onClick={(e) => { stop(e); onOpenEpisodes?.(); setSettingsOpen(false); setEpisodeListOpen(true); }} className="flex h-10 w-10 items-center justify-center rounded-full text-white active:bg-white/10">
+        <ListVideo className="h-[22px] w-[22px]" strokeWidth={2} />
+      </button>
+    )}
+    <button onClick={(e) => { stop(e); setEpisodeListOpen(false); setSettingsOpen(true); }} className="flex h-10 w-10 items-center justify-center rounded-full text-white active:bg-white/10">
+      <Settings className="h-[22px] w-[22px]" strokeWidth={2} />
+    </button>
+  </div>;
+
   // The phone's controls. The middle of the screen holds play/pause with the previous and next
   // episode beside it; seeking ±10s is a double tap on either half (see onMobileTap), so it needs
-  // no buttons. The bar at the bottom is the time, the seek bar the thumb can grab anywhere along,
-  // and the menus. Volume is the phone's own keys, and the player is always full screen here.
+  // no buttons. The bottom is one line: the time, the seek bar the thumb can grab anywhere along,
+  // and the length (tap it for what is left). Volume is the phone's own keys.
   const busy = isSwitching || buffering || !link || !!playbackError || !!unplayable;
-  const mobileMenuClass = "absolute bottom-full right-0 z-20 mb-2 max-h-[calc(100vh-5.5rem)] overflow-y-auto overscroll-contain rounded-xl border border-white/10 bg-[#1d1c22] shadow-2xl";
   const mobileControls = <>
     <div className={cn("pointer-events-none absolute inset-0 z-[5] flex items-center justify-center gap-12 transition-opacity duration-300", controlsVisible ? "opacity-100" : "opacity-0")}>
       <button
@@ -2059,56 +2082,52 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       </button>
     </div>
     <div
-      className={cn("absolute inset-x-0 bottom-0 z-[6] bg-gradient-to-t from-black/85 to-transparent pt-12 transition-opacity duration-300", controlsVisible ? "opacity-100" : "pointer-events-none opacity-0")}
-      style={{ paddingLeft: "max(1.25rem, var(--safe-left))", paddingRight: "max(1.25rem, var(--safe-right))", paddingBottom: "max(0.5rem, var(--safe-bottom))" }}
+      className={cn("absolute inset-x-0 bottom-0 z-[6] bg-gradient-to-t from-black/80 to-transparent pt-10 transition-opacity duration-300", controlsVisible ? "opacity-100" : "pointer-events-none opacity-0")}
+      style={{ paddingLeft: "max(1.25rem, var(--safe-left))", paddingRight: "max(1.25rem, var(--safe-right))", paddingBottom: "max(0.375rem, var(--safe-bottom))" }}
       onClick={stop}
     >
-      <div className="flex items-center gap-1">
-        <button onClick={(e) => { stop(e); toggleRemainingTime(); }} className="mr-auto px-1 py-2 text-[13px] font-medium tabular-nums text-zinc-200">
-          {showRemainingTime
-            ? `-${formatTime(Math.max(0, displayDuration - displayCurrentTime))}`
-            : `${formatTime(displayCurrentTime)} / ${formatTime(displayDuration)}`}
-        </button>
-        <button
-          onClick={(e) => { stop(e); setSelectedSubtitleId(selectedSubtitleId ? null : subtitleOptions[0].id); }}
-          disabled={subtitleOptions.length === 0}
-          aria-pressed={!!selectedSubtitleId}
-          className={cn("relative flex h-10 w-10 items-center justify-center", subtitleOptions.length === 0 ? "text-white/25" : "text-white")}
-        >
-          <Captions className="h-[21px] w-[21px]" strokeWidth={2} />
-          <span className={cn("absolute bottom-1.5 h-[2px] w-4 rounded-full bg-accent transition-opacity", selectedSubtitleId ? "opacity-100" : "opacity-0")} />
-        </button>
-        {(episodesLoading || !episodes || episodes.length > 1) && (
-          <div ref={episodeListRef} className="relative">
-            <button onClick={(e) => { stop(e); onOpenEpisodes?.(); setSettingsOpen(false); setEpisodeListOpen((v) => !v); }} className="flex h-10 w-10 items-center justify-center text-white">
-              <ListVideo className="h-[21px] w-[21px]" strokeWidth={2} />
-            </button>
-            {episodeListOpen && <div onClick={stop} className={mobileMenuClass}>{episodeListPanel}</div>}
+      <div className="flex items-center gap-3">
+        <span className="shrink-0 text-[13px] font-medium tabular-nums text-zinc-100">{formatTime(displayCurrentTime)}</span>
+        {/* A tall strip to land a thumb on; the visible track stays thin, the thumb always shown. */}
+        <div className="relative min-w-0 flex-1">
+          {seeking && hoverRatio !== null && duration > 0 && (
+            <div className="absolute bottom-full mb-1 -translate-x-1/2 rounded-md bg-red-600 px-2 py-1 text-xs font-bold tabular-nums text-white shadow-lg" style={{ left: `${hoverRatio * 100}%` }}>
+              {formatTime(hoverRatio * duration)}
+            </div>
+          )}
+          <div ref={seekBarRef} onPointerDown={onSeekPointerDown} className="relative flex h-9 touch-none items-center">
+            <div className="relative h-[3px] w-full overflow-hidden rounded-full bg-white/25 shadow-[0_1px_3px_rgba(0,0,0,0.7)]">
+              <div className="absolute inset-y-0 left-0 bg-white/45" style={{ width: `${bufferedPercent}%` }} />
+              <div className="absolute inset-y-0 left-0 bg-red-600" style={{ width: `${playedPercent}%` }} />
+            </div>
+            <div className={cn("absolute -translate-x-1/2 rounded-full bg-red-600 shadow-[0_1px_4px_rgba(0,0,0,0.8)] transition-[width,height]", seeking ? "h-4 w-4" : "h-3 w-3")} style={{ left: `${playedPercent}%` }} />
           </div>
-        )}
-        <div ref={settingsRef} className="relative">
-          <button onClick={(e) => { stop(e); setEpisodeListOpen(false); setSettingsOpen((v) => !v); }} className="flex h-10 w-10 items-center justify-center text-white">
-            <Settings className="h-[21px] w-[21px]" strokeWidth={2} />
-          </button>
-          {settingsOpen && <div onClick={stop} className={mobileMenuClass}>{settingsMenu}</div>}
         </div>
-      </div>
-      {/* A tall strip to land a thumb on; the visible track stays thin, the thumb always shown. */}
-      <div className="relative">
-        {seeking && hoverRatio !== null && duration > 0 && (
-          <div className="absolute bottom-full mb-1 -translate-x-1/2 rounded-md bg-red-600 px-2 py-1 text-xs font-bold tabular-nums text-white shadow-lg" style={{ left: `${hoverRatio * 100}%` }}>
-            {formatTime(hoverRatio * duration)}
-          </div>
-        )}
-        <div ref={seekBarRef} onPointerDown={onSeekPointerDown} className="relative flex h-8 touch-none items-center">
-          <div className="relative h-[3px] w-full overflow-hidden rounded-full bg-white/25 shadow-[0_1px_3px_rgba(0,0,0,0.7)]">
-            <div className="absolute inset-y-0 left-0 bg-white/45" style={{ width: `${bufferedPercent}%` }} />
-            <div className="absolute inset-y-0 left-0 bg-red-600" style={{ width: `${playedPercent}%` }} />
-          </div>
-          <div className={cn("absolute -translate-x-1/2 rounded-full bg-red-600 shadow-[0_1px_4px_rgba(0,0,0,0.8)] transition-[width,height]", seeking ? "h-4 w-4" : "h-3 w-3")} style={{ left: `${playedPercent}%` }} />
-        </div>
+        <button onClick={(e) => { stop(e); toggleRemainingTime(); }} className="shrink-0 py-2 text-[13px] font-medium tabular-nums text-zinc-100">
+          {showRemainingTime ? `-${formatTime(Math.max(0, displayDuration - displayCurrentTime))}` : formatTime(displayDuration)}
+        </button>
       </div>
     </div>
+    <AnimatePresence>
+      {(settingsOpen || episodeListOpen) && (
+        <motion.div key="panel" className="absolute inset-0 z-30" onClick={stop} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
+          <div className="absolute inset-0 bg-black/40" onClick={() => { setSettingsOpen(false); setEpisodeListOpen(false); }} />
+          <motion.div
+            // The menus' own refs, so their outside-click closing (see the effects above) knows taps
+            // inside the panel from taps on the dimmed video beside it.
+            ref={settingsOpen ? settingsRef : episodeListRef}
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", stiffness: 420, damping: 42 }}
+            className="absolute inset-y-0 right-0 w-[min(400px,48vw)] overflow-y-auto overscroll-contain bg-[#141418]/[.97] shadow-[-12px_0_40px_rgba(0,0,0,0.5)]"
+            style={{ paddingRight: "max(0.5rem, var(--safe-right))", paddingTop: "0.5rem", paddingBottom: "0.5rem" }}
+          >
+            {settingsOpen ? settingsMenu : episodeListPanel}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   </>;
 
   return (
@@ -2203,8 +2222,9 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         )}
       </AnimatePresence>
 
+      {/* Not on the phone: there the big play/pause button itself already says what happened. */}
       <AnimatePresence>
-        {centerFlash && (
+        {!isMobile && centerFlash && (
           <motion.div
             key={centerFlash.id}
             initial={{ opacity: 0.9, scale: 0.7 }}
@@ -2234,8 +2254,32 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
           instead, which only changes when a new streak starts - it stays mounted (and its own
           auto-hide timer keeps getting pushed back, see the effect above) across every pulse in
           the same streak. */}
+      {/* Phone: the double tap's answer fills the side that was tapped - a soft arc with the arrows and
+          the running total centred in it, the way a phone's own video players show it. */}
       <AnimatePresence>
-        {seekFlash && (
+        {isMobile && seekFlash && (
+          <motion.div
+            key={seekFlash.streakId}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            className={cn(
+              "pointer-events-none absolute inset-y-0 z-10 flex w-[36%] flex-col items-center justify-center gap-1.5 bg-white/[.07]",
+              seekFlash.direction === "back" ? "left-0 rounded-r-[50%]" : "right-0 rounded-l-[50%]",
+            )}
+          >
+            <motion.span key={seekFlash.pulse} initial={{ opacity: 0.4, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.18 }}>
+              {seekFlash.direction === "back" ? <ChevronsLeft className="h-9 w-9 text-white" strokeWidth={2.25} /> : <ChevronsRight className="h-9 w-9 text-white" strokeWidth={2.25} />}
+            </motion.span>
+            <span className="text-[15px] font-semibold tabular-nums text-white [text-shadow:0_1px_6px_rgba(0,0,0,0.6)]">
+              {seekFlash.direction === "back" ? "−" : "+"}{seekFlash.totalSeconds}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {!isMobile && seekFlash && (
           <motion.div
             key={seekFlash.streakId}
             initial={{ opacity: 0 }}
@@ -2333,7 +2377,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
             "absolute right-6 z-10 flex items-center gap-2 transition-[bottom] duration-300",
             controlsVisible ? "bottom-[136px]" : "bottom-8",
             // Phone: just above the seek bar while the controls are up, low on the screen otherwise.
-            isMobile && (controlsVisible ? "mobile:bottom-[5.75rem]" : "mobile:bottom-6"),
+            isMobile && (controlsVisible ? "mobile:bottom-16" : "mobile:bottom-6"),
           )}
           style={isMobile ? { right: "max(1.25rem, var(--safe-right))" } : undefined}
         >
@@ -2361,6 +2405,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
           <p className="select-text truncate text-base font-bold text-white">{title}</p>
           <p className="select-text truncate text-xs text-zinc-300">{episodeLabel}</p>
         </div>
+        {isMobile && mobileTopActions}
       </div>
 
       {/* Bottom control cluster */}

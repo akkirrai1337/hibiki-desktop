@@ -1,7 +1,12 @@
 package app.hibiki;
 
 import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
+import android.view.Window;
 import android.view.WindowManager;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
@@ -30,6 +35,44 @@ public class HibikiAppPlugin extends Plugin {
             else getActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         });
         call.resolve();
+    }
+
+    /** Whether the player asked for the system bars out of the way - re-applied after anything that brings them back. */
+    private boolean immersive = false;
+
+    /**
+     * The player's full screen: status and navigation bars hidden, a swipe from the edge shows them
+     * for a moment and they hide again. Turning the screen (which the player itself asks for) and
+     * coming back to the app both bring the bars back on some systems, so it is applied again then.
+     */
+    @PluginMethod
+    public void setImmersive(PluginCall call) {
+        immersive = Boolean.TRUE.equals(call.getBoolean("value", false));
+        getActivity().runOnUiThread(this::applyImmersive);
+        call.resolve();
+    }
+
+    private void applyImmersive() {
+        Window window = getActivity().getWindow();
+        WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(window, window.getDecorView());
+        if (immersive) {
+            controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            controller.hide(WindowInsetsCompat.Type.systemBars());
+        } else {
+            controller.show(WindowInsetsCompat.Type.systemBars());
+        }
+    }
+
+    @Override
+    protected void handleOnConfigurationChanged(Configuration newConfig) {
+        super.handleOnConfigurationChanged(newConfig);
+        if (immersive) getActivity().getWindow().getDecorView().post(this::applyImmersive);
+    }
+
+    @Override
+    protected void handleOnResume() {
+        super.handleOnResume();
+        if (immersive) getActivity().getWindow().getDecorView().post(this::applyImmersive);
     }
 
     /** "landscape" (either way up, following the sensor), "portrait", or "auto" for the user's own setting. */
