@@ -69,6 +69,15 @@ const TOP_LEVEL = new Set(["/", "/catalog", "/search", "/library", "/history", "
 // highlight (see LibrarySegments) - the page itself doesn't move.
 const LIBRARY_VIEWS = new Set(["/library", "/history", "/downloads"]);
 
+// Tab pages already shown once. A tab's first visit builds it from nothing - its first render, its
+// data, its images - which on a phone outlasts the transition, so it played out unseen over a
+// skeleton and the page popped in after. The first visit just shows the page; later visits fade.
+const shownPages = new WeakSet<HTMLElement>();
+
+function tabPageBox(pathname: string): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`[data-page-scroll="${CSS.escape(pathname)}"]`);
+}
+
 function historyIndex(): number {
   return (window.history.state as { __TSR_index?: number } | null)?.__TSR_index ?? 0;
 }
@@ -85,12 +94,14 @@ export function usePageTransition(pathname: string): void {
     const from = previous.current;
     const index = historyIndex();
     previous.current = { pathname, index };
-    if (!from || from.pathname === pathname) return;
+    const tabBox = tabPageBox(pathname);
+    const firstVisit = tabBox !== null && !shownPages.has(tabBox);
+    if (tabBox) shownPages.add(tabBox);
+    if (!from || from.pathname === pathname || firstVisit) return;
     if (pathname.startsWith("/watch/") || from.pathname.startsWith("/watch/")) return;
     if (LIBRARY_VIEWS.has(pathname) && LIBRARY_VIEWS.has(from.pathname)) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const box = document.querySelector<HTMLElement>(`[data-page-scroll="${CSS.escape(pathname)}"]`)
-      ?? document.querySelector<HTMLElement>('[data-scroll-restoration-id="app-main"]');
+    const box = tabBox ?? document.querySelector<HTMLElement>('[data-scroll-restoration-id="app-main"]');
     if (!box) return;
 
     const fade = TOP_LEVEL.has(pathname) && TOP_LEVEL.has(from.pathname);
