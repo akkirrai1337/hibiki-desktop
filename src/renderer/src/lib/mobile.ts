@@ -76,8 +76,12 @@ function historyIndex(): number {
 /** Animates the page box that `pathname` shows, each time it changes (phone only). */
 export function usePageTransition(pathname: string): void {
   const previous = useRef<{ pathname: string; index: number } | null>(null);
+  // The transition waiting for its first frame, so a newer navigation can call it off.
+  const pending = useRef<(() => void) | null>(null);
   useLayoutEffect(() => {
     if (!isMobile) return;
+    pending.current?.();
+    pending.current = null;
     const from = previous.current;
     const index = historyIndex();
     previous.current = { pathname, index };
@@ -88,18 +92,35 @@ export function usePageTransition(pathname: string): void {
     const box = document.querySelector<HTMLElement>(`[data-page-scroll="${CSS.escape(pathname)}"]`)
       ?? document.querySelector<HTMLElement>('[data-scroll-restoration-id="app-main"]');
     if (!box) return;
-    if (TOP_LEVEL.has(pathname) && TOP_LEVEL.has(from.pathname)) {
-      box.animate(
-        // A plain fade, in place: a tab is a place of its own, not something arriving from below.
-        [{ opacity: 0.4 }, { opacity: 1 }],
-        { duration: 160, easing: "ease-out" },
-      );
-      return;
-    }
-    const back = index < from.index;
-    box.animate(
-      [{ opacity: 0.5, transform: `translateX(${back ? -32 : 32}px)` }, { opacity: 1, transform: "none" }],
-      { duration: 240, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
-    );
+
+    const fade = TOP_LEVEL.has(pathname) && TOP_LEVEL.has(from.pathname);
+    // A tab fades in place - a place of its own, not something arriving from anywhere.
+    const start: Keyframe = fade
+      ? { opacity: 0.4 }
+      : { opacity: 0.5, transform: `translateX(${index < from.index ? -32 : 32}px)` };
+    const options: KeyframeAnimationOptions = fade
+      ? { duration: 160, easing: "ease-out" }
+      : { duration: 240, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" };
+
+    // A page shown for the first time can take longer to lay out and draw than the whole animation,
+    // which then ran out before anything was on screen - no transition at all. So the page is first
+    // drawn as the animation's first frame, and the animation starts once that frame is up.
+    box.style.opacity = String(start.opacity);
+    if (start.transform) box.style.transform = String(start.transform);
+    const reset = () => {
+      box.style.opacity = "";
+      box.style.transform = "";
+    };
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        pending.current = null;
+        reset();
+        box.animate([start, { opacity: 1, transform: "none" }], options);
+      });
+    });
+    pending.current = () => {
+      cancelAnimationFrame(frame);
+      reset();
+    };
   }, [pathname]);
 }
