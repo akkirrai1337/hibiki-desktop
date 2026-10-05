@@ -5,7 +5,7 @@ import type { Platform } from "../types";
 import { androidBrowser } from "./browser";
 import { createAndroidDb } from "./db";
 import { AndroidExtensionHost } from "./extensionHost";
-import { HibikiFiles, HibikiNet } from "./native";
+import { HibikiApk, HibikiFiles, HibikiNet } from "./native";
 import { androidDownloadTransfer, androidFiles, androidHttp, androidSecureStore } from "./transports";
 
 type Listener = (payload: unknown) => void;
@@ -79,6 +79,22 @@ export async function createAndroidPlatform(version: string): Promise<{ platform
       relaunch: () => window.location.reload(),
     },
     extensionHost: new AndroidExtensionHost(androidFiles),
+    apkSources: {
+      list: async () => (await HibikiApk.list()).sources,
+      // The calls ExtensionRuntime makes of a source, answered by HibikiApkPlugin.
+      call: async (sourceId, method, args) => {
+        switch (method) {
+          case "search": return (await HibikiApk.search({ sourceId, request: args[0] ?? {} })).items;
+          case "latest": return (await HibikiApk.latest({ sourceId, limit: Number(args[0] ?? 24) })).items;
+          case "getById": return HibikiApk.getById({ sourceId, id: String(args[0]) });
+          case "getPlaybackGroups": return (await HibikiApk.playbackGroups({ sourceId, titleId: String(args[0]) })).items;
+          // (titleId, groupId, episodeId): an Aniyomi episode is found by its own id alone.
+          case "getPlayerLinks": return (await HibikiApk.playerLinks({ sourceId, episodeId: String(args[2]) })).items;
+          case "getSettings": return HibikiApk.filterCatalog({ sourceId });
+          default: throw new Error(`APK sources do not support ${method}()`);
+        }
+      },
+    },
   };
   return { platform, events, migrate: () => db.migrate() };
 }

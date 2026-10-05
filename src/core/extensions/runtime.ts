@@ -147,8 +147,15 @@ function isRetiredPlayerLink(link: PlayerLink): boolean {
   }
 }
 
+/** Ids of the platform's native sources (ApkSourcesPort) - never a JS source's. */
+export function isApkSource(sourceId: string): boolean {
+  return sourceId.startsWith("apk:");
+}
+
 export class ExtensionRuntime {
   private readonly extensions = new Map<string, LoadedExtension>();
+  /** The platform's own sources (APK sources on Android), as of the last reload. */
+  private apkSources: SourceInfo[] = [];
   private readonly resolvers = new Map<string, ResolverManifest>();
   private readonly resolverHealth = new Map<string, ResolverHealth>();
   private readonly inFlightReads = new Map<string, Promise<unknown>>();
@@ -234,13 +241,23 @@ export class ExtensionRuntime {
 
     // New source files/settings must not adopt a request that started against the previous loaded
     // extension. The old work may still finish for its original caller, but no new call shares it.
+    const apkSources = await getPlatform().apkSources?.list().catch((error: unknown) => {
+      logger.warn("ext", `APK sources unavailable: ${error instanceof Error ? error.message : String(error)}`);
+      return [];
+    }) ?? [];
+
     this.inFlightReads.clear();
     replaceMap(this.extensions, extensions);
     replaceMap(this.origins, origins);
     replaceMap(this.resolvers, resolvers);
+    this.apkSources = apkSources;
   }
 
   list(): SourceInfo[] {
+    return [...this.jsSources(), ...this.apkSources];
+  }
+
+  private jsSources(): SourceInfo[] {
     return [...this.extensions.values()].map(({ manifest }) => ({
       id: manifest.id,
       name: manifest.name,
@@ -293,6 +310,7 @@ export class ExtensionRuntime {
     args: unknown[],
     options?: { extensionsDir?: string; requestId?: string; timeoutMs?: number },
   ): Promise<T> {
+    if (isApkSource(sourceId)) return this.runApk<T>(method, sourceId, args);
     const extensionsDir = options?.extensionsDir ?? this.extensionsDir;
     const timeoutMs = options?.timeoutMs ?? WORKER_TIMEOUT_MS;
     if (!options?.extensionsDir && !this.extensions.has(sourceId)) return Promise.reject(new Error(`Unknown source: ${sourceId}`));
@@ -344,6 +362,24 @@ export class ExtensionRuntime {
           throw failure;
         },
       );
+  }
+
+  // An APK source answers the same call natively (see ApkSourcesPort): no worker, no storage
+  // snapshot - the extension keeps its own preferences - and the deadline is the native side's.
+  private async runApk<T>(method: ExtensionMethod, sourceId: string, args: unknown[]): Promise<T> {
+    const port = getPlatform().apkSources;
+    if (!port || !this.apkSources.some((source) => source.id === sourceId)) throw new Error(`Unknown source: ${sourceId}`);
+    const startedAt = Date.now();
+    logger.debug("ext", `${sourceId}.${method}() start`);
+    try {
+      const result = (await port.call(sourceId, method, args)) as T;
+      logger.debug("ext", `${sourceId}.${method}() ok in ${Date.now() - startedAt}ms`);
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.warn("ext", `${sourceId}.${method}() failed in ${Date.now() - startedAt}ms: ${message}`);
+      throw new Error(message);
+    }
   }
 
   cancelRequest(requestId: string): boolean {

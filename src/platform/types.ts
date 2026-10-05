@@ -8,7 +8,7 @@
 // The interfaces grow as Phase 2 moves modules into the shared core: each extraction replaces a
 // direct electron/node import with one of these ports, and adds what that module turns out to need.
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
-import type { PlayerLink } from "@shared/types";
+import type { PlayerLink, SourceInfo } from "@shared/types";
 import type * as schema from "../core/db/schema";
 
 export type PlatformKind = "electron" | "android";
@@ -228,6 +228,19 @@ export interface Platform {
   events: EventsPort;
   app: AppPort;
   extensionHost: ExtensionHostPort;
+  /** Compiled sources the platform runs itself, beside the JS ones (Android: Aniyomi APK
+   * extensions). Absent where there are none. */
+  apkSources?: ApkSourcesPort;
+}
+
+/**
+ * Sources the platform runs natively, addressed by ids starting "apk:". ExtensionRuntime lists them
+ * with the JS sources and hands them the same calls it would make of a JS source - method names,
+ * arguments and result shapes - so nothing above it can tell the two apart.
+ */
+export interface ApkSourcesPort {
+  list(): Promise<SourceInfo[]>;
+  call(sourceId: string, method: string, args: unknown[]): Promise<unknown>;
 }
 
 // --- Extension workers -------------------------------------------------------------------------

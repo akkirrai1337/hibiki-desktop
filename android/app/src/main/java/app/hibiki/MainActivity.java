@@ -18,6 +18,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(HibikiDownloadsPlugin.class);
         registerPlugin(HibikiResolverPlugin.class);
         registerPlugin(HibikiAppPlugin.class);
+        registerPlugin(app.hibiki.apk.HibikiApkPlugin.class);
         super.onCreate(savedInstanceState);
         // The page draws under the status and navigation bars and pads itself by the safe-area
         // insets (Capacitor's SystemBars passes them through for viewport-fit=cover). Only after

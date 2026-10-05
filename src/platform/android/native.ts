@@ -1,5 +1,6 @@
 // The Java plugins under android/app/src/main/java/app/hibiki, as the Android adapters call them.
 import { registerPlugin, type PluginListenerHandle } from "@capacitor/core";
+import type { SourceInfo } from "@shared/types";
 
 export interface HibikiNetPlugin {
   request(options: {
@@ -89,7 +90,36 @@ export interface HibikiAppPlugin {
   addListener(event: "pipAction", listener: (event: { action: string }) => void): Promise<PluginListenerHandle>;
 }
 
+/** An APK source extension installed inside the app (see android/.../apk/HibikiApkPlugin.kt). */
+export interface ApkExtensionEntry {
+  packageName: string;
+  name: string;
+  versionName: string;
+  versionCode: number;
+  isNsfw: boolean;
+  trusted: boolean;
+  fingerprint: string | null;
+  iconPath: string | null;
+  sourceIds: string[];
+  error: string | null;
+}
+
+export interface HibikiApkPlugin {
+  list(): Promise<{ sources: SourceInfo[]; extensions: ApkExtensionEntry[] }>;
+  refresh(): Promise<{ sources: SourceInfo[]; extensions: ApkExtensionEntry[] }>;
+  install(options: { url: string; packageName?: string }): Promise<{ packageName: string; name: string; versionName: string; fingerprint: string; trusted: boolean }>;
+  trust(options: { packageName: string; fingerprint: string }): Promise<{ sources: SourceInfo[]; extensions: ApkExtensionEntry[] }>;
+  uninstall(options: { packageName: string }): Promise<{ sources: SourceInfo[]; extensions: ApkExtensionEntry[] }>;
+  search(options: { sourceId: string; request: unknown }): Promise<{ items: unknown[] }>;
+  latest(options: { sourceId: string; limit: number }): Promise<{ items: unknown[] }>;
+  getById(options: { sourceId: string; id: string }): Promise<unknown>;
+  playbackGroups(options: { sourceId: string; titleId: string }): Promise<{ items: unknown[] }>;
+  playerLinks(options: { sourceId: string; episodeId: string }): Promise<{ items: unknown[] }>;
+  filterCatalog(options: { sourceId: string }): Promise<unknown>;
+}
+
 export const HibikiApp = registerPlugin<HibikiAppPlugin>("HibikiApp");
+export const HibikiApk = registerPlugin<HibikiApkPlugin>("HibikiApk");
 export const HibikiNet = registerPlugin<HibikiNetPlugin>("HibikiNet");
 export const HibikiResolver = registerPlugin<HibikiResolverPlugin>("HibikiResolver");
 export const HibikiFiles = registerPlugin<HibikiFilesPlugin>("HibikiFiles");
