@@ -1731,12 +1731,33 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   // of the screen seek 10s back or forward, and every further tap on that side while the "+10" is
   // still up adds another 10s (YouTube's and Android's own players behave the same way). A lone
   // tap waits out the double-tap window before it acts, or a double tap would flash the controls.
+  // The taps only add up: the video jumps once, by the total, when the streak ends - one seek and
+  // one load instead of a fetch from every intermediate position along the way.
   const MOBILE_SEEK_SECONDS = 10;
   const DOUBLE_TAP_MS = 280;
-  const mobileTapRef = useRef<{ timer: ReturnType<typeof setTimeout> | null; at: number; side: "back" | "forward" | null; seekUntil: number }>({ timer: null, at: 0, side: null, seekUntil: 0 });
-  useEffect(() => () => { if (mobileTapRef.current.timer) clearTimeout(mobileTapRef.current.timer); }, []);
-  const onMobileTap = (e: React.MouseEvent) => {
+  const mobileTapRef = useRef<{
+    timer: ReturnType<typeof setTimeout> | null;
+    at: number;
+    side: "back" | "forward" | null;
+    seekUntil: number;
+    pendingSeconds: number;
+    commit: ReturnType<typeof setTimeout> | null;
+  }>({ timer: null, at: 0, side: null, seekUntil: 0, pendingSeconds: 0, commit: null });
+  const commitMobileSeek = useCallback(() => {
+    const tap = mobileTapRef.current;
+    if (tap.commit) { clearTimeout(tap.commit); tap.commit = null; }
     const video = videoRef.current;
+    const delta = tap.pendingSeconds;
+    tap.pendingSeconds = 0;
+    if (!video || delta === 0) return;
+    video.currentTime = Math.min(Math.max(0, video.currentTime + delta), video.duration || Infinity);
+  }, []);
+  useEffect(() => () => {
+    const tap = mobileTapRef.current;
+    if (tap.timer) clearTimeout(tap.timer);
+    if (tap.commit) clearTimeout(tap.commit);
+  }, []);
+  const onMobileTap = (e: React.MouseEvent) => {
     const box = containerRef.current?.getBoundingClientRect();
     if (!box) return;
     const x = (e.clientX - box.left) / box.width;
@@ -1747,16 +1768,17 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       if (tap.timer) { clearTimeout(tap.timer); tap.timer = null; }
       tap.seekUntil = now + SEEK_ACCUMULATION_WINDOW_MS;
       tap.side = direction;
-      if (!video) return;
-      video.currentTime = direction === "back"
-        ? Math.max(0, video.currentTime - MOBILE_SEEK_SECONDS)
-        : Math.min(video.duration || Infinity, video.currentTime + MOBILE_SEEK_SECONDS);
+      tap.pendingSeconds += direction === "back" ? -MOBILE_SEEK_SECONDS : MOBILE_SEEK_SECONDS;
+      if (tap.commit) clearTimeout(tap.commit);
+      tap.commit = setTimeout(commitMobileSeek, SEEK_ACCUMULATION_WINDOW_MS);
       flashSeek(direction, MOBILE_SEEK_SECONDS);
     };
     if (side && side === tap.side && (now < tap.seekUntil || (tap.timer && now - tap.at < DOUBLE_TAP_MS))) {
       seek(side);
       return;
     }
+    // Anything else ends a streak that is still adding up: it lands now.
+    commitMobileSeek();
     if (tap.timer) clearTimeout(tap.timer);
     tap.at = now;
     tap.side = side;
