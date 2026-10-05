@@ -861,14 +861,18 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
           {anime.type && <>{anime.year ? <Dot /> : null}<span className="uppercase">{anime.type}</span></>}
           {episodesLabel && <><Dot /><span>{episodesLabel}</span></>}
         </div>
-        {statusLabel && <span className={cn("mt-2 inline-block rounded-md px-1.5 py-0.5 text-[11px] font-semibold", anime.status === "ongoing" ? "bg-accent/15 text-accent-text" : "bg-text/10 text-muted")}>{statusLabel}</span>}
+        {/* The crowd's scores belong with the title's facts, so even a single one reads as part of
+            them - a line of its own below looked stranded on the many sources with no Rate button. */}
+        {(anime.ratings?.length ?? 0) > 0 && <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-medium text-muted">
+          <SourceRatings ratings={anime.ratings ?? []} />
+        </div>}
+        {/* This user's own score (a chip, first so its star panel opens on screen), the status, the next episode. */}
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs empty:hidden">
+          {source && <RatingButton source={source} animeId={animeId} />}
+          {statusLabel && <span className={cn("rounded-md px-1.5 py-0.5 text-[11px] font-semibold", anime.status === "ongoing" ? "bg-accent/15 text-accent-text" : "bg-text/10 text-muted")}>{statusLabel}</span>}
+          {nextEpisodeLabel && <span className="flex items-center gap-1 rounded-md bg-emerald-400/15 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-500 dark:text-emerald-400"><Clock className="h-3 w-3" strokeWidth={2.5} />{nextEpisodeLabel}</span>}
+        </div>
       </div>
-    </div>
-    {/* The scores, with this user's own (a chip, first so its star panel opens fully on screen). */}
-    <div className="mt-3.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs font-medium text-muted empty:hidden">
-      {source && <RatingButton source={source} animeId={animeId} />}
-      {(anime.ratings?.length ?? 0) > 0 && <SourceRatings ratings={anime.ratings ?? []} />}
-      {nextEpisodeLabel && <span className="flex items-center gap-1 rounded-md bg-emerald-400/15 px-1.5 py-0.5 font-semibold text-emerald-500 dark:text-emerald-400"><Clock className="h-3 w-3" strokeWidth={2.5} />{nextEpisodeLabel}</span>}
     </div>
     {/* One line the thumb scrolls, instead of genres wrapping into a block of chips. */}
     {anime.genres && anime.genres.length > 0 && <div className="no-scrollbar -mx-4 mt-3.5 flex gap-1.5 overflow-x-auto px-4 [&>*]:shrink-0">{anime.genres.map((g) => <GenreChip key={g} genre={g} sourceId={sourceId} className={GENRE_CHIP_CLASS} />)}</div>}
