@@ -434,9 +434,11 @@ function ClearXpHistoryDialog({ onConfirm, onDismiss }: { onConfirm: () => void;
 // Matches ProfilePage's own layout proportions (same header/stat-row/two-column grid shape) so
 // flipping over to the real content doesn't visibly reflow - same reasoning as AnimeCard's own
 // SkeletonCard.
+// aria-busy: the phone's page transition holds for the real profile (its data is local and comes
+// in a moment) rather than playing on this stand-in and letting the profile pop in after it.
 function ProfileSkeleton() {
   return (
-    <div className="min-h-full animate-pulse bg-app-bg pb-16">
+    <div className="min-h-full animate-pulse bg-app-bg pb-16" aria-busy="true">
       <div className="border-b border-border px-8 pb-8 pt-10 mobile:px-4">
         <div className="flex items-center gap-5">
           <div className="h-20 w-20 shrink-0 rounded-full bg-text/[.06]" />
