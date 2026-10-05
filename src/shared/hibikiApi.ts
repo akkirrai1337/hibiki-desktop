@@ -103,6 +103,11 @@ export interface HibikiApi {
   profile: {
     setBanner(bytes: ArrayBuffer, mimeType: string): Promise<string>;
     clearBanner(): Promise<void>;
+    /**
+     * Where the renderer loads a banner from, for a platform without desktop's hibiki-profile://
+     * protocol (Android). Absent on desktop.
+     */
+    bannerUrl?(filename: string): string;
   };
   library: {
     list(): Promise<LibraryEntry[]>;

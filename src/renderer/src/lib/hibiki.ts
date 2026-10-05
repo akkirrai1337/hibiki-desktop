@@ -58,5 +58,7 @@ export function downloadFileUrl(filePath: string): string {
 // Same idea for the profile banner (see main/index.ts's `hibiki-profile` handler), just a bare
 // filename rather than a whole path - there is only ever the one file.
 export function profileBannerUrl(filename: string): string {
+  // Android serves it its own way; desktop through main's hibiki-profile:// protocol.
+  if (hibiki.profile.bannerUrl) return hibiki.profile.bannerUrl(filename);
   return `hibiki-profile://local/${encodeURIComponent(filename)}`;
 }

@@ -24,13 +24,14 @@ function tabFor(pathname: string): TabPath | null {
 
 /**
  * The page colour behind the status bar, so nothing scrolls visibly under the clock and icons. Solid
- * everywhere except the two screens whose artwork is meant to run under the bar (the home hero, a
- * title's poster): there it fades in over the first stretch of scrolling, as the artwork leaves.
+ * everywhere except the screens whose artwork is meant to run under the bar (the home hero, a title's
+ * poster, the profile's banner): there it fades in over the first stretch of scrolling, as the
+ * artwork leaves. Solid, it is the page's own colour, so a header continues under the bar unbroken.
  */
 export function MobileStatusScrim() {
   const scrim = useRef<HTMLDivElement>(null);
   const pathname = useRouterState({ select: (s) => (s.resolvedLocation ?? s.location).pathname });
-  const artwork = pathname === "/" || pathname.startsWith("/anime/");
+  const artwork = pathname === "/" || pathname === "/profile" || pathname.startsWith("/anime/");
   const artworkRef = useRef(artwork);
   artworkRef.current = artwork;
   const opacityFor = (scrollTop: number) => (artworkRef.current ? Math.min(1, scrollTop / 160) : 1);
