@@ -18,5 +18,8 @@
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
+        <!-- Android 12+ draws the launcher icon on this: the app's own dark, not a white flash
+             before the page's dark splash. -->
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
     </style>
 </resources>
