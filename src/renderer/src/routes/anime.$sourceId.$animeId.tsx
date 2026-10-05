@@ -880,16 +880,17 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
           {anime.year ? <span>{anime.year}</span> : null}
           {anime.type && <>{anime.year ? <Dot /> : null}<span className="uppercase">{anime.type}</span></>}
           {episodesLabel && <><Dot /><span>{episodesLabel}</span></>}
+          {/* The status belongs with the year and type: a badge on a line of its own read as stranded. */}
+          {statusLabel && <span className={cn("ml-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-semibold", anime.status === "ongoing" ? "bg-accent/15 text-accent-text" : "bg-text/10 text-muted")}>{statusLabel}</span>}
         </div>
         {/* The crowd's scores belong with the title's facts, so even a single one reads as part of
             them - a line of its own below looked stranded on the many sources with no Rate button. */}
         {(anime.ratings?.length ?? 0) > 0 && <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-medium text-muted">
           <SourceRatings ratings={anime.ratings ?? []} />
         </div>}
-        {/* This user's own score (a chip, first so its star panel opens on screen), the status, the next episode. */}
+        {/* This user's own score (a chip, first so its star panel opens on screen), the next episode. */}
         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs empty:hidden">
           {source && <RatingButton source={source} animeId={animeId} />}
-          {statusLabel && <span className={cn("rounded-md px-1.5 py-0.5 text-[11px] font-semibold", anime.status === "ongoing" ? "bg-accent/15 text-accent-text" : "bg-text/10 text-muted")}>{statusLabel}</span>}
           {nextEpisodeLabel && <span className="flex items-center gap-1 rounded-md bg-emerald-400/15 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-500 dark:text-emerald-400"><Clock className="h-3 w-3" strokeWidth={2.5} />{nextEpisodeLabel}</span>}
         </div>
       </div>
