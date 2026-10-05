@@ -432,7 +432,7 @@ function AnimeDetailPage() {
         {groupsQuery.isError && <ErrorBanner message={(groupsQuery.error as Error).message} />}
         {groups.length === 0 && !groupsQuery.isLoading && !groupsQuery.isError && <div className="text-sm text-muted">{t("detail.noEpisodesYet")}</div>}
         {activeGroup && <div className={cn("grid gap-2.5 mobile:gap-2", episodesView === "tiles" ? "grid-cols-[repeat(auto-fill,minmax(112px,1fr))] mobile:grid-cols-[repeat(auto-fill,minmax(72px,1fr))]" : "grid-cols-[repeat(auto-fill,minmax(300px,1fr))]")}>
-          {foldEpisodes(episodesNewestFirst ? [...activeGroup.episodes].reverse() : activeGroup.episodes, continueTarget?.episode.id, episodesView, episodesExpanded).map((ep) => (
+          {foldEpisodes(orderEpisodes(activeGroup.episodes, episodesNewestFirst), episodesView, episodesExpanded).map((ep) => (
             <EpisodeChip
               key={ep.id}
               sourceId={sourceId}
@@ -478,7 +478,7 @@ function AnimeDetailPage() {
         {isMobile && activeGroup && activeGroup.episodes.length > foldedCount(episodesView) && (
           <button
             onClick={() => setEpisodesExpanded((open) => !open)}
-            className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl border border-border py-2.5 text-[13px] font-semibold text-text/80 active:bg-text/[.06]"
+            className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl border border-text/15 bg-text/[.06] py-2.5 text-[13px] font-semibold text-text/85 active:bg-text/[.1]"
           >
             {episodesExpanded ? t("detail.relatedShowLess") : t("detail.relatedShowMore", { count: activeGroup.episodes.length - foldedCount(episodesView) })}
             <ChevronDown className={cn("h-4 w-4 transition-transform", episodesExpanded && "rotate-180")} strokeWidth={2.25} />
@@ -580,16 +580,25 @@ function foldedCount(view: "tiles" | "list"): number {
 }
 
 /**
- * Phone only: the slice of the (already ordered) episode list shown while it is folded - from the
- * start, or around the episode to watch next when that one would fall past the fold, so the one
- * that matters is always on screen.
+ * The episodes in the chosen order, by their numbers: sources list them either way round (Aniyomi
+ * extensions usually newest first), so their own order says nothing. Equal numbers keep the
+ * source's order.
  */
-function foldEpisodes(episodes: Episode[], nextId: string | undefined, view: "tiles" | "list", expanded: boolean): Episode[] {
+function orderEpisodes(episodes: Episode[], newestFirst: boolean): Episode[] {
+  const indexed = episodes.map((episode, index) => ({ episode, index }));
+  indexed.sort((a, b) => (newestFirst ? b.episode.number - a.episode.number : a.episode.number - b.episode.number) || a.index - b.index);
+  return indexed.map(({ episode }) => episode);
+}
+
+/**
+ * Phone only: the slice of the (already ordered) episode list shown while it is folded - its start,
+ * as the order says. (It once jumped to the episode to watch next, which read as a broken sort -
+ * "oldest first" opening on episode 286; that episode is the Continue button's anyway.)
+ */
+function foldEpisodes(episodes: Episode[], view: "tiles" | "list", expanded: boolean): Episode[] {
   const count = foldedCount(view);
   if (!isMobile || expanded || episodes.length <= count) return episodes;
-  const next = nextId ? episodes.findIndex((ep) => ep.id === nextId) : -1;
-  const start = next < count ? 0 : Math.min(next - 1, episodes.length - count);
-  return episodes.slice(start, start + count);
+  return episodes.slice(0, count);
 }
 
 function EpisodeChip({
