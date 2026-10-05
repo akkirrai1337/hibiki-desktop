@@ -57,12 +57,14 @@ export function installBackButton(goBack: () => void, goUp: () => boolean): () =
 // --- page transitions ---------------------------------------------------------------------------
 // Only the incoming page moves - the outgoing one is already gone (hidden or unmounted) by the
 // time the route resolves. Switching tabs is a short fade in place; going
-// deeper slides in from the right, going back from the left. Nothing for the player: the screen
+// to a title slides in from the right, coming back from the left. Nothing for the player: the screen
 // turns on the way in and out, and a slide on top of that only reads as a stutter.
 // Never from fully transparent: the WebView does not draw a layer at opacity 0, so the new page
 // stayed blank for the whole animation and only popped in after it - a flash on every switch.
 
-const TOP_LEVEL = new Set(["/", "/catalog", "/search", "/library", "/history", "/downloads", "/profile"]);
+// Tabs, and the screens that are part of one (the library's views; settings and sources under the
+// profile): moving between them fades in place rather than sliding.
+const TOP_LEVEL = new Set(["/", "/catalog", "/search", "/library", "/history", "/downloads", "/profile", "/settings", "/sources"]);
 // The library's three views share one switch at their top: picking one only slides that switch's
 // highlight (see LibrarySegments) - the page itself doesn't move.
 const LIBRARY_VIEWS = new Set(["/library", "/history", "/downloads"]);

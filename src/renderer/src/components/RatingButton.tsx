@@ -87,7 +87,7 @@ export function RatingButton({ source, animeId }: { source: SourceInfo; animeId:
           "mobile:h-7 mobile:gap-1 mobile:rounded-full mobile:px-2.5 mobile:text-xs",
           current != null
             ? "border-amber-400/40 bg-amber-400/15 text-amber-500 dark:text-amber-300"
-            : "border-border bg-text/[.05] text-muted hover:bg-text/[.09]",
+            : "border-border bg-text/[.05] text-muted hover:bg-text/[.09] mobile:border-text/15 mobile:bg-text/[.09] mobile:text-text/85",
         )}
         aria-label={t("detail.rating.rate")}
       >

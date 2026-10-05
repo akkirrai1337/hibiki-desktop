@@ -1256,7 +1256,8 @@ function MobileTitleChrome({ posterUrl, siteUrl }: { posterUrl?: string | null; 
 }
 
 // The title page's own look for a genre chip - see GenreChip for the shared open-the-catalog logic.
-const GENRE_CHIP_CLASS = "rounded-full border border-border bg-text/[.03] px-3 py-1 text-xs font-medium text-text/75 hover:border-accent/50 hover:bg-accent/[.06] hover:text-text";
+// Phone: a denser fill and edge, or the chips melted into a background theme (and artwork) behind them.
+const GENRE_CHIP_CLASS = "rounded-full border border-border bg-text/[.03] px-3 py-1 text-xs font-medium text-text/75 hover:border-accent/50 hover:bg-accent/[.06] hover:text-text mobile:border-text/15 mobile:bg-text/[.09] mobile:text-text/85";
 
 // Six fill two rows of the widest layout (three columns) and three of the usual two. A phone's one
 // column shows three, or the list alone would fill the screen above the episodes.
