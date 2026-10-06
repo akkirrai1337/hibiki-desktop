@@ -1149,6 +1149,8 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
         // NETWORK_ERROR already was, giving up into the visible error overlay after a few tries.
         let mediaRetries = 0;
         const MAX_MEDIA_RETRIES = 3;
+        let emptyFragment = { sn: "", count: 0 };
+        const MAX_EMPTY_FRAGMENT_REPEATS = 4;
         hls.on(HlsEngine.Events.MANIFEST_PARSED, (_event, data) => {
           networkRetries = 0;
           trace(`manifest parsed; levels=${data.levels.length}; selectedLevel=${hls?.currentLevel ?? "auto"}`);
@@ -1168,6 +1170,21 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
             : "incomplete";
           const failedUrl = data.response?.url ?? request?.responseURL ?? data.url ?? data.frag?.url ?? streamUrl;
           write("player", `[${traceId} +${Math.round(performance.now() - traceStartedAt)}ms] hls.js ${data.fatal ? "fatal" : "non-fatal"} error:`, data.type, data.details, data.reason ?? "", data.response ? `http ${data.response.code}` : "", `url=${playbackUrlLabel(failedUrl)}`, `fragment=${data.frag?.sn ?? "?"}`, `level=${data.level ?? data.frag?.level ?? "?"}`, `context=${data.context?.type ?? "?"}`, `buffer=${data.buffer ?? data.bufferInfo?.len ?? "?"}`, `appendNoProgress=${data.appendsWithoutProgress ?? "?"}`, `requestStatus=${request?.status ?? "?"}`, `loaded=${stats?.loaded ?? "?"}`, `requestDuration=${requestDuration}`);
+          // hls.js treats a fragment that parses to no media as non-fatal and asks for it again, without
+          // end: seen live with Kodik after a seek, the same segment came back empty for fifteen seconds
+          // until the startup timeout moved on. The CDN answers that segment the same way each time, so
+          // a few repeats are enough to call the stream broken and go to the next link.
+          if (!data.fatal && data.details === HlsEngine.ErrorDetails.FRAG_PARSING_ERROR && data.frag) {
+            const sn = String(data.frag.sn);
+            emptyFragment = emptyFragment.sn === sn ? { sn, count: emptyFragment.count + 1 } : { sn, count: 1 };
+            if (emptyFragment.count >= MAX_EMPTY_FRAGMENT_REPEATS) {
+              const reason = `fragment ${sn} has no media`;
+              log.warn("player", `${reason} after ${emptyFragment.count} tries; giving up on this stream`);
+              if (!reportPlaybackFailure(link, reason)) setPlaybackError(reason);
+              hls?.destroy();
+              return;
+            }
+          }
           if (!data.fatal) return;
           switch (data.type) {
             case HlsEngine.ErrorTypes.NETWORK_ERROR: {
