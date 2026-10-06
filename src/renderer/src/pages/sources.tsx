@@ -303,7 +303,7 @@ export function SourcesPage({ embedded = false }: { embedded?: boolean } = {}) {
     <div className={cn("flex min-h-full flex-col bg-app-bg", embedded && "mobile:min-h-0 mobile:bg-transparent")}>
       <div className={cn("px-8 pt-8 mobile:px-4 mobile:pt-2", embedded && "mobile:pt-0")}>
         {isMobile && !embedded && <MobilePageHeader title={t("nav.sources")} parent="/settings" />}
-        <div className="flex gap-1 border-b border-border">
+        <div className="flex gap-1 border-b border-border mobile:gap-0">
           <TabButton layoutId="sourcesTabIndicator" active={tab === "extensions"} onClick={() => setTab("extensions")}>{t("sources.tabs.extensions")}</TabButton>
           <TabButton layoutId="sourcesTabIndicator" active={tab === "repositories"} onClick={() => setTab("repositories")}>{t("sources.tabs.repositories")}</TabButton>
         </div>
@@ -340,6 +340,7 @@ export function SourcesPage({ embedded = false }: { embedded?: boolean } = {}) {
                   {isMobile && (
                     <BottomSheet
                       open={languageFilterOpen}
+                      prewarm
                       onClose={() => setLanguageFilterOpen(false)}
                       title={t("sources.filterLanguages")}
                       footer={selectedLanguages.size > 0 ? (

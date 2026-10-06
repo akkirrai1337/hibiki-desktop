@@ -4,7 +4,7 @@ import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-r
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useIsPresent } from "motion/react";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import { ArrowDown01, ArrowDown10, ArrowLeft, ArrowUpDown, ChevronRight, LayoutGrid, List, Mic, Play, Bookmark, Check, ChevronDown, Clock, Download, Eraser, ExternalLink, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
 import { CommentsSection } from "@/components/CommentsSection";
@@ -977,7 +977,10 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
 // viewer drift away from the viewport after the details page has been scrolled.
 function PosterPreview({ posterUrl, title, onClose }: { posterUrl: string; title: string; onClose: () => void }) {
   const { t } = useTranslation();
-  useBackHandler(true, onClose);
+  // Once closing, the overlay lets touches through: its picture's spring kept it on the page, taking
+  // every tap, for most of a second after the close.
+  const present = useIsPresent();
+  useBackHandler(present, onClose);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -996,13 +999,13 @@ function PosterPreview({ posterUrl, title, onClose }: { posterUrl: string; title
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      className="fixed inset-x-0 bottom-0 top-10 z-[100] flex items-center justify-center bg-black/[.78] p-8 backdrop-blur-sm mobile:top-0 mobile:px-4 mobile:pb-[calc(1rem+var(--safe-bottom))] mobile:pt-[calc(1rem+var(--safe-top))]"
+      className={cn("fixed inset-x-0 bottom-0 top-10 z-[100] flex items-center justify-center bg-black/[.78] p-8 backdrop-blur-sm mobile:top-0 mobile:px-4 mobile:pb-[calc(1rem+var(--safe-bottom))] mobile:pt-[calc(1rem+var(--safe-top))]", !present && "pointer-events-none")}
       onClick={onClose}
     >
       <motion.div
         initial={{ opacity: 0, scale: 0.94 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.94 }}
+        exit={{ opacity: 0, scale: 0.94, transition: { duration: 0.18, ease: "easeIn" } }}
         transition={{ type: "spring", stiffness: 360, damping: 30 }}
         // Click-through: only the image and the button take clicks, so the empty space around them
         // reaches the overlay and closes the preview.
@@ -1201,14 +1204,15 @@ function DownloadDialog({
 // scrollable page instead of the window. This page no longer applies one, but the portal stays: it
 // keeps the dialog out of the page's own stacking and scroll context. Same as SearchFiltersPanel.
 function Modal({ onDismiss, children }: { onDismiss: () => void; children: React.ReactNode }) {
-  useBackHandler(true, onDismiss);
+  const present = useIsPresent();
+  useBackHandler(present, onDismiss);
   return createPortal(
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className={cn("fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4", !present && "pointer-events-none")}
       onClick={onDismiss}
     >
       {/* No `scale` - see LibraryButton above for why. */}

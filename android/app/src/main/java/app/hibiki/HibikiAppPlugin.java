@@ -131,11 +131,13 @@ public class HibikiAppPlugin extends Plugin {
                 out.write(text.getBytes(StandardCharsets.UTF_8));
             }
             android.net.Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", file);
+            // The file alone: no EXTRA_SUBJECT/EXTRA_TEXT, which Telegram and others post as a caption
+            // under it. ClipData carries the read grant through the chooser to the picked app.
             Intent send = new Intent(Intent.ACTION_SEND)
                 .setType("text/plain")
                 .putExtra(Intent.EXTRA_STREAM, uri)
-                .putExtra(Intent.EXTRA_SUBJECT, name)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            send.setClipData(android.content.ClipData.newRawUri(name, uri));
             Intent chooser = Intent.createChooser(send, null).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             getActivity().runOnUiThread(() -> getActivity().startActivity(chooser));
             call.resolve();

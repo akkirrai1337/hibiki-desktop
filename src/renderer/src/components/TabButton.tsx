@@ -6,7 +6,8 @@ export function TabButton({ active, onClick, layoutId, children }: { active: boo
     <button
       onClick={onClick}
       className={cn(
-        "relative px-4 py-2.5 text-sm font-semibold transition-colors duration-200",
+        // On the phone the tabs share the row in equal halves, each underline its own half.
+        "relative px-4 py-2.5 text-sm font-semibold transition-colors duration-200 mobile:flex-1 mobile:text-[15px]",
         active ? "text-text" : "text-muted hover:text-text/80",
       )}
     >

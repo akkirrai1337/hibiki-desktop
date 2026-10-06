@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef } from "react";
 import { hibiki } from "@/lib/hibiki";
 
 /**
@@ -18,19 +18,28 @@ export const mobileSearchMemory = { query: "" };
 
 const backHandlers: Array<{ current: () => void }> = [];
 
+/**
+ * False inside a kept-alive page that is not the one on screen (__root keeps visited tabs mounted).
+ * A sheet left open on such a page - a settings category, say - must not keep Back: it took the first
+ * Back on whatever screen came next and closed itself out of sight, and the gesture looked swallowed.
+ */
+export const PageActiveContext = createContext(true);
+
 /** While `active`, Back calls `onBack` instead of navigating - for sheets, menus and overlays. */
 export function useBackHandler(active: boolean, onBack: () => void): void {
   const handler = useRef(onBack);
   handler.current = onBack;
+  const pageActive = useContext(PageActiveContext);
+  const on = active && pageActive;
   useEffect(() => {
-    if (!active || !isMobile) return;
+    if (!on || !isMobile) return;
     const entry = { current: () => handler.current() };
     backHandlers.push(entry);
     return () => {
       const index = backHandlers.indexOf(entry);
       if (index >= 0) backHandlers.splice(index, 1);
     };
-  }, [active]);
+  }, [on]);
 }
 
 /**

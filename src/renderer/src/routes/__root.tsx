@@ -8,7 +8,7 @@ import { TitleBar } from "@/components/TitleBar";
 import { Sidebar } from "@/components/Sidebar";
 import { MobileStatusScrim, MobileTabBar } from "@/components/MobileTabBar";
 import { LibrarySegments } from "@/components/MobilePageHeader";
-import { installBackButton, isMobile, usePageTransition } from "@/lib/mobile";
+import { installBackButton, isMobile, PageActiveContext, usePageTransition } from "@/lib/mobile";
 import { SearchSpotlight } from "@/components/SearchSpotlight";
 import { AchievementToast } from "@/components/AchievementToast";
 import { useAchievementUnlocks } from "@/lib/achievementUnlocks";
@@ -350,7 +350,7 @@ function RootLayoutContent() {
               isActive ? "flex-1" : "hidden",
             )}
           >
-            <Suspense fallback={<PageShellFallback path={path} />}><Page /></Suspense>
+            <PageActiveContext.Provider value={isActive}><Suspense fallback={<PageShellFallback path={path} />}><Page /></Suspense></PageActiveContext.Provider>
           </div>;
         })}
         {/* Param routes (anime details, the player) aren't persisted above - a fresh mount every
