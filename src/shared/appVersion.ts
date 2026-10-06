@@ -28,7 +28,7 @@ export function parseVersion(raw: string): ParsedVersion | null {
  *
  * A prerelease sorts *below* the release it leads to, per semver - so 1.1.0-prerelease.2 is older
  * than 1.1.0. That matters here beyond tidiness: this project ships prereleases under the base
- * version (see .github/workflows/release-windows.yml), and without this rule an installed 1.1.0
+ * version (see .github/workflows/release.yml), and without this rule an installed 1.1.0
  * would be offered a "newer" 1.1.0-prerelease.1 and downgrade itself.
  */
 export function compareVersions(a: ParsedVersion, b: ParsedVersion): number {

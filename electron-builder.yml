@@ -22,7 +22,7 @@ win:
 nsis:
   # Overrides the default "${productName} Setup ${version}.exe". Two reasons: a space-separated
   # filename reads badly as a download and has to be quoted in every script that touches it, and
-  # release-windows.yml has to *find* this file afterwards - globbing for any .exe in the output
+  # release.yml has to *find* this file afterwards - globbing for any .exe in the output
   # directory would also match the uninstaller electron-builder writes there while building. A
   # fixed, predictable name makes that lookup exact instead of a guess.
   artifactName: ${productName}-v${version}-setup.${ext}

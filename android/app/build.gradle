@@ -9,6 +9,14 @@ def appVersionCode = { String v ->
     major * 10000 + minor * 100 + patch
 }(appVersion)
 
+// Release signing: the Kotlin Hibiki's own key and the same variable names it reads, so its
+// keystore and its GitHub secrets sign this build too. Each value comes from the environment (CI) or
+// a Gradle property (~/.gradle/gradle.properties or -P); the store file is relative to android/app.
+// Without all four, a release build is left unsigned rather than failing.
+def releaseSigning = ["HIBIKI_RELEASE_STORE_FILE", "HIBIKI_RELEASE_STORE_PASSWORD", "HIBIKI_RELEASE_KEY_ALIAS", "HIBIKI_RELEASE_KEY_PASSWORD"]
+    .collectEntries { [(it): System.getenv(it) ?: (project.findProperty(it) as String)] }
+def hasReleaseSigning = releaseSigning.values().every { it }
+
 android {
     namespace = "app.hibiki"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -25,8 +33,21 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile file(releaseSigning.HIBIKI_RELEASE_STORE_FILE)
+                storePassword releaseSigning.HIBIKI_RELEASE_STORE_PASSWORD
+                keyAlias releaseSigning.HIBIKI_RELEASE_KEY_ALIAS
+                keyPassword releaseSigning.HIBIKI_RELEASE_KEY_PASSWORD
+            }
+        }
+    }
     buildTypes {
         release {
+            if (hasReleaseSigning) signingConfig signingConfigs.release
+            // Off: APK sources link against the host's classes by name at run time (see app/hibiki/apk),
+            // which R8 would rename or strip without keep rules for the whole extension API.
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
