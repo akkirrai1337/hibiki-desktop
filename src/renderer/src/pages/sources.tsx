@@ -23,6 +23,7 @@ import {
   UserRound,
   MessageSquare,
   Star,
+  Settings2,
 } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
 import { useUiStore } from "@/stores/uiStore";
@@ -32,7 +33,7 @@ import { SourceSettingsDialog } from "@/components/SourceSettingsDialog";
 import { isExtensionUpdateAvailable } from "@/lib/version";
 import { TabButton } from "@/components/TabButton";
 import { Modal } from "@/components/Modal";
-import { BottomSheet } from "@/components/BottomSheet";
+import { BottomSheet, SheetOption } from "@/components/BottomSheet";
 import type { MarketplaceExtension, RepositoryFetchResult, SourceCapability } from "@shared/types";
 
 type Tab = "extensions" | "repositories";
@@ -811,8 +812,17 @@ function ExtensionCard({
             >
               {t("sources.manage")}
             </button>
+            {/* Phone: a sheet. The dropdown below sits inside the card, whose content-visibility clips
+                whatever leaves its box - the menu opened out of sight and the button seemed dead. */}
+            {isMobile && (
+              <BottomSheet open={menuOpen} onClose={() => setMenuOpen(false)} title={extension.name}>
+                {!upToDate && <SheetOption icon={<RefreshCw className="h-5 w-5" strokeWidth={2} />} label={t("sources.update")} onClick={() => { setMenuOpen(false); onInstall(); }} />}
+                {hasSettings && <SheetOption icon={<Settings2 className="h-5 w-5" strokeWidth={2} />} label={t("sources.settings")} onClick={() => { setMenuOpen(false); onOpenSettings(); }} />}
+                <SheetOption danger icon={<Trash2 className="h-5 w-5" strokeWidth={2} />} label={t("sources.uninstall")} onClick={() => { setMenuOpen(false); onUninstall(); }} />
+              </BottomSheet>
+            )}
             <AnimatePresence>
-              {menuOpen && (
+              {menuOpen && !isMobile && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
                   {/* No `scale` - see LibraryButton in anime.$sourceId.$animeId.tsx for why. */}
