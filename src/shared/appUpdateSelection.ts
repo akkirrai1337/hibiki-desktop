@@ -18,6 +18,14 @@ export interface GitHubRelease {
   assets: GitHubReleaseAsset[];
 }
 
+/** Where releases are listed. One place, so every platform's check looks at the same repository. */
+export const RELEASES_URL = "https://api.github.com/repos/akkirrai1337/hibiki/releases?per_page=20";
+
+/** Which build of a release a platform installs: the Windows installer or the Android package. */
+export type UpdateTarget = "windows" | "android";
+
+const ASSET_EXTENSION: Record<UpdateTarget, string> = { windows: ".exe", android: ".apk" };
+
 /** Only ever download from GitHub's own hosts. The release document is fetched over HTTPS from
  * this project's repository, so this should never fire - but its download URL is the one field
  * that turns into a file execution, and checking costs nothing. */
@@ -40,7 +48,7 @@ export function isTrustedDownloadUrl(url: string): boolean {
  * against release shapes that don't exist yet - which is the whole difficulty here, since the
  * first real release is the one this code has to get right.
  */
-export function selectUpdate(releases: GitHubRelease[], currentVersion: string): AppUpdate | null {
+export function selectUpdate(releases: GitHubRelease[], currentVersion: string, target: UpdateTarget = "windows"): AppUpdate | null {
   if (!Array.isArray(releases)) return null;
 
   const candidates = releases
@@ -51,7 +59,8 @@ export function selectUpdate(releases: GitHubRelease[], currentVersion: string):
       const parsed = parseVersion(version);
       if (!parsed) return null;
       // The installer, not the .blockmap or latest.yml electron-builder uploads beside it.
-      const asset = release.assets?.find((a) => a.name.toLowerCase().endsWith(".exe"));
+      const extension = ASSET_EXTENSION[target];
+      const asset = release.assets?.find((a) => a.name.toLowerCase().endsWith(extension));
       if (!asset || !isTrustedDownloadUrl(asset.browser_download_url)) return null;
       return {
         parsed,

@@ -5,7 +5,7 @@ import type { Platform } from "../types";
 import { androidBrowser } from "./browser";
 import { createAndroidDb } from "./db";
 import { AndroidExtensionHost } from "./extensionHost";
-import { HibikiApk, HibikiFiles, HibikiNet } from "./native";
+import { HibikiApk, HibikiApp, HibikiFiles, HibikiNet } from "./native";
 import { Capacitor } from "@capacitor/core";
 import { androidDownloadTransfer, androidFiles, androidHttp, androidSecureStore } from "./transports";
 
@@ -60,7 +60,7 @@ export async function createAndroidPlatform(version: string): Promise<{ platform
       zoom: false,
       discordPresence: false,
       hardwareAccelerationToggle: false,
-      appUpdates: "none",
+      appUpdates: "apk",
       revealLogFolder: false,
     },
     paths,
@@ -80,6 +80,15 @@ export async function createAndroidPlatform(version: string): Promise<{ platform
       relaunch: () => window.location.reload(),
     },
     extensionHost: new AndroidExtensionHost(androidFiles),
+    appInstaller: {
+      canInstall: async () => (await HibikiApp.canInstallPackages()).granted,
+      requestPermission: async () => (await HibikiApp.openInstallSettings()).granted,
+      verify: async (path, expectedVersion) => {
+        const { ok, reason } = await HibikiApp.verifyPackage({ path, version: expectedVersion });
+        return ok ? { ok: true } : { ok: false, reason: reason ?? "unreadable" };
+      },
+      install: (path) => HibikiApp.installPackage({ path }),
+    },
     apkSources: {
       list: async () => {
         const { sources, extensions } = await HibikiApk.list();

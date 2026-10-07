@@ -172,6 +172,12 @@ export interface HibikiApi {
     downloadAndInstall(update: AppUpdate): Promise<void>;
     openRelease(url: string): Promise<void>;
     onProgress(callback: (progress: UpdateDownloadProgress) => void): () => void;
+    /**
+     * Android only: the system's "install unknown apps" permission, which an in-app update needs.
+     * `downloadAndInstall` fails with code "permission-needed" without it; asking is the UI's job,
+     * since it can explain why first.
+     */
+    installPermission?: { granted(): Promise<boolean>; request(): Promise<boolean> };
   };
   zoom: {
     set(factor: number): void;

@@ -231,6 +231,20 @@ export interface Platform {
   /** Compiled sources the platform runs itself, beside the JS ones (Android: Aniyomi APK
    * extensions). Absent where there are none. */
   apkSources?: ApkSourcesPort;
+  /** Installing an update of the app itself, where the platform does it in-app (Android). */
+  appInstaller?: AppInstallerPort;
+}
+
+export interface AppInstallerPort {
+  /** Whether the system lets this app start installing packages. */
+  canInstall(): Promise<boolean>;
+  /** Takes the person to the system setting that allows it; resolves with the state once they are back. */
+  requestPermission(): Promise<boolean>;
+  /** Whether the file is a newer build of this very app, signed the same way. `reason` is an
+   * UpdateErrorCode (core/updates.ts). */
+  verify(path: string, version: string): Promise<{ ok: true } | { ok: false; reason: string }>;
+  /** Opens the system installer on the file. Resolves once it is up, not when the install ends. */
+  install(path: string): Promise<void>;
 }
 
 /**

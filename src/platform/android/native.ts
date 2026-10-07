@@ -92,6 +92,14 @@ export interface HibikiAppPlugin {
   addListener(event: "deepLink", listener: (event: { url: string }) => void): Promise<PluginListenerHandle>;
   /** The hibiki:// link the app was started with, once. */
   takeLaunchUrl(): Promise<{ url: string | null }>;
+  /** Whether the system lets the app start installing packages (always true before Android 8). */
+  canInstallPackages(): Promise<{ granted: boolean }>;
+  /** The "install unknown apps" screen for this app; answers with the setting once the person is back. */
+  openInstallSettings(): Promise<{ granted: boolean }>;
+  /** `reason` is an UpdateErrorCode (core/updates.ts). */
+  verifyPackage(options: { path: string; version: string }): Promise<{ ok: boolean; reason?: string }>;
+  /** Opens the system installer; answers once it is up. */
+  installPackage(options: { path: string }): Promise<void>;
 }
 
 /** An APK source extension installed inside the app (see android/.../apk/HibikiApkPlugin.kt). */

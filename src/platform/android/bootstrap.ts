@@ -4,12 +4,13 @@
 // lib/hibiki.ts reads window.hibiki once at import time.
 import type { HibikiApi, PipAction } from "@shared/hibikiApi";
 import { IPC } from "@shared/ipc";
-import type { DownloadProgress, TrackerImportProgress } from "@shared/types";
+import type { AppUpdate, DownloadProgress, TrackerImportProgress, UpdateDownloadProgress } from "@shared/types";
 import { createCoreApi } from "../../core/api";
 import { handleTrackingRedirect } from "../../core/api/tracking";
 import { ExtensionRuntime } from "../../core/extensions/runtime";
 import { log, recentEntries, renderLog } from "../../core/logger";
 import { installPlatform } from "../../core/platform";
+import { checkForUpdate, cleanUpdateLeftovers, downloadUpdate, installUpdate } from "../../core/updates";
 import { createAndroidPlatform } from "./index";
 import { Capacitor, SystemBars, SystemBarsStyle } from "@capacitor/core";
 import { HibikiApp } from "./native";
@@ -49,6 +50,9 @@ export async function installAndroidHibiki(): Promise<void> {
   const applied = await migrate();
   if (applied > 0) log("info", "db", `applied ${applied} migration(s)`);
 
+  // A package from an update that has since been installed has nothing left to do on disk.
+  void cleanUpdateLeftovers().catch((error) => log("warn", "update", `could not clean old update files: ${error}`));
+
   const runtime = new ExtensionRuntime(platform.paths.extensions);
   await runtime.reload();
   const core = createCoreApi(runtime);
@@ -74,7 +78,21 @@ export async function installAndroidHibiki(): Promise<void> {
     // platform.capabilities as the mobile layout lands.
     discord: { setEnabled: async () => {}, updatePresence: async () => {}, setIdlePresence: async () => {}, clearPresence: async () => {} },
     window: { unmaximizeForDrag() {}, minimize() {}, toggleMaximize() {}, close() {}, isMaximized: async () => false, onMaximizedChanged: nothing },
-    updates: { check: async () => null, downloadAndInstall: async () => {}, openRelease: (url) => platform.app.openExternal(url), onProgress: nothing },
+    updates: {
+      check: () => checkForUpdate("android"),
+      downloadAndInstall: async (update: AppUpdate) => {
+        const path = await downloadUpdate(update, (receivedBytes, totalBytes) => {
+          events.emit(IPC.updatesProgress, { receivedBytes, totalBytes } satisfies UpdateDownloadProgress);
+        });
+        await installUpdate(path, update.version);
+      },
+      openRelease: (url) => platform.app.openExternal(url),
+      onProgress: (callback) => events.on(IPC.updatesProgress, (progress) => callback(progress as UpdateDownloadProgress)),
+      installPermission: {
+        granted: () => platform.appInstaller!.canInstall(),
+        request: () => platform.appInstaller!.requestPermission(),
+      },
+    },
     zoom: { set() {}, get: () => 1 },
     profile: {
       ...core.profile,

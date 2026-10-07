@@ -16,6 +16,7 @@ import { ACCENT_PRESETS, BACKGROUND_THEME_PRESETS, CUSTOM_BACKGROUND_THEME_ID, c
 import { sortLabel } from "@/lib/catalogSort";
 import { SelectDropdown } from "@/components/SelectDropdown";
 import { hibiki, type LogEntry } from "@/lib/hibiki";
+import { useAppUpdate, useUpdateFlow } from "@/lib/appUpdate";
 import { TRACKING_KEY, useTrackerAccount } from "@/lib/tracking";
 import type { TrackerImportProgress, TrackerImportReport } from "@shared/types";
 import type { MemorySnapshot } from "@shared/types";
@@ -1153,8 +1154,37 @@ function MobileSettingsList({ categories, onOpen }: {
           </button>
         ))}
       </div>
+      <MobileVersionRow />
     </motion.div>
   );
+}
+
+/** The app's own version under the list; when a newer one is out, the way back to its sheet. */
+function MobileVersionRow() {
+  const { t } = useTranslation();
+  const update = useAppUpdate();
+  const openSheet = useUpdateFlow((s) => s.openSheet);
+  const downloading = useUpdateFlow((s) => s.phase.kind === "downloading");
+  const version = useQuery({ queryKey: ["appVersion"], queryFn: () => hibiki.app.getVersion(), staleTime: Infinity }).data;
+  if (!version) return null;
+  const content = <>
+    <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl", update ? "bg-emerald-500/15 text-emerald-400" : "bg-text/[.07] text-text")}>
+      {update ? <ArrowDownToLine className="h-[18px] w-[18px]" strokeWidth={2} /> : <Info className="h-[18px] w-[18px]" strokeWidth={2} />}
+    </span>
+    <span className="min-w-0 flex-1">
+      <span className="block truncate text-[15px] font-medium text-text">{t("update.settingsVersion", { version })}</span>
+      <span className={cn("block truncate text-[12.5px]", update ? "text-emerald-400" : "text-muted")}>
+        {update ? t("update.settingsAvailable", { version: update.version }) : t("update.settingsLatest")}
+      </span>
+    </span>
+    {update && (downloading
+      ? <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-emerald-400" />
+      : <ChevronRight className="h-5 w-5 shrink-0 text-muted" strokeWidth={2} />)}
+  </>;
+  const shell = "mt-3 flex w-full items-center gap-3.5 rounded-2xl border border-border bg-text/[.03] px-4 py-3.5 text-left";
+  return update
+    ? <button type="button" onClick={openSheet} className={cn(shell, "active:bg-text/[.06]")}>{content}</button>
+    : <div className={shell}>{content}</div>;
 }
 
 /**

@@ -4,17 +4,23 @@ import android.app.PendingIntent;
 import android.app.PictureInPictureParams;
 import android.app.RemoteAction;
 import android.content.BroadcastReceiver;
+import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.Signature;
 import android.graphics.drawable.Icon;
+import android.net.Uri;
 import android.os.Build;
+import android.provider.Settings;
 import android.util.Rational;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.view.Window;
 import android.view.WindowManager;
+import androidx.activity.result.ActivityResult;
 import androidx.annotation.RequiresApi;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
@@ -25,12 +31,17 @@ import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * The few things about the app's own window the mobile UI asks for: leaving to the launcher when
@@ -304,4 +315,127 @@ public class HibikiAppPlugin extends Plugin {
         PendingIntent pending = PendingIntent.getBroadcast(getContext(), requestCode, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         return new RemoteAction(Icon.createWithResource(getContext(), icon), title, title, pending);
     }
+
+    // --- Updating the app itself ----------------------------------------------------------------
+
+    private boolean canInstallPackages() {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.O || getContext().getPackageManager().canRequestPackageInstalls();
+    }
+
+    @PluginMethod
+    public void canInstallPackages(PluginCall call) {
+        JSObject result = new JSObject();
+        result.put("granted", canInstallPackages());
+        call.resolve(result);
+    }
+
+    /**
+     * The system's "install unknown apps" switch for this app. Resolves with its state once the
+     * person is back from the settings screen. (Some skins, MIUI among them, word the screen
+     * differently; it is the same setting.)
+     */
+    @PluginMethod
+    public void openInstallSettings(PluginCall call) {
+        if (canInstallPackages()) {
+            JSObject result = new JSObject();
+            result.put("granted", true);
+            call.resolve(result);
+            return;
+        }
+        Intent intent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getContext().getPackageName()));
+        startActivityForResult(call, intent, "installSettingsResult");
+    }
+
+    @ActivityCallback
+    private void installSettingsResult(PluginCall call, ActivityResult result) {
+        JSObject answer = new JSObject();
+        answer.put("granted", canInstallPackages());
+        call.resolve(answer);
+    }
+
+    /**
+     * Whether the file is a newer build of this very app, signed with the same key - the check the
+     * system does at install time too, made here first so the person is told why, and so a wrong
+     * file is deleted instead of offered. `reason` is one of the codes core/updates.ts knows.
+     */
+    @PluginMethod
+    public void verifyPackage(PluginCall call) {
+        String path = call.getString("path");
+        String version = call.getString("version");
+        JSObject result = new JSObject();
+        String reason = verifyPackageFile(path, version);
+        result.put("ok", reason == null);
+        if (reason != null) result.put("reason", reason);
+        call.resolve(result);
+    }
+
+    @SuppressWarnings("deprecation")
+    private String verifyPackageFile(String path, String version) {
+        if (path == null || version == null) return "unreadable";
+        PackageManager manager = getContext().getPackageManager();
+        boolean modern = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P;
+        int flags = modern ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES;
+        PackageInfo archive;
+        PackageInfo installed;
+        try {
+            archive = manager.getPackageArchiveInfo(path, flags);
+            if (archive == null) return "unreadable";
+            installed = manager.getPackageInfo(getContext().getPackageName(), flags);
+        } catch (PackageManager.NameNotFoundException | RuntimeException error) {
+            return "unreadable";
+        }
+        if (!getContext().getPackageName().equals(archive.packageName)) return "wrong-package";
+        if (!version.equals(archive.versionName)) return "wrong-version";
+        if (versionCodeOf(archive) <= versionCodeOf(installed)) return "not-newer";
+        Set<String> offered = signersOf(archive, modern);
+        if (offered.isEmpty() || !offered.equals(signersOf(installed, modern))) return "signature-mismatch";
+        return null;
+    }
+
+    @SuppressWarnings("deprecation")
+    private static long versionCodeOf(PackageInfo info) {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? info.getLongVersionCode() : info.versionCode;
+    }
+
+    @SuppressWarnings("deprecation")
+    private static Set<String> signersOf(PackageInfo info, boolean modern) {
+        Signature[] signatures = modern
+            ? (info.signingInfo == null ? null : info.signingInfo.getApkContentsSigners())
+            : info.signatures;
+        Set<String> hashes = new HashSet<>();
+        if (signatures == null) return hashes;
+        try {
+            for (Signature signature : signatures) {
+                byte[] digest = MessageDigest.getInstance("SHA-256").digest(signature.toByteArray());
+                StringBuilder hex = new StringBuilder();
+                for (byte b : digest) hex.append(String.format("%02x", b));
+                hashes.add(hex.toString());
+            }
+        } catch (NoSuchAlgorithmException impossible) {
+            return new HashSet<>();
+        }
+        return hashes;
+    }
+
+    /** Opens the system installer on a package verifyPackage accepted; answers once it is up. */
+    @PluginMethod
+    public void installPackage(PluginCall call) {
+        String path = call.getString("path");
+        if (path == null) {
+            call.reject("No path");
+            return;
+        }
+        try {
+            File file = new File(path);
+            Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", file);
+            Intent intent = new Intent(Intent.ACTION_VIEW)
+                .setDataAndType(uri, "application/vnd.android.package-archive")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            call.resolve();
+        } catch (IllegalArgumentException | ActivityNotFoundException error) {
+            call.reject("Could not open the installer: " + error.getMessage());
+        }
+    }
 }
+

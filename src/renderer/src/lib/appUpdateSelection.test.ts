@@ -85,6 +85,45 @@ describe("selectUpdate", () => {
   });
 });
 
+describe("selectUpdate for Android", () => {
+  const base = "https://github.com/akkirrai1337/hibiki/releases/download";
+  const both = (tag: string, overrides: Partial<GitHubRelease> = {}) => {
+    const version = tag.replace(/^v/, "");
+    return release({
+      tag_name: tag,
+      assets: [
+        { name: `hibiki-v${version}-setup.exe`, size: 120_000_000, browser_download_url: `${base}/${tag}/hibiki-v${version}-setup.exe` },
+        { name: `hibiki-v${version}.apk`, size: 90_000_000, browser_download_url: `${base}/${tag}/hibiki-v${version}.apk` },
+      ],
+      ...overrides,
+    });
+  };
+
+  it("takes the installer on Windows and the package on Android from the same release", () => {
+    expect(selectUpdate([both("v1.1.0")], "1.0.0", "windows")!.fileName).toBe("hibiki-v1.1.0-setup.exe");
+    const android = selectUpdate([both("v1.1.0")], "1.0.0", "android")!;
+    expect(android.fileName).toBe("hibiki-v1.1.0.apk");
+    expect(android.sizeBytes).toBe(90_000_000);
+  });
+
+  it("does not offer a release that has no package", () => {
+    expect(selectUpdate([release({ tag_name: "v1.1.0" })], "1.0.0", "android")).toBeNull();
+  });
+
+  it("picks the highest version that carries a package", () => {
+    const releases = [both("v1.0.1"), both("v1.2.0"), release({ tag_name: "v1.3.0" })];
+    expect(selectUpdate(releases, "1.0.0", "android")!.version).toBe("1.2.0");
+  });
+
+  it("refuses a package hosted somewhere other than GitHub", () => {
+    const offsite = release({
+      tag_name: "v1.1.0",
+      assets: [{ name: "hibiki-v1.1.0.apk", size: 1, browser_download_url: "https://evil.example.com/hibiki.apk" }],
+    });
+    expect(selectUpdate([offsite], "1.0.0", "android")).toBeNull();
+  });
+});
+
 describe("isTrustedDownloadUrl", () => {
   it("accepts the hosts GitHub actually serves release assets from", () => {
     expect(isTrustedDownloadUrl("https://github.com/o/r/releases/download/v1/a.exe")).toBe(true);
