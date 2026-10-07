@@ -4,6 +4,8 @@ import type { DailyActivity, LibraryEntry, RatingSyncResult, SourceAccount, Sour
 import { library, watchProgress, dailyActivity, titleRatings } from "../db/schema";
 import { logger } from "../logger";
 import { getPlatform } from "../platform";
+import { deviceId } from "../sync/changes";
+import { requestSync } from "../sync/client";
 import { onEpisodeWatched, onLibraryChanged } from "../tracking/tracker";
 
 const getDb = () => getPlatform().db.get();
@@ -52,10 +54,10 @@ function pushToAccount(
     .then(async (enabled) => {
       if (!enabled) return;
       await runtime.syncLibraryEntry(sourceId, { animeId, category });
-      logger.debug("sync", `${sourceId}/${animeId} -> ${category ?? "removed"}`);
+      logger.info("account", `${sourceId}/${animeId} -> ${category ?? "removed"}`);
     })
     .catch((error: unknown) => {
-      logger.warn("sync", `${sourceId}/${animeId} not synced: ${error instanceof Error ? error.message : String(error)}`);
+      logger.warn("account", `${sourceId}/${animeId} not synced: ${error instanceof Error ? error.message : String(error)}`);
     });
 }
 
@@ -95,7 +97,7 @@ async function pushRating(
     category = (await runtime.listLibrary(sourceId)).find((entry) => entry.animeId === animeId)?.category ?? null;
   }
   await runtime.syncLibraryEntry(sourceId, { animeId, category, rating });
-  logger.info("sync", `${sourceId}/${animeId} rated ${rating}`);
+  logger.info("account", `${sourceId}/${animeId} rated ${rating}`);
   return { synced: true };
 }
 
@@ -124,12 +126,13 @@ export function createLibraryApi(runtime: LibrarySyncRuntime): Pick<HibikiApi, "
             .onConflictDoUpdate({ target: [titleRatings.sourceId, titleRatings.animeId], set: { rating, ratedAt: values.ratedAt } })
             .run();
         }
+        requestSync();
         // Kept local first and pushed after: a rating is this app's own record, and a source that is
         // unreachable, signed out, or simply slow must not cost the user their answer. Awaited, unlike
         // the library push, so the screen can say whether the account got it.
         if (rating == null) return { synced: false, reason: "unsupported" };
         return pushRating(runtime, sourceId, animeId, rating).catch((error: unknown) => {
-          logger.warn("sync", `${sourceId}/${animeId} rating not synced: ${error instanceof Error ? error.message : String(error)}`);
+          logger.warn("account", `${sourceId}/${animeId} rating not synced: ${error instanceof Error ? error.message : String(error)}`);
           return { synced: false, reason: "failed" } as const;
         });
       },
@@ -170,6 +173,7 @@ export function createLibraryApi(runtime: LibrarySyncRuntime): Pick<HibikiApi, "
           })
           .run();
         pushToAccount(runtime, entry.sourceId, entry.animeId, entry.category);
+        requestSync();
         onLibraryChanged({
           sourceId: entry.sourceId,
           animeId: entry.animeId,
@@ -185,6 +189,7 @@ export function createLibraryApi(runtime: LibrarySyncRuntime): Pick<HibikiApi, "
           .where(and(eq(library.sourceId, sourceId), eq(library.animeId, animeId)))
           .run();
         pushToAccount(runtime, sourceId, animeId, null);
+        requestSync();
       },
     },
 
@@ -261,11 +266,12 @@ export function createLibraryApi(runtime: LibrarySyncRuntime): Pick<HibikiApi, "
         if (newlyCompleted) onEpisodeWatched(progress.sourceId, progress.titleId);
         if (watchedDeltaMs > 0 || newlyCompleted) {
           const date = localDateKey(progress.updatedAt);
+          // This device's own row for the day: synced devices each add to theirs (see core/sync).
           await db
             .insert(dailyActivity)
-            .values({ date, watchedMs: watchedDeltaMs, completedCount: newlyCompleted ? 1 : 0 })
+            .values({ date, deviceId: await deviceId(), watchedMs: watchedDeltaMs, completedCount: newlyCompleted ? 1 : 0 })
             .onConflictDoUpdate({
-              target: dailyActivity.date,
+              target: [dailyActivity.date, dailyActivity.deviceId],
               set: {
                 watchedMs: sql`${dailyActivity.watchedMs} + ${watchedDeltaMs}`,
                 completedCount: sql`${dailyActivity.completedCount} + ${newlyCompleted ? 1 : 0}`,
@@ -273,6 +279,7 @@ export function createLibraryApi(runtime: LibrarySyncRuntime): Pick<HibikiApi, "
             })
             .run();
         }
+        requestSync();
       },
 
       async listRecent(limit: number) {
@@ -292,6 +299,7 @@ export function createLibraryApi(runtime: LibrarySyncRuntime): Pick<HibikiApi, "
           .delete(watchProgress)
           .where(and(eq(watchProgress.sourceId, sourceId), eq(watchProgress.titleId, titleId)))
           .run();
+        requestSync();
       },
 
       // Same as removeForAnime but scoped to one episode - the history page (see
@@ -302,6 +310,7 @@ export function createLibraryApi(runtime: LibrarySyncRuntime): Pick<HibikiApi, "
           .delete(watchProgress)
           .where(and(eq(watchProgress.sourceId, sourceId), eq(watchProgress.titleId, titleId), eq(watchProgress.episodeId, episodeId)))
           .run();
+        requestSync();
       },
 
       // Only ever updates an existing row (see VideoPlayer's onCaptureThumbnail, fired on pause/leave)
@@ -318,10 +327,16 @@ export function createLibraryApi(runtime: LibrarySyncRuntime): Pick<HibikiApi, "
 
       async listDailyActivity(days: number): Promise<DailyActivity[]> {
         const since = localDateKey(Date.now() - (days - 1) * 86_400_000);
+        // A day is the sum of every device's row for it.
         return await getDb()
-          .select()
+          .select({
+            date: dailyActivity.date,
+            watchedMs: sql<number>`sum(${dailyActivity.watchedMs})`.mapWith(Number),
+            completedCount: sql<number>`sum(${dailyActivity.completedCount})`.mapWith(Number),
+          })
           .from(dailyActivity)
           .where(gte(dailyActivity.date, since))
+          .groupBy(dailyActivity.date)
           .orderBy(dailyActivity.date)
           .all();
       },

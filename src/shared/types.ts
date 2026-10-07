@@ -120,6 +120,24 @@ export interface DownloadRequest {
   // Matched exactly against a candidate PlayerLink's own `quality` (see downloads.ts's
   // selectPlayerLink) - unset falls back to the previous "best available" pick.
   quality?: string | null;
+  // The link's player (an APK source's hoster, a site's mirror), matched together with `quality`:
+  // two players can each offer a "1080p".
+  playerName?: string | null;
+}
+
+/** A subtitle track saved beside a downloaded episode, already converted to WebVTT. */
+export interface DownloadedSubtitle {
+  filePath: string;
+  label: string;
+  language: string | null;
+}
+
+/** What playback needs to know about a downloaded episode. */
+export interface DownloadedEpisodeFile {
+  filePath: string;
+  durationMs: number | null;
+  quality: string | null;
+  subtitles: DownloadedSubtitle[];
 }
 
 // A finished download, as listed on the "Downloaded episodes" screen - `animeTitle`/`animePosterUrl`
@@ -358,6 +376,47 @@ export interface MarketplaceExtension {
 export type RepositoryFetchResult =
   | { url: string; ok: true; extensions: MarketplaceExtension[] }
   | { url: string; ok: false; error: string };
+
+/** A device this one syncs with (see core/sync). */
+export interface SyncDevice {
+  deviceId: string;
+  name: string;
+  lastSyncAt: number | null;
+  pairedAt: number;
+  /** This device syncs with that one itself (it entered that one's code); otherwise that one does. */
+  connects: boolean;
+}
+
+/** A device found on the network that this one can pair with. */
+export interface SyncCandidate {
+  deviceId: string;
+  name: string;
+  host: string;
+  port: number;
+  kind: "computer" | "phone";
+}
+
+/** Why a title is recommended - shown under its card. */
+export type RecommendationReason =
+  | { kind: "similar"; to: string[] }
+  | { kind: "genres"; genres: string[] }
+  | { kind: "continues"; of: string };
+
+export interface RecommendedTitle {
+  anime: AnimeTitle;
+  reason: RecommendationReason;
+}
+
+/** Recommendations from one source for what was watched on it (see core/recommendations). */
+export interface SourceRecommendations {
+  /** Titles on this source with enough episodes watched to count as liked. */
+  seedCount: number;
+  /** How many such titles recommendations need; `picks` stays empty below it. */
+  neededSeeds: number;
+  picks: RecommendedTitle[];
+  /** Later entries of watched titles' franchises: the next season, a sequel. */
+  continuations: RecommendedTitle[];
+}
 
 export interface SearchRequest {
   query?: string;

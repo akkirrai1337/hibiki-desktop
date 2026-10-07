@@ -5,7 +5,7 @@ import { PullToRefresh } from "@/components/PullToRefresh";
 import { useTranslation } from "react-i18next";
 import { Play, Radio, RefreshCw, WifiOff } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
-import { AnimeCard, PosterGrid, PosterGridSkeleton, PosterRow, animeTitle } from "@/components/AnimeCard";
+import { AnimeCard, PosterGrid, PosterGridSkeleton, PosterRow, PosterRowSkeleton, animeTitle } from "@/components/AnimeCard";
 import { ContinueWatchingFrameRow } from "@/components/ContinueWatchingRow";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { HERO_ACTION_CLASS, HeroCarousel, type HeroSlide } from "@/components/Hero";
@@ -83,10 +83,20 @@ export function CatalogPage() {
       return hibiki.sources.search(source!.id, { offset: 0, limit: POOL_WINDOW, sort: sortMode });
     },
   });
+  // What was watched on this source, turned into what to watch next on it (core/recommendations).
+  // Only asked once there is history; the backend reuses its answer until the history changes.
+  const { hasHistory } = useContinueWatching();
+  const recommendations = useQuery({
+    queryKey: ["recommendations", source?.id, sortMode ?? ""],
+    enabled: !!source && settingsReady && hasHistory,
+    queryFn: () => hibiki.sources.recommendations(source!.id, sortMode),
+    staleTime: 5 * 60 * 1000,
+  });
+  const picks = recommendations.data?.picks ?? [];
+  const continuations = recommendations.data?.continuations ?? [];
   // Shared with the profile page's own "continue watching" row - see useContinueWatching, which
   // caches per-title lookups under query keys both pages agree on so whichever loads first does
   // the actual work.
-  const { hasHistory } = useContinueWatching();
   const heroSlides = useMemo(() => hero.data ?? [], [hero.data]);
   const poolTitles = useMemo(() => pool.data ?? [], [pool.data]);
   const isNew = !hasHistory;
@@ -111,6 +121,7 @@ export function CatalogPage() {
     // Only with a source: without one these have nothing to ask (and are switched off).
     ...(source ? [hero.refetch(), pool.refetch()] : []),
     queryClient.invalidateQueries({ queryKey: ["recent-progress"] }),
+    queryClient.invalidateQueries({ queryKey: ["recommendations"] }),
   ]);
   return <div className="min-h-full bg-app-bg pb-12">
     <PullToRefresh onRefresh={refreshHome} />
@@ -124,7 +135,7 @@ export function CatalogPage() {
         ? isMobile
           ? <MobileHero slides={heroSlides.map((slide) => toHeroSlide(slide, t("catalog.openTitle"), source.iconUrl))} label={t("catalog.trendingOnPrefix")} sourceName={source.name} />
           : <HeroCarousel slides={heroSlides.map((slide) => toHeroSlide(slide, t("catalog.openTitle"), source.iconUrl))} label={t("catalog.trendingOnPrefix")} sourceName={source.name} />
-        : hero.isLoading && <HeroSkeleton />}
+        : hero.isPending && <HeroSkeleton />}
       <div className="space-y-12 px-8 pt-10 mobile:space-y-8 mobile:px-4 mobile:pt-5">
         {pool.isError && !hero.isError && <ErrorBanner message={(pool.error as Error).message} onRetry={() => void pool.refetch()} />}
         {/* Always the frame row: swapping to poster cards below a threshold meant the section
@@ -133,8 +144,15 @@ export function CatalogPage() {
         {!isNew && <Section title={t("catalog.continueWatching")} action={t("catalog.viewHistory")} to="/history">
           <ContinueWatchingFrameRow sourceById={sourceById} />
         </Section>}
-        {!pool.isError && <Section title={isNew ? t("catalog.popularNow") : t("catalog.becauseYouWatched")} action={t("catalog.openCatalog")} to="/catalog">
-          {pool.isLoading ? <PosterGridSkeleton count={isMobile ? 3 : 15} /> : <HomeTitles>{recommended.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</HomeTitles>}
+        {continuations.length > 0 && <Section title={t("catalog.continuations")}>
+          <HomeTitles>{continuations.map(({ anime }) => <AnimeCard key={anime.id} anime={anime} />)}</HomeTitles>
+        </Section>}
+        {picks.length > 0 && <Section title={t("catalog.forYou", { source: source.name })}>
+          <HomeTitles>{picks.map(({ anime }) => <AnimeCard key={anime.id} anime={anime} />)}</HomeTitles>
+        </Section>}
+        {/* The pool is what is popular on the source, nothing more - personal picks are above. */}
+        {!pool.isError && <Section title={t("catalog.popularNow")} action={t("catalog.openCatalog")} to="/catalog">
+          {pool.isPending ? (isMobile ? <PosterRowSkeleton /> : <PosterGridSkeleton count={15} />) : <HomeTitles>{recommended.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</HomeTitles>}
         </Section>}
         {genreSection && <Section title={t("catalog.genreSection", { genre: genreSection.genre })} action={t("catalog.openCatalog")} to="/catalog">
           <HomeTitles>{genreSection.items.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</HomeTitles>
@@ -167,10 +185,42 @@ function toHeroSlide(anime: AnimeTitle, openLabel: string, sourceIconUrl?: strin
   };
 }
 
-function Section({ title, action, to, children }: { title: string; action: string; to: "/catalog" | "/history"; children: React.ReactNode }) { return <section><div className="mb-5 flex items-center justify-between gap-3 mobile:mb-3"><h2 className="text-2xl font-bold tracking-[-.02em] text-text mobile:truncate mobile:text-[19px]">{title}</h2><Link to={to} className="text-sm font-semibold text-muted transition-colors hover:text-accent-text mobile:shrink-0 mobile:text-[13px]">{action} →</Link></div>{children}</section>; }
+function Section({ title, action, to, children }: { title: string; action?: string; to?: "/catalog" | "/history"; children: React.ReactNode }) { return <section><div className="mb-5 flex items-center justify-between gap-3 mobile:mb-3"><h2 className="text-2xl font-bold tracking-[-.02em] text-text mobile:truncate mobile:text-[19px]">{title}</h2>{action && to && <Link to={to} className="text-sm font-semibold text-muted transition-colors hover:text-accent-text mobile:shrink-0 mobile:text-[13px]">{action} →</Link>}</div>{children}</section>; }
 // A grid on desktop; on the phone a row the thumb scrolls sideways, so a section stays one screen-line tall.
 function HomeTitles({ children }: { children: React.ReactNode }) { return isMobile ? <PosterRow>{children}</PosterRow> : <PosterGrid>{children}</PosterGrid>; }
-function HeroSkeleton() { return <div className="min-h-[420px] animate-pulse border-b border-white/[.04] bg-white/[.03] px-8 py-16"><div className="h-3 w-40 rounded bg-white/[.08]" /><div className="mt-5 h-12 w-96 rounded bg-white/[.08]" /><div className="mt-5 h-3 w-full max-w-lg rounded bg-white/[.06]" /><div className="mt-2 h-3 w-4/5 max-w-lg rounded bg-white/[.06]" /></div>; }
+/**
+ * The hero while its titles load, in the hero's own shape - the full-bleed slide with its text at
+ * the bottom on the phone, the tall banner on the desktop - so nothing below moves when it arrives.
+ * (Its query waits for the source's sort orders first, which on a slow source is most of the wait.)
+ */
+function HeroSkeleton() {
+  if (isMobile) {
+    return <div aria-hidden className="relative -mt-[var(--safe-top)] overflow-hidden" style={{ height: "calc(min(46vh, 420px) + var(--safe-top))", minHeight: 340 }}>
+      <div className="skeleton absolute inset-0 opacity-60" />
+      <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, transparent 30%, rgb(var(--color-bg) / 0.85) 80%, rgb(var(--color-bg)))" }} />
+      <div className="absolute inset-x-0 bottom-0 px-4 pb-4">
+        <div className="skeleton h-2.5 w-24 rounded-full" />
+        <div className="skeleton mt-3 h-7 w-4/5 rounded-lg" />
+        <div className="skeleton mt-2 h-7 w-1/2 rounded-lg" />
+        <div className="skeleton mt-3 h-3 w-2/5 rounded-full" />
+        <div className="mt-4 flex items-center justify-between">
+          <div className="skeleton h-10 w-32 rounded-full" />
+          <div className="flex gap-1.5"><div className="skeleton h-1 w-6 rounded-full" /><div className="skeleton h-1 w-1.5 rounded-full" /><div className="skeleton h-1 w-1.5 rounded-full" /></div>
+        </div>
+      </div>
+    </div>;
+  }
+  return <div aria-hidden className="relative min-h-[520px] overflow-hidden border-b border-white/[.04] px-8 py-20">
+    <div className="skeleton absolute inset-0 opacity-40" />
+    <div className="relative flex min-h-[360px] max-w-2xl flex-col justify-end">
+      <div className="skeleton h-3 w-40 rounded-full" />
+      <div className="skeleton mt-5 h-12 w-[28rem] max-w-full rounded-xl" />
+      <div className="skeleton mt-5 h-3 w-full max-w-lg rounded-full" />
+      <div className="skeleton mt-2 h-3 w-4/5 max-w-lg rounded-full" />
+      <div className="skeleton mt-8 h-11 w-40 rounded-xl" />
+    </div>
+  </div>;
+}
 function SourceUnavailable({ name, retrying, onRetry }: { name: string; retrying: boolean; onRetry: () => void }) {
   const { t } = useTranslation();
   const offline = typeof navigator !== "undefined" && !navigator.onLine;

@@ -5,6 +5,7 @@
 // HibikiResolverPlugin.java (document-start scripts + a message channel per frame, since Android
 // WebView cannot evaluate inside a child frame the way Electron's WebFrameMain can).
 import type { PlayerLink } from "@shared/types";
+import { subtitleTracksFrom, type ReportedSubtitle } from "@shared/resolverSubtitles";
 import { logger } from "../../core/logger";
 import type { ResolvedStream } from "../types";
 import { HibikiResolver } from "./native";
@@ -37,6 +38,7 @@ interface PageState {
   done: boolean;
   captures: Capture[];
   lastQuality: string | null;
+  subtitles?: ReportedSubtitle[];
 }
 interface StreamProbe {
   reachable: boolean;
@@ -66,7 +68,10 @@ const BOOT_SCRIPT = `
       video: function (url) { window.__hibikiCaptures.push({ kind: "video", url: String(url), quality: window.__hibikiLastQuality }); },
       audio: function (url) { window.__hibikiCaptures.push({ kind: "audio", url: String(url), quality: window.__hibikiLastQuality }); },
       stream: function (url) { window.__hibikiCaptures.push({ kind: "stream", url: String(url), quality: window.__hibikiLastQuality }); },
-      subtitle: function () {},
+      subtitle: function (url, label, language) {
+        window.__hibikiSubtitles = window.__hibikiSubtitles || [];
+        window.__hibikiSubtitles.push({ url: url == null ? null : String(url), label: label == null ? null : String(label), language: language == null ? null : String(language) });
+      },
       done: function () { window.__hibikiDone = true; },
     };
   }
@@ -112,7 +117,7 @@ const BOOT_SCRIPT = `
         installBridge();
         value = typeof window.__hibikiResolverFn === "function" ? window.__hibikiResolverFn() : (0, eval)(msg.code);
       } else if (msg.action === "readState") {
-        value = { done: window.__hibikiDone === true, captures: window.__hibikiCaptures || [], lastQuality: window.__hibikiLastQuality || null };
+        value = { done: window.__hibikiDone === true, captures: window.__hibikiCaptures || [], lastQuality: window.__hibikiLastQuality || null, subtitles: window.__hibikiSubtitles || [] };
       } else if (msg.action === "probe") {
         value = probe(msg.url, msg.range, msg.wantsHead, msg.timeoutMs);
       }
@@ -411,6 +416,13 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
     let started = false;
     let done = false;
     let lastCount = 0;
+    const reportedSubtitles: ReportedSubtitle[] = [];
+    // Every stream gets the tracks the page reported, whichever probe it was found on.
+    const withSubtitles = (streams: ResolvedStream[]): ResolvedStream[] => {
+      const subtitles = subtitleTracksFrom(reportedSubtitles, link.url, streams[0]?.headers["User-Agent"]);
+      if (subtitles.length > 0) logger.info("resolve", `browser resolver reported ${subtitles.length} subtitle track(s): ${subtitles.map((track) => track.label).join(", ")}`);
+      return subtitles.length > 0 ? streams.map((stream) => ({ ...stream, subtitles })) : streams;
+    };
     let lastChangeAt = Date.now();
     const probes = new Map<string, Promise<StreamProbe>>();
     for (let probe = 0; probe < MAX_PROBES && !done && Date.now() < deadline; probe++) {
@@ -434,6 +446,7 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
       await collectNetwork();
       const state = await readPageState();
       currentQuality = state.lastQuality;
+      reportedSubtitles.push(...(state.subtitles ?? []));
       done = state.done;
       if (probe < 8 || done || state.captures.length > 0 || networkCaptures.length > 0) {
         logger.debug("resolve", `browser probe ${probe + 1}: state read ${Date.now() - probeStartedAt}ms; done=${done}; captured=${state.captures.length + networkCaptures.length}; quality=${state.lastQuality ?? "?"}; elapsed=${Date.now() - resolveStartedAt}ms`);
@@ -442,26 +455,27 @@ export async function performBrowserResolve(link: PlayerLink, script: string, ti
       const masters = state.captures.filter((capture) => capture.kind === "master" && !PLACEHOLDER_URL_PATTERN.test(capture.url));
       if (masters.length > 0) {
         logger.debug("resolve", `master playlist(s) captured on probe ${probe + 1}: ${masters.length}; stopping early`);
-        return await buildResult(masters, [], link, page, target, deadline, probes, capturedRequestHeaders);
+        return withSubtitles(await buildResult(masters, [], link, page, target, deadline, probes, capturedRequestHeaders));
       }
       if (networkCaptures.some((capture) => MASTER_PLAYLIST_REQUEST_PATTERN.test(capture.url))) {
         logger.debug("resolve", `master playlist requested by the page on probe ${probe + 1}; stopping early`);
         break;
       }
-      const totalCount = state.captures.length + networkCaptures.length;
+      const totalCount = state.captures.length + networkCaptures.length + (state.subtitles?.length ?? 0);
       if (totalCount !== lastCount) {
         lastCount = totalCount;
         lastChangeAt = Date.now();
       } else if (totalCount > 0 && Date.now() - lastChangeAt > SETTLE_MS) {
         break;
       }
-      if (done) return await buildResult(state.captures, networkCaptures, link, page, target, deadline, probes, capturedRequestHeaders);
+      if (done) return await withSubtitles(await buildResult(state.captures, networkCaptures, link, page, target, deadline, probes, capturedRequestHeaders));
     }
 
     await collectNetwork();
     const finalState = await readPageState();
     logger.info("resolve", `browser probing finished after ${Date.now() - resolveStartedAt}ms: page=${finalState.captures.length}, network=${networkCaptures.length}; validating candidates`);
-    return await buildResult(finalState.captures, networkCaptures, link, page, target, deadline, probes, capturedRequestHeaders);
+    reportedSubtitles.push(...(finalState.subtitles ?? []));
+    return withSubtitles(await buildResult(finalState.captures, networkCaptures, link, page, target, deadline, probes, capturedRequestHeaders));
   } finally {
     void releasePage(page, heldRefererUrl);
   }

@@ -602,7 +602,11 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
           return null;
         }
       }));
-      if (!cancelled) setResolvedSourceSubtitles(resolved.filter((entry) => entry !== null));
+      const usable = resolved.filter((entry) => entry !== null);
+      if ((link?.subtitles?.length ?? 0) > 0) {
+        log.info("player", `subtitles ready: ${usable.length}/${link?.subtitles?.length ?? 0}${usable.length ? ` (${usable.map((entry) => entry.label).join(", ")})` : ""}`);
+      }
+      if (!cancelled) setResolvedSourceSubtitles(usable);
     })();
     return () => {
       cancelled = true;
@@ -639,6 +643,34 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   // A VTT cue's `.text` can carry a handful of simple markup tags (<i>, <b>, <c>, ...) - stripped
   // rather than rendered, same ceiling Android's own plain-text overlay has (see PlayerSubtitleOverlay
   // in PlayerScreen.kt).
+  // For the log: which track was turned on, and whether it then loaded - "subtitles show nothing"
+  // is otherwise impossible to tell apart from a track that never arrived.
+  const subtitleLoggedRef = useRef<string | null>(null);
+  useEffect(() => {
+    const video = videoRef.current;
+    const index = subtitleOptions.findIndex((option) => option.id === selectedSubtitleId);
+    const option = subtitleOptions[index];
+    if (!video || !option) {
+      if (subtitleLoggedRef.current) log.info("player", "subtitles off");
+      subtitleLoggedRef.current = null;
+      return;
+    }
+    if (subtitleLoggedRef.current !== option.id) log.info("player", `subtitles on: "${option.label}"`);
+    subtitleLoggedRef.current = option.id;
+    const element = video.querySelectorAll("track")[index];
+    if (!element) return;
+    const onLoad = () => log.info("player", `subtitles "${option.label}" loaded: ${element.track.cues?.length ?? 0} cue(s)`);
+    const onError = () => log.warn("player", `subtitles "${option.label}" failed to load`);
+    if (element.readyState === HTMLTrackElement.LOADED) onLoad();
+    else if (element.readyState === HTMLTrackElement.ERROR) onError();
+    element.addEventListener("load", onLoad);
+    element.addEventListener("error", onError);
+    return () => {
+      element.removeEventListener("load", onLoad);
+      element.removeEventListener("error", onError);
+    };
+  }, [selectedSubtitleId, subtitleOptions]);
+
   const [activeSubtitleLines, setActiveSubtitleLines] = useState<string[]>([]);
   useEffect(() => {
     const video = videoRef.current;
@@ -1169,7 +1201,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
             ? `${Math.round(stats.loading.end - stats.loading.start)}ms`
             : "incomplete";
           const failedUrl = data.response?.url ?? request?.responseURL ?? data.url ?? data.frag?.url ?? streamUrl;
-          write("player", `[${traceId} +${Math.round(performance.now() - traceStartedAt)}ms] hls.js ${data.fatal ? "fatal" : "non-fatal"} error:`, data.type, data.details, data.reason ?? "", data.response ? `http ${data.response.code}` : "", `url=${playbackUrlLabel(failedUrl)}`, `fragment=${data.frag?.sn ?? "?"}`, `level=${data.level ?? data.frag?.level ?? "?"}`, `context=${data.context?.type ?? "?"}`, `buffer=${data.buffer ?? data.bufferInfo?.len ?? "?"}`, `appendNoProgress=${data.appendsWithoutProgress ?? "?"}`, `requestStatus=${request?.status ?? "?"}`, `loaded=${stats?.loaded ?? "?"}`, `requestDuration=${requestDuration}`);
+          write("player", `[${traceId} +${Math.round(performance.now() - traceStartedAt)}ms] hls.js ${data.fatal ? "fatal" : "non-fatal"} error:`, data.type, data.details, data.reason ?? "", data.response ? `http ${data.response.code}` : "", `url=${playbackUrlLabel(failedUrl)}`, `fragment=${data.frag?.sn ?? "?"}`, `level=${data.level ?? data.frag?.level ?? "?"}`, `context=${data.context?.type ?? "?"}`, `buffer=${data.buffer ?? data.bufferInfo?.len ?? "?"}`, `appendNoProgress=${data.appendsWithoutProgress ?? "?"}`, `requestStatus=${request?.status ?? "?"}`, request?.getResponseHeader?.("X-Hibiki-Error") ? `proxy=${request.getResponseHeader("X-Hibiki-Error")}` : "", `loaded=${stats?.loaded ?? "?"}`, `requestDuration=${requestDuration}`);
           // hls.js treats a fragment that parses to no media as non-fatal and asks for it again, without
           // end: seen live with Kodik after a seek, the same segment came back empty for fifteen seconds
           // until the startup timeout moved on. The CDN answers that segment the same way each time, so
@@ -1438,6 +1470,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     };
     const onEnded = () => {
       observe("ended");
+      if (autoPlayNextEpisode && onNextEpisode) log.info("player", "episode ended; playing the next one");
       if (autoPlayNextEpisode) onNextEpisode?.();
     };
     const onProgressEvent = () => {

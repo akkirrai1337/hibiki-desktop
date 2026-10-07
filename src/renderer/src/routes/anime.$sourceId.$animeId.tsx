@@ -6,10 +6,11 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { AnimatePresence, motion, useIsPresent } from "motion/react";
 import * as ContextMenu from "@radix-ui/react-context-menu";
-import { ArrowDown01, ArrowDown10, ArrowLeft, ArrowUpDown, ChevronRight, LayoutGrid, List, Mic, Play, Bookmark, Check, ChevronDown, Clock, Download, Eraser, ExternalLink, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
+import { ArrowDown01, ArrowDown10, ArrowLeft, ArrowUpDown, Captions, ChevronRight, Sparkles, LayoutGrid, List, Mic, Play, Bookmark, Check, ChevronDown, Clock, Download, Eraser, ExternalLink, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
 import { CommentsSection } from "@/components/CommentsSection";
 import { RatingButton, SourceRatings } from "@/components/RatingButton";
 import { TrackerLinkButton } from "@/components/TrackerLinkButton";
+import { useRecommendationReason } from "@/lib/recommendations";
 import { hibiki } from "@/lib/hibiki";
 import { findListedTitle } from "@/lib/listedTitles";
 import { usePlaybackGroups } from "@/lib/playbackGroups";
@@ -17,6 +18,7 @@ import { isGenericDubTitle } from "@/lib/dubTitle";
 import { animeTitle } from "@/components/AnimeCard";
 import { GenreChip } from "@/components/GenreChip";
 import { GroupDropdown } from "@/components/GroupDropdown";
+import { SelectDropdown } from "@/components/SelectDropdown";
 import { HorizontalScrollRow } from "@/components/HorizontalScrollRow";
 import { SmoothImage } from "@/components/SmoothImage";
 import { cn } from "@/lib/cn";
@@ -899,6 +901,7 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
     </div>
     {/* One line the thumb scrolls, instead of genres wrapping into a block of chips. */}
     {anime.genres && anime.genres.length > 0 && <div className="no-scrollbar -mx-4 mt-3.5 flex gap-1.5 overflow-x-auto px-4 [&>*]:shrink-0">{anime.genres.map((g) => <GenreChip key={g} genre={g} sourceId={sourceId} className={GENRE_CHIP_CLASS} />)}</div>}
+    <RecommendationNote sourceId={sourceId} animeId={animeId} className="mt-3" />
     {anime.description && <div className="mt-3.5 overflow-hidden transition-[max-height] duration-300 ease-in-out" style={{ maxHeight }}>
       <p ref={descriptionRef} className="select-text text-[13.5px] leading-[1.55] text-muted">{anime.description}</p>
     </div>}
@@ -938,6 +941,7 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
           {(anime.ratings?.length ?? 0) > 0 && <><Dot /><SourceRatings ratings={anime.ratings ?? []} /></>}
         </div>
         {anime.genres && anime.genres.length > 0 && <div className="mt-3 flex flex-wrap gap-1.5">{anime.genres.map((g) => <GenreChip key={g} genre={g} sourceId={sourceId} className={GENRE_CHIP_CLASS} />)}</div>}
+        <RecommendationNote sourceId={sourceId} animeId={animeId} className="mt-3.5" />
         {anime.description && <div className="mt-4 max-w-2xl overflow-hidden transition-[max-height] duration-300 ease-in-out" style={{ maxHeight }}>
           <p ref={descriptionRef} className="select-text text-sm leading-6 text-muted">{anime.description}</p>
         </div>}
@@ -1124,7 +1128,7 @@ function DownloadDialog({
 }) {
   const { t } = useTranslation();
   const [groupId, setGroupId] = useState(defaultGroupId);
-  const [quality, setQuality] = useState<string | null>(null);
+  const [variantId, setVariantId] = useState<string | null>(null);
 
   const linksQuery = useQuery({
     queryKey: ["playerLinks", sourceId, animeId, groupId, episode.id],
@@ -1136,15 +1140,34 @@ function DownloadDialog({
   // by this app, so offering their qualities here would just be a picker for downloads that are
   // guaranteed to fail with "unsupported" the moment they're started.
   const downloadableLinks = (linksQuery.data ?? []).filter((l: PlayerLink) => (l.type === "DIRECT_HLS" || l.type === "DIRECT_MP4") && !l.audioUrl);
-  const qualities = Array.from(new Set(downloadableLinks.map((l) => l.quality).filter((q): q is string => !!q)));
-  const selectedQuality = quality && qualities.includes(quality) ? quality : (qualities[0] ?? null);
+  // One entry per player and quality. APK sources put the dub into the quality ("HD-1 - Dub -
+  // 1080p"), which made a row of chips run to dozens - a list holds any number.
+  const variants = (() => {
+    const seen = new Map<string, PlayerLink>();
+    for (const link of downloadableLinks) {
+      if (!link.quality) continue;
+      const id = `${link.playerName ?? ""} ${link.quality}`;
+      if (!seen.has(id)) seen.set(id, link);
+    }
+    return [...seen].map(([id, link]) => ({ id, link }));
+  })();
+  const severalPlayers = new Set(variants.map((variant) => variant.link.playerName ?? "")).size > 1;
+  const variantOptions = variants.map(({ id, link }) => ({
+    id,
+    label: link.quality!,
+    // The player only where it tells two otherwise equal entries apart, and the label doesn't already say it.
+    badge: severalPlayers && link.playerName && !link.quality!.toLowerCase().includes(link.playerName.toLowerCase()) ? link.playerName : undefined,
+  }));
+  const selected = variants.find((variant) => variant.id === variantId) ?? variants[0] ?? null;
+  const selectedLink = selected?.link ?? downloadableLinks[0] ?? null;
+  const subtitleNames = Array.from(new Set((selectedLink?.subtitles ?? []).map((track) => track.label ?? track.language ?? "?")));
   const unsupported = linksQuery.isSuccess && downloadableLinks.length === 0;
   const episodeLabel = episode.title || t("detail.episodeFallback", { number: episode.number });
 
   const onConfirm = () => {
     hibiki.downloads.start({
       sourceId, animeId, groupId, episodeId: episode.id, episodeNumber: episode.number,
-      animeTitle, episodeLabel, quality: selectedQuality,
+      animeTitle, episodeLabel, quality: selected?.link.quality ?? null, playerName: selected?.link.playerName ?? null,
     });
     onClose();
   };
@@ -1157,7 +1180,7 @@ function DownloadDialog({
       {groups.length > 1 && (
         <div className="mt-4">
           <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">{t("detail.downloadDialog.translation")}</p>
-          <GroupDropdown groups={groups} activeGroupId={groupId} onSelect={(id) => { setGroupId(id); setQuality(null); }} />
+          <GroupDropdown groups={groups} activeGroupId={groupId} onSelect={(id) => { setGroupId(id); setVariantId(null); }} />
         </div>
       )}
 
@@ -1169,21 +1192,18 @@ function DownloadDialog({
           <p className="text-sm text-rose-400">{t("common.loadFailed", { message: (linksQuery.error as Error).message })}</p>
         ) : unsupported ? (
           <p className="text-sm text-rose-400">{t("detail.episodeMenu.downloadUnsupported")}</p>
-        ) : qualities.length === 0 ? (
+        ) : variants.length === 0 ? (
           <p className="text-sm text-muted">{t("detail.downloadDialog.qualityUnknown")}</p>
+        ) : variants.length === 1 ? (
+          <p className="text-sm font-semibold text-text">{variantOptions[0].label}</p>
         ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {qualities.map((q) => (
-              <button
-                key={q}
-                type="button"
-                onClick={() => setQuality(q)}
-                className={cn("rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors", q === selectedQuality ? "bg-accent/20 text-accent-text" : "bg-text/[.06] text-muted hover:bg-text/[.1]")}
-              >
-                {q}
-              </button>
-            ))}
-          </div>
+          <SelectDropdown options={variantOptions} value={selected?.id ?? ""} onChange={setVariantId} placeholder={t("detail.downloadDialog.quality")} />
+        )}
+        {linksQuery.isSuccess && !unsupported && subtitleNames.length > 0 && (
+          <p className="mt-2.5 flex items-start gap-1.5 text-xs leading-relaxed text-muted">
+            <Captions className="mt-px h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+            {t("detail.downloadDialog.subtitles", { list: subtitleNames.join(", ") })}
+          </p>
         )}
       </div>
 
@@ -1317,6 +1337,28 @@ function MobileTitleChrome({ posterUrl, siteUrl }: { posterUrl?: string | null; 
       ><ExternalLink className="h-[18px] w-[18px]" strokeWidth={2} /></motion.a>}
     </div>, document.body)}
   </>;
+}
+
+/**
+ * Why this title was in the home screen's recommendations - one quiet line under the genres, in the
+ * same small muted type as the facts above, so it explains without competing with the title or the
+ * Watch button. Nothing at all for a title reached any other way.
+ */
+function RecommendationNote({ sourceId, animeId, className }: { sourceId: string; animeId: string; className?: string }) {
+  const { t } = useTranslation();
+  const reason = useRecommendationReason(sourceId, animeId);
+  if (!reason) return null;
+  const name = (title: string) => <span className="text-text/75">«{title}»</span>;
+  let text: React.ReactNode;
+  if (reason.kind === "continues") text = <>{t("detail.recommended.continuesBefore")}{name(reason.of)}{t("detail.recommended.continuesAfter")}</>;
+  else if (reason.kind === "similar") {
+    text = <>{t("detail.recommended.similarBefore")}{name(reason.to[0])}{reason.to.length > 1 ? t("detail.recommended.similarMore", { count: reason.to.length - 1 }) : ""}{t("detail.recommended.similarAfter")}</>;
+  } else if (reason.genres.length > 0) text = t("detail.recommended.genres", { genres: reason.genres.join(", ") });
+  else text = t("detail.recommended.taste");
+  return <p className={cn("flex items-start gap-1.5 text-xs leading-relaxed text-muted", className)}>
+    <Sparkles className="mt-[3px] h-3 w-3 shrink-0 opacity-70" strokeWidth={2} />
+    <span className="min-w-0">{text}</span>
+  </p>;
 }
 
 // The title page's own look for a genre chip - see GenreChip for the shared open-the-catalog logic.

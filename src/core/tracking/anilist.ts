@@ -5,6 +5,7 @@
 // hibiki://anilist-auth with the token in the URL fragment, and no client secret exists anywhere.
 // The client id is public by nature (it is in every sign-in URL) and baked in at build time.
 import type { TrackerMedia, TrackerStatus } from "@shared/types";
+import { logger } from "../logger";
 import { getPlatform } from "../platform";
 
 declare const __ANILIST_CLIENT_ID__: string | undefined;
@@ -153,10 +154,18 @@ interface GraphQlResponse<T> {
   errors?: Array<{ message?: string; status?: number }> | null;
 }
 
+/** What a request was, for the log: its kind and root field (Viewer, Page, SaveMediaListEntry...). */
+function operationOf(query: string): string {
+  const kind = /^\s*mutation/.test(query) ? "mutation" : "query";
+  return `${kind} ${/\{\s*(\w+)/.exec(query)?.[1] ?? "?"}`;
+}
+
 /** One GraphQL call. `token` null reads anonymously (public data only). */
 export function anilistQuery<T>(token: string | null, query: string, variables: Record<string, unknown> = {}): Promise<T> {
+  const operation = operationOf(query);
   return enqueue(async () => {
     for (let attempt = 0; ; attempt++) {
+      const startedAt = Date.now();
       const response = await getPlatform().http.request({
         url: GRAPHQL_URL,
         method: "POST",
@@ -169,10 +178,16 @@ export function anilistQuery<T>(token: string | null, query: string, variables: 
         // an explicit null would clear it.
         body: JSON.stringify({ query, variables }),
         timeoutMs: 20_000,
+      }).catch((error: unknown) => {
+        logger.warn("tracking", `AniList ${operation}: no answer after ${Date.now() - startedAt}ms: ${error instanceof Error ? error.message : String(error)}`);
+        throw error;
       });
+      logger.debug("tracking", `AniList ${operation}: http ${response.status} in ${Date.now() - startedAt}ms`);
       if (response.status === 429 && attempt === 0) {
         const retryAfter = Number(response.headers["retry-after"]?.[0]);
-        await sleep((Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 30) * 1000);
+        const waitSeconds = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 30;
+        logger.warn("tracking", `AniList rate limit hit; retrying in ${waitSeconds}s`);
+        await sleep(waitSeconds * 1000);
         continue;
       }
       let parsed: GraphQlResponse<T> | null = null;
@@ -183,9 +198,13 @@ export function anilistQuery<T>(token: string | null, query: string, variables: 
       }
       const error = parsed?.errors?.[0];
       if (response.status === 401 || error?.status === 401 || /invalid token|unauthorized/i.test(error?.message ?? "")) {
+        logger.warn("tracking", `AniList ${operation}: token refused (http ${response.status})`);
         throw new AniListAuthError();
       }
-      if (error) throw new Error(`AniList: ${error.message ?? "request failed"}`);
+      if (error) {
+        logger.warn("tracking", `AniList ${operation}: ${error.message ?? "request failed"} (http ${response.status})`);
+        throw new Error(`AniList: ${error.message ?? "request failed"}`);
+      }
       if (response.status < 200 || response.status >= 300) throw new Error(`AniList answered HTTP ${response.status}`);
       if (!parsed?.data) throw new Error("AniList answered with no data");
       return parsed.data;

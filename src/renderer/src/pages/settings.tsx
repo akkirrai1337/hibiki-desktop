@@ -17,6 +17,8 @@ import { sortLabel } from "@/lib/catalogSort";
 import { SelectDropdown } from "@/components/SelectDropdown";
 import { hibiki, type LogEntry } from "@/lib/hibiki";
 import { useAppUpdate, useUpdateFlow } from "@/lib/appUpdate";
+import { AniListLogo } from "@/components/AniListLogo";
+import { DeviceSyncSection } from "@/components/DeviceSync";
 import { TRACKING_KEY, useTrackerAccount } from "@/lib/tracking";
 import type { TrackerImportProgress, TrackerImportReport } from "@shared/types";
 import type { MemorySnapshot } from "@shared/types";
@@ -676,7 +678,7 @@ function TrackingSection() {
 
   return (
     <SettingsSection>
-      <SettingsRow icon={<ListChecks className="h-[18px] w-[18px]" strokeWidth={2} />}>
+      <SettingsRow icon={<AniListLogo className="h-[18px] w-[18px]" />}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-sm font-semibold text-text">AniList</p>
@@ -1088,7 +1090,7 @@ export function SettingsPage() {
       )}
 
       {activeCategory === "sources" && <div className="-mx-4"><Suspense fallback={null}><SourcesPage embedded /></Suspense></div>}
-      {activeCategory === "tracking" && <TrackingSection />}
+      {activeCategory === "tracking" && <div className="space-y-4"><DeviceSyncSection /><TrackingSection /></div>}
       {activeCategory === "home" && <HomeSortSection />}
       {activeCategory === "data" && <BackupSection />}
       {activeCategory === "diagnostics" && <DiagnosticsSection />}

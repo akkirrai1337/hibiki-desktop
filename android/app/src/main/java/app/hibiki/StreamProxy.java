@@ -71,8 +71,11 @@ final class StreamProxy {
         }
     }
 
+    /** The reason also goes as X-Hibiki-Error, which the player's log line reads (VideoPlayer.tsx). */
     private static WebResourceResponse error(int code, String reason, String message) {
-        return new WebResourceResponse("text/plain", "utf-8", code, reason, new HashMap<>(),
+        Map<String, String> headers = new HashMap<>();
+        headers.put("X-Hibiki-Error", message.replaceAll("[\r\n]+", " "));
+        return new WebResourceResponse("text/plain", "utf-8", code, reason, headers,
             new ByteArrayInputStream(message.getBytes(StandardCharsets.UTF_8)));
     }
 

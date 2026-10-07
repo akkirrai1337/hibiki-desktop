@@ -316,6 +316,41 @@ public class HibikiAppPlugin extends Plugin {
         return new RemoteAction(Icon.createWithResource(getContext(), icon), title, title, pending);
     }
 
+    // --- Work that outlives the screen ---------------------------------------------------------
+
+    /** Whether the notification permission was already asked for this run - asked once, never nagged. */
+    private boolean notificationsAsked = false;
+
+    /**
+     * Downloads running or not: `active` starts or updates the foreground service that keeps the app
+     * alive in the background (with its notification), and its absence stops it.
+     */
+    @PluginMethod
+    public void setBackgroundWork(PluginCall call) {
+        boolean active = Boolean.TRUE.equals(call.getBoolean("active", false));
+        if (!active) {
+            BackgroundWorkService.stop(getContext());
+            call.resolve();
+            return;
+        }
+        // Without it the service still runs, but its notification - the only sign that the app is
+        // busy - stays hidden. Asked for at the moment it starts to matter.
+        if (Build.VERSION.SDK_INT >= 33 && !notificationsAsked
+            && ContextCompat.checkSelfPermission(getContext(), android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            notificationsAsked = true;
+            androidx.core.app.ActivityCompat.requestPermissions(getActivity(), new String[] { android.Manifest.permission.POST_NOTIFICATIONS }, 7302);
+        }
+        Integer progress = call.getInt("progress");
+        try {
+            BackgroundWorkService.update(getContext(), call.getString("title", "hibiki"), call.getString("text", ""), progress == null ? -1 : progress);
+            call.resolve();
+        } catch (RuntimeException refused) {
+            // Started from the background where Android forbids it (12+): the work goes on while
+            // the app is allowed to run.
+            call.reject("Could not start background work: " + refused.getMessage());
+        }
+    }
+
     // --- Updating the app itself ----------------------------------------------------------------
 
     private boolean canInstallPackages() {

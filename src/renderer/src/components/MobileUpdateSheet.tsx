@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { ArrowDownToLine, ExternalLink, PackageCheck, ShieldCheck, TriangleAlert, WifiOff } from "lucide-react";
+import { ArrowDownToLine, ExternalLink, ShieldCheck, TriangleAlert, WifiOff } from "lucide-react";
 import type { AppUpdate } from "@shared/types";
 import { BottomSheet } from "@/components/BottomSheet";
 import { formatBytes } from "@/components/UpdateButton";
@@ -96,9 +96,6 @@ function PhaseNotice({ phase }: { update: AppUpdate; phase: UpdatePhase }) {
   // Second time round, the notice says the switch is still off instead of explaining it again.
   const permissionDenied = useUpdateFlow((s) => s.permissionAsked);
 
-  if (phase.kind === "installer") {
-    return <Notice icon={PackageCheck} tone="good" title={t("update.installerTitle")} text={t("update.installerHint")} />;
-  }
   if (phase.kind !== "failed") return null;
   switch (phase.failure) {
     case "permission-needed":
@@ -189,7 +186,9 @@ function Footer({ update, phase, onLater }: { update: AppUpdate; phase: UpdatePh
     );
   }
 
-  const label = phase.kind === "installer" ? t("update.installerAgain") : phase.kind === "failed" ? t("update.retry") : t("update.install");
+  // After the installer was opened (and maybe backed out of), the same button opens it again: the
+  // package is already on disk, so nothing is downloaded twice.
+  const label = phase.kind === "installer" ? t("update.installNow") : phase.kind === "failed" ? t("update.retry") : t("update.install");
   return (
     <div className="flex flex-col gap-1">
       <button type="button" onClick={() => void start(update)} className={PRIMARY}>{label}</button>

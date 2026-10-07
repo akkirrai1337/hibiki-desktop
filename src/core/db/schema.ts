@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, primaryKey, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const library = sqliteTable(
   "library",
@@ -8,8 +8,13 @@ export const library = sqliteTable(
     category: text("category").notNull(), // watching | planned | completed | dropped | on_hold | favorite | saved
     addedAt: integer("added_at").notNull(),
     animeJson: text("anime_json").notNull(),
+    // When the category last changed - what decides between two devices' versions (sync). Set by a
+    // trigger, so no writer has to remember it.
+    updatedAt: integer("updated_at").notNull().default(0),
+    // Local change counter for device sync (core/sync): bumped by triggers on every write.
+    changeSeq: integer("change_seq").notNull().default(0),
   },
-  (t) => [primaryKey({ columns: [t.sourceId, t.animeId] })],
+  (t) => [primaryKey({ columns: [t.sourceId, t.animeId] }), index("library_change_seq").on(t.changeSeq)],
 );
 
 export const watchProgress = sqliteTable(
@@ -39,15 +44,24 @@ export const watchProgress = sqliteTable(
     // onCaptureThumbnail) - powers the history page's per-episode thumbnails. Null until the first
     // capture, and for episodes saved before this column existed.
     thumbnailDataUrl: text("thumbnail_data_url"),
+    changeSeq: integer("change_seq").notNull().default(0),
   },
-  (t) => [primaryKey({ columns: [t.sourceId, t.titleId, t.episodeId] })],
+  (t) => [primaryKey({ columns: [t.sourceId, t.titleId, t.episodeId] }), index("watch_progress_change_seq").on(t.changeSeq)],
 );
 
-export const dailyActivity = sqliteTable("daily_activity", {
-  date: text("date").primaryKey(), // YYYY-MM-DD
-  watchedMs: integer("watched_ms").notNull().default(0),
-  completedCount: integer("completed_count").notNull().default(0),
-});
+export const dailyActivity = sqliteTable(
+  "daily_activity",
+  {
+    date: text("date").notNull(), // YYYY-MM-DD
+    // Which device watched: each one counts only its own, and a day's total is their sum - so two
+    // devices' minutes add up instead of one overwriting the other when they sync.
+    deviceId: text("device_id").notNull().default(""),
+    watchedMs: integer("watched_ms").notNull().default(0),
+    completedCount: integer("completed_count").notNull().default(0),
+    changeSeq: integer("change_seq").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.date, t.deviceId] }), index("daily_activity_change_seq").on(t.changeSeq)],
+);
 
 export const sourceRepositories = sqliteTable("source_repositories", {
   url: text("url").primaryKey(),
@@ -58,12 +72,19 @@ export const sourceRepositories = sqliteTable("source_repositories", {
 // only genuinely discrete "+N XP" moments in the whole system. The steady per-hour-watched trickle
 // (levelProgress.ts) isn't logged here at all - it's a continuous total, not a series of events,
 // and would just be noise at one entry every 6 minutes of watching.
-export const xpEvents = sqliteTable("xp_events", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  kind: text("kind").notNull(), // an achievement tier id, e.g. "collector_10"
-  xp: integer("xp").notNull(),
-  createdAt: integer("created_at").notNull(),
-});
+export const xpEvents = sqliteTable(
+  "xp_events",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    kind: text("kind").notNull(), // an achievement tier id, e.g. "collector_10"
+    xp: integer("xp").notNull(),
+    createdAt: integer("created_at").notNull(),
+    // The same event on every device: the local id differs from one database to another.
+    uid: text("uid"),
+    changeSeq: integer("change_seq").notNull().default(0),
+  },
+  (t) => [uniqueIndex("xp_events_uid").on(t.uid), index("xp_events_change_seq").on(t.changeSeq)],
+);
 
 // One row per episode a download actually finished for (see main/ipc/downloads.ts) - the
 // foundation offline viewing is built on. `filePath` points at wherever it landed under this
@@ -90,6 +111,9 @@ export const downloadedEpisodes = sqliteTable(
     // doesn't apply to a file already on disk. Null for an episode downloaded before this column
     // existed, or from a source whose links never carried a quality label to begin with.
     quality: text("quality"),
+    // The episode's subtitle tracks saved beside the video, converted to WebVTT: a JSON array of
+    // { filePath, label, language } (DownloadedSubtitle). Null when there were none.
+    subtitles: text("subtitles"),
     downloadedAt: integer("downloaded_at").notNull(),
   },
   (t) => [primaryKey({ columns: [t.sourceId, t.animeId, t.episodeId] })],
@@ -138,9 +162,48 @@ export const titleRatings = sqliteTable(
     animeId: text("anime_id").notNull(),
     rating: integer("rating").notNull(),
     ratedAt: integer("rated_at").notNull(),
+    changeSeq: integer("change_seq").notNull().default(0),
   },
-  (t) => [primaryKey({ columns: [t.sourceId, t.animeId] })],
+  (t) => [primaryKey({ columns: [t.sourceId, t.animeId] }), index("title_ratings_change_seq").on(t.changeSeq)],
 );
+
+// --- Device sync (core/sync) ----------------------------------------------------------------------
+
+/** This database's own facts for sync: its device id and its change counter ("seq"). */
+export const syncState = sqliteTable("sync_state", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+});
+
+/** Rows deleted from synced tables, so the deletion reaches the other devices too. Written by triggers. */
+export const syncTombstones = sqliteTable(
+  "sync_tombstones",
+  {
+    tbl: text("tbl").notNull(),
+    key: text("key").notNull(),
+    deletedAt: integer("deleted_at").notNull(),
+    changeSeq: integer("change_seq").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.tbl, t.key] }), index("sync_tombstones_change_seq").on(t.changeSeq)],
+);
+
+/** Devices this one is paired with, and how far each side has seen the other's changes. */
+export const syncPeers = sqliteTable("sync_peers", {
+  deviceId: text("device_id").primaryKey(),
+  name: text("name").notNull(),
+  // The shared key, encrypted with the platform's secure store (base64 ciphertext).
+  keyCiphertext: text("key_ciphertext").notNull(),
+  // Our own change counter as of the last batch the peer acknowledged.
+  sentSeq: integer("sent_seq").notNull().default(0),
+  // The peer's change counter as of the last batch applied here.
+  receivedSeq: integer("received_seq").notNull().default(0),
+  lastAddress: text("last_address"),
+  lastSyncAt: integer("last_sync_at"),
+  pairedAt: integer("paired_at").notNull(),
+  // This device reaches out to that one (it paired by entering that one's code), rather than waiting
+  // to be reached. Only these are synced from here; the others sync with this one themselves.
+  connects: integer("connects", { mode: "boolean" }).notNull().default(false),
+});
 
 // Which entry on a tracker (AniList) a title of a source is. One row per title and tracker, also for
 // a title that was searched for and not found (remoteId null), so it is not searched again on every

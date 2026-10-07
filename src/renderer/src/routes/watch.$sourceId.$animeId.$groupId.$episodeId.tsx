@@ -3,7 +3,7 @@ import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router"
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Loader2, TriangleAlert } from "lucide-react";
-import type { PlaybackGroup, PlayerLink } from "@shared/types";
+import type { DownloadedEpisodeFile, PlaybackGroup, PlayerLink } from "@shared/types";
 import { pickDefaultLink, pickPlaybackFallback, pickPreferredLink, pickResolvedLink } from "@/lib/playerLinks";
 import { usePlaybackGroups } from "@/lib/playbackGroups";
 import { isGenericDubTitle } from "@/lib/dubTitle";
@@ -66,10 +66,25 @@ function WatchRoute() {
   return <WatchPage key={`${groupId}/${episodeId}`} />;
 }
 
-const SAVE_INTERVAL_MS = 5000;
 // Progress ticks arrive several times a second while playing, so anything past a couple of seconds
 // is a jump rather than elapsed playback.
 const PLAYED_TICK_MAX_MS = 2500;
+
+/** One episode's progress as last seen, waiting to be written when the episode is left. */
+interface PendingSave {
+  sourceId: string;
+  titleId: string;
+  episodeId: string;
+  episodeNumber: number;
+  groupId: string;
+  translation: string | null;
+  playerName: string | null;
+  videoId: string | null;
+  thumbnail: { dataUrl: string | null };
+  positionMs: number;
+  durationMs: number;
+  watched: boolean;
+}
 // Matches Android's own DiscordRpcManager.MIN_PUBLISH_INTERVAL_MS - no need to hit the local
 // Discord IPC socket every progress tick, timestamps already convey a moving playhead on their own.
 const DISCORD_UPDATE_INTERVAL_MS = 16_000;
@@ -95,8 +110,10 @@ const DISCORD_UPDATE_INTERVAL_MS = 16_000;
  * it at face value for the displayed duration and the 90%-watched threshold alike. An episode
  * downloaded before that was tracked falls back to a permissive placeholder (still wrong, but
  * only discovered as such once real data arrives - see the `ended` handling this leans on). */
-function localFileLink(filePath: string, durationMs: number | null, quality: string | null): PlayerLink {
-  if (!filePath.toLowerCase().endsWith(".ts")) return { url: downloadFileUrl(filePath), type: "DIRECT_MP4", quality };
+function localFileLink({ filePath, durationMs, quality, subtitles: saved }: DownloadedEpisodeFile): PlayerLink {
+  // Saved beside the episode as WebVTT when it was downloaded.
+  const subtitles = saved.map((subtitle) => ({ url: downloadFileUrl(subtitle.filePath), label: subtitle.label, language: subtitle.language }));
+  if (!filePath.toLowerCase().endsWith(".ts")) return { url: downloadFileUrl(filePath), type: "DIRECT_MP4", quality, subtitles };
   const durationSeconds = durationMs ? Math.ceil(durationMs / 1000) : 100_000;
   const playlist = [
     "#EXTM3U",
@@ -108,7 +125,16 @@ function localFileLink(filePath: string, durationMs: number | null, quality: str
     "#EXT-X-ENDLIST",
     "",
   ].join("\n");
-  return { url: `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(playlist)))}`, type: "DIRECT_HLS", quality };
+  return { url: `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(playlist)))}`, type: "DIRECT_HLS", quality, subtitles };
+}
+
+/** 83_000 -> "1:23", for the log. */
+function clock(ms: number): string {
+  const total = Math.max(0, Math.round(ms / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = String(total % 60).padStart(2, "0");
+  return hours > 0 ? `${hours}:${String(minutes).padStart(2, "0")}:${seconds}` : `${minutes}:${seconds}`;
 }
 
 function WatchPage() {
@@ -128,8 +154,12 @@ function WatchPage() {
     canShareDiscordPresenceRef.current = canShareDiscordPresence;
     if (!canShareDiscordPresence) hibiki.discord.clearPresence();
   }, [canShareDiscordPresence]);
-  const lastSaveRef = useRef(0);
-  const watchedSentRef = useRef(false);
+  useEffect(() => {
+    log.info("player", `episode opened: ${sourceId}/${animeId} group=${groupId} episode=${episodeId}`);
+    return () => log.info("player", `episode left: ${sourceId}/${animeId} episode=${episodeId}`);
+  }, [sourceId, animeId, groupId, episodeId]);
+  // What the next save writes: the latest tick of this episode, unsaved yet. See saveProgress.
+  const pendingSaveRef = useRef<PendingSave | null>(null);
   const lastDiscordUpdateRef = useRef(0);
   const lastPlaybackRef = useRef({ positionMs: 0, durationMs: 0 });
   // Time that actually played since the last save, and the position the previous progress tick
@@ -306,6 +336,7 @@ function WatchPage() {
   // had already read, turning a one-off fallback into a sticky preference.
   const rememberSelection = usePlayerSelectionStore((s) => s.remember);
   const selectLinkManually = useCallback((selected: PlayerLink) => {
+    log.info("player", `picked by hand: ${selected.translation ?? "?"}/${selected.playerName ?? "?"} ${selected.quality ?? "?"}`);
     rememberSelection(sourceId, animeId, groupId, { playerName: selected.playerName ?? null, translation: selected.translation ?? null });
     void selectLink(selected);
   }, [rememberSelection, selectLink, sourceId, animeId, groupId]);
@@ -424,7 +455,10 @@ function WatchPage() {
   // leaving the player walked back through every one of them instead of returning to the page the
   // player was opened from. Same reasoning for the dub switch below.
   const goToEpisode = useCallback(
-    (targetEpisodeId: string) => navigate({ to: "/watch/$sourceId/$animeId/$groupId/$episodeId", params: { sourceId, animeId, groupId, episodeId: targetEpisodeId }, replace: true }),
+    (targetEpisodeId: string) => {
+      log.info("player", `switching to episode ${targetEpisodeId}`);
+      return navigate({ to: "/watch/$sourceId/$animeId/$groupId/$episodeId", params: { sourceId, animeId, groupId, episodeId: targetEpisodeId }, replace: true });
+    },
     [navigate, sourceId, animeId, groupId],
   );
   // Switching dub means switching PlaybackGroup, and groups number their episodes independently
@@ -449,6 +483,7 @@ function WatchPage() {
       if (targetEpisode.number !== episodeNumber) {
         log.info("player", `${target.title} has no episode ${episodeNumber}, opening episode ${targetEpisode.number} instead`);
       }
+      log.info("player", `switching dub to "${target.title}" (${targetGroupId}), episode ${targetEpisode.number}`);
       navigate({ to: "/watch/$sourceId/$animeId/$groupId/$episodeId", params: { sourceId, animeId, groupId: targetGroupId, episodeId: targetEpisode.id }, replace: true });
     },
     [navigate, playerGroups, sourceId, animeId, episodeNumber],
@@ -464,11 +499,19 @@ function WatchPage() {
   // changed, which - through VideoPlayer's effects keying off them - reset/reloaded the player on
   // basically any unrelated re-render, not just background refetches (see the queries above).
   const link = useMemo((): PlayerLink | undefined => {
-    if (downloadedQuery.data) return localFileLink(downloadedQuery.data.filePath, downloadedQuery.data.durationMs, downloadedQuery.data.quality);
+    if (downloadedQuery.data) return localFileLink(downloadedQuery.data);
     if (manualLink) return manualLink;
     if (preferencePending) return undefined;
     return pickDefaultLink(linksQuery.data);
   }, [downloadedQuery.data, manualLink, preferencePending, linksQuery.data]);
+  // Why this link: the engine's own trace (VideoPlayer) says what it is, not where it came from.
+  useEffect(() => {
+    if (!link) return;
+    const origin = downloadedQuery.data ? "downloaded copy" : manualLink ? "picked" : "default pick";
+    log.info("player", `playing the ${origin}: ${link.type} ${link.translation ?? "?"}/${link.playerName ?? "?"} ${link.quality ?? "?"}, subtitles=${link.subtitles?.length ?? 0}`);
+    // Only on a new link; where it came from is read at that moment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [link]);
   // With a stream already playing the message is a passing notice, not a state to stay in.
   useEffect(() => {
     if (!resolveFailed || !link) return;
@@ -569,57 +612,27 @@ function WatchPage() {
         }
       }
       lastPlaybackRef.current = { positionMs, durationMs };
+      // Only remembered here. The progress is written once, when the episode is left (see
+      // saveProgress below): a row rewritten every few seconds meant every screen and every account
+      // saw a moving target - the AniList count went up at the credits while still watching.
       const watched = durationMs > 0 && positionMs / durationMs >= watchedThreshold;
-      const justFinished = watched && !watchedSentRef.current;
+      pendingSaveRef.current = {
+        sourceId,
+        titleId: animeId,
+        episodeId,
+        episodeNumber,
+        groupId,
+        translation: linkTranslation,
+        playerName: linkPlayerName,
+        videoId: linkVideoId,
+        thumbnail: thumbnailCache,
+        positionMs,
+        durationMs,
+        // Sticky for the visit, as it is in the database: reaching the end and seeking back is
+        // still having watched it.
+        watched: watched || (pendingSaveRef.current?.watched ?? false),
+      };
       const now = Date.now();
-      if (justFinished || now - lastSaveRef.current >= SAVE_INTERVAL_MS) {
-        lastSaveRef.current = now;
-        if (watched) watchedSentRef.current = true;
-        const upserted = hibiki.progress.upsert({
-          ...(thumbnailCache.dataUrl ? { thumbnailDataUrl: thumbnailCache.dataUrl } : {}),
-          sourceId,
-          titleId: animeId,
-          episodeId,
-          episodeNumber,
-          groupId,
-          translation: linkTranslation,
-          playerName: linkPlayerName,
-          positionMs,
-          durationMs,
-          watched,
-          updatedAt: now,
-          watchedDeltaMs: playedMsRef.current,
-        });
-        playedMsRef.current = 0;
-
-        // The same seconds, told to the source's account: an episode counted and the minutes
-        // really spent in it, which is what fills the day squares on a YummyAnime profile. Fire
-        // and forget - a website being unreachable must not disturb playback, and the seconds are
-        // only cleared once they are actually accepted, so the next save carries them again.
-        const videoId = linkVideoId;
-        const pending = [...unreportedSecondsRef.current];
-        if (videoId && pending.length > 0) {
-          unreportedSecondsRef.current = new Set();
-          void hibiki.sources
-            .reportPlayback(sourceId, {
-              videoId,
-              positionSeconds: Math.floor(positionMs / 1000),
-              durationSeconds: Math.round(durationMs / 1000),
-              watchedSeconds: pending,
-            })
-            .catch(() => {
-              for (const second of pending) unreportedSecondsRef.current.add(second);
-            });
-        }
-        // The streak-detection effect above reads straight from this same query's cache, so it
-        // can't notice today's activity until this refetch actually lands. Every save, not just
-        // the first one: on a resumed episode, the very first save's position can exactly match
-        // what's already stored (no delta yet, so main's dailyActivity write is a no-op) - it's a
-        // later save, once playback has actually moved past the resume point, that first writes
-        // anything. Only invalidating once (on that possibly-empty first save) meant a real
-        // increment later in the same session could go unnoticed for the rest of the episode.
-        upserted.then(() => queryClient.invalidateQueries({ queryKey: ["dailyActivity", ACTIVITY_DAYS] }));
-      }
       const meta = discordMetaRef.current;
       if (canShareDiscordPresenceRef.current && meta.title && now - lastDiscordUpdateRef.current >= DISCORD_UPDATE_INTERVAL_MS) {
         lastDiscordUpdateRef.current = now;
@@ -640,6 +653,80 @@ function WatchPage() {
     },
     [sourceId, animeId, episodeId, episodeNumber, groupId, linkTranslation, linkPlayerName, linkVideoId, watchedThreshold, thumbnailCache],
   );
+
+  // The one write of this visit's progress: when the episode is left (another episode is a new
+  // page - WatchPage is keyed by it - so that is an unmount too), and whenever the app might not get
+  // another chance - sent to the background, where Android may end it, or its window closing.
+  // Reads only refs, so it can run from an unmount and from window events alike.
+  const saveProgress = useCallback((reason: string) => {
+    const pending = pendingSaveRef.current;
+    if (!pending) return;
+    pendingSaveRef.current = null;
+    const watchedDeltaMs = playedMsRef.current;
+    playedMsRef.current = 0;
+    const percent = pending.durationMs > 0 ? Math.round((pending.positionMs / pending.durationMs) * 100) : 0;
+    log.info(
+      "player",
+      `saving progress (${reason}): episode ${pending.episodeNumber} at ${clock(pending.positionMs)}/${clock(pending.durationMs)} (${percent}%)${pending.watched ? ", watched" : ""}, played ${clock(watchedDeltaMs)} this time`,
+    );
+    const upserted = hibiki.progress.upsert({
+      ...(pending.thumbnail.dataUrl ? { thumbnailDataUrl: pending.thumbnail.dataUrl } : {}),
+      sourceId: pending.sourceId,
+      titleId: pending.titleId,
+      episodeId: pending.episodeId,
+      episodeNumber: pending.episodeNumber,
+      groupId: pending.groupId,
+      translation: pending.translation,
+      playerName: pending.playerName,
+      positionMs: pending.positionMs,
+      durationMs: pending.durationMs,
+      watched: pending.watched,
+      updatedAt: Date.now(),
+      watchedDeltaMs,
+    });
+
+    // The same seconds, told to the source's account: an episode counted and the minutes really
+    // spent in it, which is what fills the day squares on a YummyAnime profile. Fire and forget - a
+    // website being unreachable must not matter here, and seconds that were not accepted go back
+    // to be sent with the next save.
+    const seconds = [...unreportedSecondsRef.current];
+    if (pending.videoId && seconds.length > 0) {
+      unreportedSecondsRef.current = new Set();
+      void hibiki.sources
+        .reportPlayback(pending.sourceId, {
+          videoId: pending.videoId,
+          positionSeconds: Math.floor(pending.positionMs / 1000),
+          durationSeconds: Math.round(pending.durationMs / 1000),
+          watchedSeconds: seconds,
+        })
+        .catch(() => {
+          for (const second of seconds) unreportedSecondsRef.current.add(second);
+        });
+    }
+    // Whatever shows progress is behind until these refetch - the title page and the continue-watching
+    // row are usually the very next screen.
+    void upserted.catch((error: unknown) => log.error("player", `progress not saved for episode ${pending.episodeNumber}:`, error));
+    void upserted.then(() => {
+      void queryClient.invalidateQueries({ queryKey: ["dailyActivity", ACTIVITY_DAYS] });
+      void queryClient.invalidateQueries({ queryKey: ["progress-all", pending.sourceId, pending.titleId] });
+      void queryClient.invalidateQueries({ queryKey: ["progress", pending.sourceId, pending.titleId, pending.episodeId] });
+      void queryClient.invalidateQueries({ queryKey: ["recent-progress"] });
+    });
+  }, [queryClient]);
+
+  useEffect(() => {
+    const onHidden = () => {
+      if (document.visibilityState === "hidden") saveProgress("app hidden");
+    };
+    const onPageHide = () => saveProgress("window closing");
+    document.addEventListener("visibilitychange", onHidden);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onHidden);
+      window.removeEventListener("pagehide", onPageHide);
+      saveProgress("episode left");
+    };
+  }, [saveProgress]);
 
   // timeupdate (the only thing that drives onProgress above) simply stops firing while paused, so
   // without this a pause would leave Discord showing the last isPlaying:true timestamp, which

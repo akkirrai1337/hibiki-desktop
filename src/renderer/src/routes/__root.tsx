@@ -6,6 +6,8 @@ import { useKnownSourcesStore } from "@/stores/knownSourcesStore";
 import { applyAccentColor, applyBackgroundTheme, DEFAULT_MOBILE_ACCENT, DEFAULT_MOBILE_ACCENT_LIGHT, BACKGROUND_THEME_PRESETS, CUSTOM_BACKGROUND_THEME_ID, customBackgroundGradientCss } from "@/lib/theme";
 import { TitleBar } from "@/components/TitleBar";
 import { MobileUpdateSheet } from "@/components/MobileUpdateSheet";
+import { BackgroundWorkNotice } from "@/components/BackgroundWorkNotice";
+import { SyncListener } from "@/components/DeviceSync";
 import { Sidebar } from "@/components/Sidebar";
 import { MobileStatusScrim, MobileTabBar } from "@/components/MobileTabBar";
 import { LibrarySegments } from "@/components/MobilePageHeader";
@@ -376,6 +378,8 @@ function RootLayoutContent() {
       </main>
     </div>
     {isMobile && <MobileUpdateSheet suppressed={isWatching} />}
+    {isMobile && <BackgroundWorkNotice />}
+    <SyncListener />
     {isMobile && !isWatching && <><MobileStatusScrim />{!pathname.startsWith("/anime/") && <MobileTabBar />}</>}
   </div>;
 }

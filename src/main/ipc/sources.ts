@@ -22,6 +22,7 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   );
   ipcMain.handle(IPC.sourceResolvePlayerLink, (_e, link: PlayerLink) => sources.resolvePlayerLink(link));
   ipcMain.handle(IPC.sourceFilterCatalog, (_e, sourceId: string) => sources.filterCatalog(sourceId));
+  ipcMain.handle(IPC.sourceRecommendations, (_e, sourceId: string, sort?: string) => sources.recommendations(sourceId, sort));
 
   ipcMain.handle(IPC.sourceLogin, (_e, sourceId: string, credentials: { login: string; password: string }) => sources.account.login(sourceId, credentials));
   ipcMain.handle(IPC.sourceLoginWeb, (_e, sourceId: string) => sources.account.loginWeb(sourceId));

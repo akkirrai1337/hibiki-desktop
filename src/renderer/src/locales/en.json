@@ -64,7 +64,9 @@
     "emptySourcesText": "Add an anime source to see what is popular, browse its catalog, and continue watching.",
     "openSources": "Open sources",
     "sourceUnavailableTitle": "{{source}} isn't responding",
-    "sourceUnavailableText": "Check your connection or try again in a bit."
+    "sourceUnavailableText": "Check your connection or try again in a bit.",
+    "continuations": "Continue the story",
+    "forYou": "For you on {{source}}"
   },
   "detail": {
     "back": "Back",
@@ -97,7 +99,8 @@
       "translation": "Dub",
       "quality": "Quality",
       "loadingQualities": "Loading options…",
-      "qualityUnknown": "Quality unknown, but this episode can be downloaded"
+      "qualityUnknown": "Quality unknown, but this episode can be downloaded",
+      "subtitles": "Subtitles: {{list}} — saved with the episode"
     },
     "relatedTitles": "Related titles",
     "relatedCurrentTitle": "You're currently here",
@@ -174,7 +177,17 @@
     "relatedHere": "You are here",
     "relatedShowMore": "Show {{count}} more",
     "relatedShowLess": "Show less",
-    "screenshots": "Screenshots"
+    "screenshots": "Screenshots",
+    "recommended": {
+      "similarBefore": "Like ",
+      "similarMore_one": " and {{count}} more",
+      "similarMore_other": " and {{count}} more",
+      "similarAfter": " from your history",
+      "continuesBefore": "Later in the franchise of ",
+      "continuesAfter": " you watched",
+      "genres": "In your genres: {{genres}}",
+      "taste": "Picked for your taste"
+    }
   },
   "watch": {
     "loadingLink": "Loading link…",
@@ -695,12 +708,9 @@
     "later": "Later",
     "downloadingMobile": "{{received}} of {{total}}",
     "backgroundHint": "You can close this — the download keeps going.",
-    "installerTitle": "Installer opened",
-    "installerHint": "Confirm the install in the window Android showed. If you closed it, open it again — nothing has to be downloaded twice.",
-    "installerAgain": "Open the installer",
     "permissionTitle": "One permission first",
-    "permissionHint": "Android asks whether hibiki may install apps. Turn the switch on and come back — the update carries on by itself.",
-    "permissionDenied": "The permission is still off, so the update can't be installed.",
+    "permissionHint": "Allow hibiki to install apps, then come back.",
+    "permissionDenied": "Still not allowed, so the update can't be installed.",
     "permissionAction": "Allow",
     "downloadFailedTitle": "Download failed",
     "downloadFailedHint": "Check the connection and try again.",
@@ -711,7 +721,8 @@
     "openRelease": "Release page",
     "settingsVersion": "hibiki {{version}}",
     "settingsLatest": "Up to date",
-    "settingsAvailable": "Version {{version}} is available"
+    "settingsAvailable": "Version {{version}} is available",
+    "installNow": "Install"
   },
   "tracking": {
     "settings": {
@@ -766,5 +777,49 @@
       "on_hold": "Paused",
       "rewatching": "Rewatching"
     }
+  },
+  "backgroundWork": {
+    "downloadingTitle_one": "Downloading {{count}} episode",
+    "downloadingTitle_other": "Downloading {{count}} episodes"
+  },
+  "deviceSync": {
+    "hint": "Library, progress, ratings and achievements stay the same on your phone and computers while they are on the same network. Nothing goes through the internet.",
+    "connectPhone": "Connect a phone or computer",
+    "connectComputer": "Connect to a device",
+    "connectAnother": "Connect another device",
+    "enterOnPhone": "On the other device: Settings → Sync → Connect to a device, then pick this computer and enter the code:",
+    "waiting": "Waiting for the other device… the code works for 5 minutes.",
+    "findHint": "On the device you are connecting to, open Settings → Sync and show its code (on a computer: “Connect a phone or computer”). Both need to be on the same network.",
+    "searching": "Looking for devices…",
+    "notFound": "Nothing found. Make sure hibiki is open on the other device, showing its code, and both are on the same Wi-Fi.",
+    "searchAgain": "Search again",
+    "enterCode": "Enter the code shown on {{name}}:",
+    "pair": "Connect",
+    "back": "Back",
+    "lastSync": "Synced {{when}}",
+    "never": "not yet",
+    "justNow": "just now",
+    "minutesAgo_one": "{{count}} min ago",
+    "minutesAgo_other": "{{count}} min ago",
+    "hoursAgo_one": "{{count}} h ago",
+    "hoursAgo_other": "{{count}} h ago",
+    "syncNow": "Sync now",
+    "forget": "Forget this device",
+    "forgetConfirm": "Stop syncing with it? Nothing is deleted on either device.",
+    "forgetAction": "Forget",
+    "error": {
+      "unreachable": "The other device isn't reachable: is hibiki open on it, on the same network? A phone can only be reached while hibiki is on its screen.",
+      "unknownDevice": "The other device no longer knows this one. Forget it here and connect again.",
+      "badCode": "Wrong code. Check the one on the other device's screen.",
+      "notPairing": "The other device isn't showing a code. Open its code first.",
+      "tooMany": "Too many wrong codes. Start connecting on the computer again.",
+      "version": "The two apps are different versions. Update both.",
+      "generic": "Something went wrong. Try again."
+    },
+    "title": "Devices",
+    "hintPhone": "Library, progress, ratings and achievements stay the same on your devices while they are on the same Wi-Fi. Moving to a new phone works the same way. Nothing goes through the internet.",
+    "showCodePhone": "Show a code for another device",
+    "enterOnOtherPhone": "On the other device: Settings → Sync → Connect to a device, then pick this phone and enter the code. Keep hibiki open on this screen meanwhile:",
+    "codeTitle": "Connection code"
   }
 }

@@ -5,7 +5,8 @@ import type { Platform } from "../types";
 import { androidBrowser } from "./browser";
 import { createAndroidDb } from "./db";
 import { AndroidExtensionHost } from "./extensionHost";
-import { HibikiApk, HibikiApp, HibikiFiles, HibikiNet } from "./native";
+import { HibikiApk, HibikiApp, HibikiFiles, HibikiNet, HibikiSync } from "./native";
+import { DISCOVERY_PORT, DISCOVERY_PROBE } from "../../core/sync/protocol";
 import { Capacitor } from "@capacitor/core";
 import { androidDownloadTransfer, androidFiles, androidHttp, androidSecureStore } from "./transports";
 
@@ -80,6 +81,11 @@ export async function createAndroidPlatform(version: string): Promise<{ platform
       relaunch: () => window.location.reload(),
     },
     extensionHost: new AndroidExtensionHost(androidFiles),
+    syncTransport: {
+      request: async (host, port, message, timeoutMs) => (await HibikiSync.request({ host, port, message, timeoutMs })).message,
+      discover: async (timeoutMs) => (await HibikiSync.discover({ timeoutMs, port: DISCOVERY_PORT, probe: DISCOVERY_PROBE })).devices,
+      deviceName: async () => (await HibikiSync.deviceName()).name,
+    },
     appInstaller: {
       canInstall: async () => (await HibikiApp.canInstallPackages()).granted,
       requestPermission: async () => (await HibikiApp.openInstallSettings()).granted,

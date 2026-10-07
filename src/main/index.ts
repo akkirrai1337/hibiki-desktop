@@ -12,6 +12,7 @@ import { destroyAllLoginWindows } from "./extensions/webLogin";
 import { registerSourceHandlers } from "./ipc/sources";
 import { registerLibraryHandlers } from "./ipc/library";
 import { registerTrackingHandlers } from "./ipc/tracking";
+import { registerSyncHandlers } from "./ipc/sync";
 import { handleTrackingRedirect } from "../core/api/tracking";
 import { registerXpEventHandlers } from "./ipc/xpEvents";
 import { registerMarketplaceHandlers } from "./ipc/marketplace";
@@ -253,7 +254,9 @@ app.whenReady().then(async () => {
       if (!realPath.startsWith(realDownloadsDir + path.sep)) return new Response("Forbidden", { status: 403 });
 
       const stat = await fs.stat(realPath);
-      const contentType = realPath.toLowerCase().endsWith(".mp4") ? "video/mp4" : "video/mp2t";
+      // A downloaded episode's subtitles live beside it, as WebVTT (see core/api/downloads.ts).
+      const lower = realPath.toLowerCase();
+      const contentType = lower.endsWith(".mp4") ? "video/mp4" : lower.endsWith(".vtt") ? "text/vtt; charset=utf-8" : "video/mp2t";
       const range = /bytes=(\d+)-(\d*)/.exec(request.headers.get("range") ?? "");
 
       if (range) {
@@ -321,6 +324,7 @@ app.whenReady().then(async () => {
   registerMarketplaceHandlers(runtime);
   registerLibraryHandlers(runtime);
   registerTrackingHandlers(runtime);
+  registerSyncHandlers();
   registerXpEventHandlers();
   // Progress goes out through platform.events, whose window getter is read at send-time: a download
   // can still be running long after the window is recreated (e.g. closed and reopened via the

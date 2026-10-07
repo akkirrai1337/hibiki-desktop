@@ -120,6 +120,27 @@
       "when": 1791365397741,
       "tag": "0016_drop_cached_source_queries",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1791388224517,
+      "tag": "0017_downloaded_subtitles",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1791394440869,
+      "tag": "0018_device_sync",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1791395419779,
+      "tag": "0019_sync_peer_connects",
+      "breakpoints": true
     }
   ]
 }

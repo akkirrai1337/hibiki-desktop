@@ -26,6 +26,7 @@ export interface HibikiFilesPlugin {
   list(options: { path: string }): Promise<{ entries: string[] }>;
   readText(options: { path: string }): Promise<{ value: string }>;
   writeText(options: { path: string; value: string }): Promise<void>;
+  appendText(options: { path: string; value: string }): Promise<void>;
   readBytes(options: { path: string }): Promise<{ base64: string }>;
   writeBytes(options: { path: string; base64: string }): Promise<void>;
   mkdir(options: { path: string }): Promise<void>;
@@ -92,6 +93,8 @@ export interface HibikiAppPlugin {
   addListener(event: "deepLink", listener: (event: { url: string }) => void): Promise<PluginListenerHandle>;
   /** The hibiki:// link the app was started with, once. */
   takeLaunchUrl(): Promise<{ url: string | null }>;
+  /** Starts, updates or (inactive) stops the foreground service that keeps downloads running in the background. */
+  setBackgroundWork(options: { active: boolean; title?: string; text?: string; progress?: number }): Promise<void>;
   /** Whether the system lets the app start installing packages (always true before Android 8). */
   canInstallPackages(): Promise<{ granted: boolean }>;
   /** The "install unknown apps" screen for this app; answers with the setting once the person is back. */
@@ -132,7 +135,23 @@ export interface HibikiApkPlugin {
   writeSetting(options: { sourceId: string; key: string; value: string | null }): Promise<void>;
 }
 
+/** Device sync's transport (android/.../HibikiSyncPlugin.java). */
+export interface HibikiSyncPlugin {
+  request(options: { host: string; port: number; message: string; timeoutMs: number }): Promise<{ message: string }>;
+  discover(options: { timeoutMs: number; port: number; probe: string }): Promise<{ devices: Array<{ deviceId: string; name: string; host: string; port: number; kind: "computer" | "phone" }> }>;
+  deviceName(): Promise<{ name: string }>;
+  /** Listens for other devices while the app is on screen; each request arrives as a "request" event. */
+  startServer(options: { port: number; discoveryPort: number; probe: string; answer: string }): Promise<void>;
+  stopServer(): Promise<void>;
+  /** The answer to a "request" event. */
+  respond(options: { id: string; message: string }): Promise<void>;
+  addListener(event: "request", listener: (event: { id: string; message: string; address: string }) => void): Promise<PluginListenerHandle>;
+  /** Trouble on the socket side, for the app log. */
+  addListener(event: "log", listener: (event: { level: "debug" | "info" | "warn" | "error"; message: string }) => void): Promise<PluginListenerHandle>;
+}
+
 export const HibikiApp = registerPlugin<HibikiAppPlugin>("HibikiApp");
+export const HibikiSync = registerPlugin<HibikiSyncPlugin>("HibikiSync");
 export const HibikiApk = registerPlugin<HibikiApkPlugin>("HibikiApk");
 export const HibikiNet = registerPlugin<HibikiNetPlugin>("HibikiNet");
 export const HibikiResolver = registerPlugin<HibikiResolverPlugin>("HibikiResolver");

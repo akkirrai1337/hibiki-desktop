@@ -23,17 +23,17 @@ export interface LogEntry {
 const MAX_ENTRIES = 5000;
 
 const entries: LogEntry[] = [];
-let sink: ((line: string) => void) | null = null;
+let sink: ((line: string, level: LogLevel) => void) | null = null;
 let minLevel: LogLevel = "debug";
 
 const LEVEL_ORDER: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3 };
 
-function formatEntry(entry: LogEntry): string {
+export function formatEntry(entry: LogEntry): string {
   return `${new Date(entry.time).toISOString()} ${entry.level.toUpperCase().padEnd(5)} [${entry.scope}] ${entry.message}`;
 }
 
 /** Where every formatted line goes besides the in-memory buffer, e.g. a log file. */
-export function setLogSink(next: ((line: string) => void) | null): void {
+export function setLogSink(next: ((line: string, level: LogLevel) => void) | null): void {
   sink = next;
 }
 
@@ -47,7 +47,7 @@ export function log(level: LogLevel, scope: string, message: string): void {
   entries.push(entry);
   if (entries.length > MAX_ENTRIES) entries.splice(0, entries.length - MAX_ENTRIES);
   const line = formatEntry(entry);
-  sink?.(line);
+  sink?.(line, level);
   if (level === "error") console.error(line);
   else if (level === "warn") console.warn(line);
 }

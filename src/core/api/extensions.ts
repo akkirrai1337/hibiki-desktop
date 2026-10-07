@@ -28,8 +28,9 @@ async function installResolverDependencies(dependencyIds: string[], originUrl: s
     try {
       const { manifestJson, jsPayload } = await fetchExtensionFiles(resolverExtension);
       await runtime.installResolver(id, manifestJson, jsPayload);
+      logger.info("sources", `resolver ${id} ${resolverExtension.version} installed`);
     } catch (error) {
-      console.warn(`Failed to install resolver "${id}":`, error);
+      logger.warn("sources", `resolver ${id} could not be installed: ${errorText(error)}`);
     }
   }
 }
@@ -92,24 +93,23 @@ function notifyChanged(): void {
   getPlatform().events.emit(IPC.sourcesChanged);
 }
 
+const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
 /** Installing, updating and removing sources: the parts of `window.hibiki.sources` that change
  * what is installed. */
 export function createExtensionsApi(runtime: ExtensionRuntime): Pick<HibikiApi["sources"], "install" | "uninstall" | "installedVersions"> {
   return {
     async install(extension: MarketplaceExtension, originUrl: string): Promise<SourceInfo[]> {
-      if (extension.apkPackage) {
-        const port = getPlatform().apkSources;
-        if (!port) throw new Error("APK sources are only supported on Android");
-        await port.install(extension.manifestUrl, extension.apkPackage);
-        await runtime.reload();
-        notifyChanged();
-        return runtime.list();
+      const previous = runtime.installedVersions().get(extension.id);
+      const what = `${extension.id} ${previous ? `${previous} -> ` : ""}${extension.version}${extension.apkPackage ? " (APK)" : ""}`;
+      try {
+        const sources = await installExtension(extension, originUrl);
+        logger.info("sources", `${previous ? "updated" : "installed"} ${what}`);
+        return sources;
+      } catch (error) {
+        logger.warn("sources", `could not ${previous ? "update" : "install"} ${what}: ${errorText(error)}`);
+        throw error;
       }
-      const { manifestJson, jsPayload } = await fetchExtensionFiles(extension);
-      await runtime.install(extension.id, manifestJson, jsPayload, originUrl);
-      await installResolverDependencies(extension.resolverDependencies, originUrl, runtime);
-      notifyChanged();
-      return runtime.list();
     },
 
     // Both halves read from the same runtime state in the same tick, so they cannot disagree.
@@ -119,17 +119,39 @@ export function createExtensionsApi(runtime: ExtensionRuntime): Pick<HibikiApi["
     }),
 
     async uninstall(id: string): Promise<SourceInfo[]> {
-      const apkPackage = isApkSource(id) ? runtime.apkPackageOf(id) : null;
-      if (apkPackage) {
-        // The whole package goes: its other sources (a mirror, say) were installed with it.
-        await getPlatform().apkSources?.uninstall(apkPackage);
-        await runtime.reload();
-        notifyChanged();
-        return runtime.list();
-      }
-      await runtime.uninstall(id);
-      notifyChanged();
-      return runtime.list();
+      const sources = await uninstallExtension(id);
+      logger.info("sources", `removed ${id}`);
+      return sources;
     },
   };
+
+  async function installExtension(extension: MarketplaceExtension, originUrl: string): Promise<SourceInfo[]> {
+    if (extension.apkPackage) {
+      const port = getPlatform().apkSources;
+      if (!port) throw new Error("APK sources are only supported on Android");
+      await port.install(extension.manifestUrl, extension.apkPackage);
+      await runtime.reload();
+      notifyChanged();
+      return runtime.list();
+    }
+    const { manifestJson, jsPayload } = await fetchExtensionFiles(extension);
+    await runtime.install(extension.id, manifestJson, jsPayload, originUrl);
+    await installResolverDependencies(extension.resolverDependencies, originUrl, runtime);
+    notifyChanged();
+    return runtime.list();
+  }
+
+  async function uninstallExtension(id: string): Promise<SourceInfo[]> {
+    const apkPackage = isApkSource(id) ? runtime.apkPackageOf(id) : null;
+    if (apkPackage) {
+      // The whole package goes: its other sources (a mirror, say) were installed with it.
+      await getPlatform().apkSources?.uninstall(apkPackage);
+      await runtime.reload();
+      notifyChanged();
+      return runtime.list();
+    }
+    await runtime.uninstall(id);
+    notifyChanged();
+    return runtime.list();
+  }
 }

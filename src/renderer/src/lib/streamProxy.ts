@@ -6,7 +6,7 @@ import { hibiki } from "./hibiki";
 
 /** The URL a request for `url` should actually go to under the playback `sessionId`. */
 export function streamRequestUrl(sessionId: string, url: string): string {
-  if (!hibiki.player.streamUrl || !/^https?:/i.test(url)) return url;
+  if (!hibiki.player.streamUrl || !/^https?:/i.test(url) || url.startsWith(`${location.origin}/`)) return url;
   return hibiki.player.streamUrl(sessionId, url);
 }
 

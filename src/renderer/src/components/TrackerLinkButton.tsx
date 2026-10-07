@@ -10,6 +10,7 @@ import { TRACKING_KEY, isTracking, useTrackerAccount } from "@/lib/tracking";
 import { BottomSheet } from "@/components/BottomSheet";
 import { Modal } from "@/components/Modal";
 import { cn } from "@/lib/cn";
+import { AniListLogo } from "@/components/AniListLogo";
 
 /**
  * Where this title stands on AniList, next to the rating: its status and progress there, or a way
@@ -59,7 +60,7 @@ export function TrackerLinkButton({ sourceId, animeId, searchName, inLibrary }: 
             : "border-border bg-text/[.05] text-muted hover:bg-text/[.09] mobile:border-text/15 mobile:bg-text/[.09] mobile:text-text/85",
         )}
       >
-        {data ? <span className="text-[11px] font-black tracking-tight mobile:text-[10px]">AL</span> : <Link2 className="h-[18px] w-[18px] mobile:h-3.5 mobile:w-3.5" strokeWidth={2} />}
+        {data ? <AniListLogo className="h-4 w-4 shrink-0 mobile:h-3.5 mobile:w-3.5" /> : <Link2 className="h-[18px] w-[18px] mobile:h-3.5 mobile:w-3.5" strokeWidth={2} />}
         <span className="max-w-[16rem] truncate">{label}</span>
       </button>
       {isMobile ? (

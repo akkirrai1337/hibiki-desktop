@@ -1,4 +1,5 @@
 import { app, shell, type BrowserWindow } from "electron";
+import { electronSyncTransport } from "./syncTransport";
 import type { Platform } from "../types";
 import { electronBrowser } from "./browser";
 import { electronDb } from "./db";
@@ -46,5 +47,7 @@ export function createElectronPlatform(getWindow: () => BrowserWindow | null): P
       },
     },
     extensionHost: new ElectronExtensionHost(),
+    // Reaching another computer for device sync; this one also listens (main/sync.ts).
+    syncTransport: electronSyncTransport,
   };
 }

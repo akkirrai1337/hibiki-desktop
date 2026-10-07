@@ -100,6 +100,17 @@ public class HibikiFilesPlugin extends Plugin {
         });
     }
 
+    /** Adds to the end of a file, creating it - the log, which grows a line at a time. */
+    @PluginMethod
+    public void appendText(PluginCall call) {
+        io(call, c -> {
+            try (FileOutputStream out = new FileOutputStream(file(c, "path"), true)) {
+                out.write(c.getString("value", "").getBytes(StandardCharsets.UTF_8));
+            }
+            c.resolve();
+        });
+    }
+
     @PluginMethod
     public void readBytes(PluginCall call) {
         io(call, c -> {

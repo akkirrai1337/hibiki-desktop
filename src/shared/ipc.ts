@@ -12,6 +12,7 @@ export const IPC = {
   sourcePlayerLinks: "source:playerLinks",
   sourceResolvePlayerLink: "source:resolvePlayerLink",
   sourceFilterCatalog: "source:filterCatalog",
+  sourceRecommendations: "source:recommendations",
 
   // Account, and what an account unlocks. Each is answered only by sources that declare the
   // matching capability - see SourceCapability.
@@ -133,6 +134,16 @@ export const IPC = {
   trackingChanged: "tracking:changed",
   // Pushed backend -> renderer while an import runs, same idea as downloadsProgress.
   trackingImportProgress: "tracking:importProgress",
+
+  syncDevices: "sync:devices",
+  syncRemove: "sync:remove",
+  syncStartPairing: "sync:startPairing",
+  syncStopPairing: "sync:stopPairing",
+  syncDiscover: "sync:discover",
+  syncPair: "sync:pair",
+  syncNow: "sync:now",
+  // Pushed main -> renderer: paired devices changed, or a sync brought data in.
+  syncChanged: "sync:changed",
 
   updatesCheck: "updates:check",
   updatesDownloadAndInstall: "updates:downloadAndInstall",

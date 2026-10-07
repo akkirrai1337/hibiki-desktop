@@ -8,7 +8,7 @@
 // The interfaces grow as Phase 2 moves modules into the shared core: each extraction replaces a
 // direct electron/node import with one of these ports, and adds what that module turns out to need.
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
-import type { PlayerLink, SourceInfo } from "@shared/types";
+import type { PlayerLink, SourceInfo, SubtitleTrack } from "@shared/types";
 import type * as schema from "../core/db/schema";
 
 export type PlatformKind = "electron" | "android";
@@ -155,6 +155,8 @@ export interface ResolvedStream {
   quality: string | null;
   headers: Record<string, string>;
   segments: [];
+  /** Tracks the resolver reported on the embed page, with the headers to fetch them with. */
+  subtitles?: SubtitleTrack[];
 }
 
 export interface HarvestedCookie {
@@ -233,6 +235,17 @@ export interface Platform {
   apkSources?: ApkSourcesPort;
   /** Installing an update of the app itself, where the platform does it in-app (Android). */
   appInstaller?: AppInstallerPort;
+  /** Reaching a computer on the local network for device sync (Android; the computer listens instead). */
+  syncTransport?: SyncTransportPort;
+}
+
+export interface SyncTransportPort {
+  /** Sends one framed message (core/sync/protocol.ts) to host:port and resolves the answer. */
+  request(host: string, port: number, message: string, timeoutMs: number): Promise<string>;
+  /** Broadcasts the discovery probe and collects the answers that arrive within the time. */
+  discover(timeoutMs: number): Promise<Array<{ deviceId: string; name: string; host: string; port: number; kind: "computer" | "phone" }>>;
+  /** What this device is called, as the computer will list it. */
+  deviceName(): Promise<string>;
 }
 
 export interface AppInstallerPort {

@@ -1,6 +1,7 @@
 import type { HibikiApi } from "@shared/hibikiApi";
 import { IPC } from "@shared/ipc";
-import type { DownloadProgress, DownloadRequest, PlayerLink } from "@shared/types";
+import { subtitleFormatFromUrl, toVtt } from "@shared/subtitles";
+import type { DownloadedSubtitle, DownloadProgress, DownloadRequest, PlayerLink } from "@shared/types";
 import type { ExtensionRuntime } from "../extensions/runtime";
 import {
   cacheAnime,
@@ -10,6 +11,7 @@ import {
   listDownloadedEpisodes,
   recordDownloadedEpisode,
 } from "../offlineCache";
+import { logger } from "../logger";
 import { getPlatform } from "../platform";
 
 // Same ordering as the watch page's own selectPlayerLink (see the route file) - a direct,
@@ -17,14 +19,17 @@ import { getPlatform } from "../platform";
 // saved to disk from here.
 const LINK_TYPE_PRIORITY: Record<string, number> = { DIRECT_HLS: 0, DIRECT_MP4: 0, DIRECT_DASH: 1, EMBED: 2 };
 
-function selectPlayerLink(links: PlayerLink[], preferredQuality?: string | null): PlayerLink | undefined {
+function selectPlayerLink(links: PlayerLink[], preferredQuality?: string | null, preferredPlayer?: string | null): PlayerLink | undefined {
   if (links.length === 0) return undefined;
   const sorted = [...links].sort((a, b) => (LINK_TYPE_PRIORITY[a.type] ?? 0) - (LINK_TYPE_PRIORITY[b.type] ?? 0));
   // Only ever a preference, not a hard requirement - a quality the picker offered when the dialog
   // was open (e.g. a source whose availability shifts between requests) not being present in this
   // fetch just falls back to the same type-priority pick as if nothing had been requested.
   if (preferredQuality) {
-    const match = sorted.find((l) => l.quality === preferredQuality);
+    // The exact pick first (two players can both offer a "1080p"), then the quality from any player.
+    const match =
+      (preferredPlayer ? sorted.find((l) => l.quality === preferredQuality && l.playerName === preferredPlayer) : undefined) ??
+      sorted.find((l) => l.quality === preferredQuality);
     if (match) return match;
   }
   return sorted[0];
@@ -188,16 +193,54 @@ async function downloadDirect(state: DownloadState, onProgress: (percent: number
   });
 }
 
+/** A file-name-safe tag for a track: its language, else its label. */
+function subtitleTag(track: { label?: string | null; language?: string | null }): string {
+  const raw = (track.language || track.label || "sub").toLowerCase();
+  return raw.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 24) || "sub";
+}
+
+/**
+ * Every subtitle track of the episode, saved beside the video as WebVTT - the one format the
+ * player's <track> reads, so nothing needs converting at playback. Best-effort: a track that fails
+ * leaves the episode downloaded without it, and is named in the log.
+ */
+async function downloadSubtitles(state: DownloadState): Promise<DownloadedSubtitle[]> {
+  const tracks = (state.link.subtitles ?? []).filter((track, index, all) => track.url && all.findIndex((other) => other.url === track.url) === index);
+  if (tracks.length === 0) return [];
+  const { files } = getPlatform();
+  const base = state.outFile.replace(/\.[^./\\]+$/, "");
+  const label = jobLabel(state.request);
+  const saved: DownloadedSubtitle[] = [];
+  for (const [index, track] of tracks.entries()) {
+    const name = track.label ?? track.language ?? `#${index + 1}`;
+    try {
+      const text = await fetchText(track.url, track.headers ?? state.link.headers, state.controller.signal);
+      const format = subtitleFormatFromUrl(track.url);
+      // An extension-less file is read by what it holds, not guessed from its name.
+      const vtt = format !== "unknown" ? toVtt(format, text) : /^\uFEFF?WEBVTT/.test(text) ? text : /\[Events\]/i.test(text) ? toVtt("ass", text) : /-->/.test(text) ? toVtt("srt", text) : null;
+      if (!vtt) throw new Error("not a subtitle file");
+      const filePath = `${base}.${index + 1}.${subtitleTag(track)}.vtt`;
+      await files.writeText(filePath, vtt);
+      saved.push({ filePath, label: name, language: track.language ?? null });
+    } catch (error) {
+      if (isAbortError(error)) throw error;
+      logger.warn("download", `${label}: subtitle "${name}" not saved: ${errorText(error)}`);
+    }
+  }
+  if (saved.length > 0) logger.info("download", `${label}: ${saved.length}/${tracks.length} subtitle track(s) saved`);
+  return saved;
+}
+
 /** Everything a downloaded episode's title page needs to still work offline: the episode row
  * itself, plus (best-effort - a hiccup here shouldn't fail a download that otherwise completed
  * fine) a snapshot of the anime's own detail and its playback groups, for whenever the source
  * itself isn't reachable later (see sources.ts's own fallback-to-cache). */
-async function cacheForOffline(state: DownloadState): Promise<void> {
+async function cacheForOffline(state: DownloadState, subtitles: DownloadedSubtitle[]): Promise<void> {
   const { sourceId, animeId, groupId, episodeId, episodeNumber, episodeLabel } = state.request;
   try {
     const fileStat = await getPlatform().files.stat(state.outFile);
     if (!fileStat) throw new Error("downloaded file is missing");
-    await recordDownloadedEpisode({ sourceId, animeId, groupId, episodeId, episodeNumber, episodeLabel, filePath: state.outFile, fileSizeBytes: fileStat.size, durationMs: state.durationMs ?? null, quality: state.link.quality ?? null });
+    await recordDownloadedEpisode({ sourceId, animeId, groupId, episodeId, episodeNumber, episodeLabel, filePath: state.outFile, fileSizeBytes: fileStat.size, durationMs: state.durationMs ?? null, quality: state.link.quality ?? null, subtitles });
     const [anime, groups] = await Promise.all([state.runtime.getById(sourceId, animeId), state.runtime.getPlaybackGroups(sourceId, animeId)]);
     await cacheAnime(sourceId, animeId, anime);
     await cachePlaybackGroups(sourceId, animeId, groups);
@@ -224,6 +267,13 @@ function jobEpisodeId(job: QueuedJob): string {
   return job.kind === "start" ? job.request.episodeId : job.episodeId;
 }
 
+/** How a download is named in the log: which title and episode, not its opaque ids. */
+function jobLabel(request: DownloadRequest): string {
+  return `${request.sourceId} "${request.animeTitle}" ${request.episodeLabel}`;
+}
+
+const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
 /** The episode-download part of `window.hibiki`. Progress (including the final
  * done/error/paused/cancelled) goes out as `downloads:progress` events. */
 export function createDownloadsApi(runtime: ExtensionRuntime): Omit<HibikiApi["downloads"], "onProgress"> {
@@ -234,7 +284,11 @@ export function createDownloadsApi(runtime: ExtensionRuntime): Omit<HibikiApi["d
 
   async function runDownload(state: DownloadState): Promise<void> {
     const episodeId = state.request.episodeId;
+    const label = jobLabel(state.request);
+    const startedAt = Date.now();
     state.running = true;
+    const resuming = state.nextSegmentIndex > 0 || state.bytesReceived > 0;
+    logger.info("download", `${label}: ${resuming ? `resumed at ${state.lastPercent}%` : "started"} (${state.link.type}, ${state.link.quality ?? "?"}, ${state.link.playerName ?? "?"})`);
     try {
       send({ episodeId, status: "downloading", percent: state.lastPercent });
       const onProgress = (percent: number) => {
@@ -244,11 +298,15 @@ export function createDownloadsApi(runtime: ExtensionRuntime): Omit<HibikiApi["d
       if (state.link.type === "DIRECT_HLS") await downloadHls(state, onProgress);
       else await downloadDirect(state, onProgress);
 
+      const subtitles = await downloadSubtitles(state);
       downloads.delete(episodeId);
-      await cacheForOffline(state);
+      await cacheForOffline(state, subtitles);
+      const size = (await getPlatform().files.stat(state.outFile))?.size ?? 0;
+      logger.info("download", `${label}: done in ${Math.round((Date.now() - startedAt) / 1000)}s, ${(size / 1024 / 1024).toFixed(1)} MB`);
       send({ episodeId, status: "done", filePath: state.outFile });
     } catch (err) {
       if (!isAbortError(err)) {
+        logger.warn("download", `${label}: failed at ${state.lastPercent}%: ${errorText(err)}`);
         downloads.delete(episodeId);
         send({ episodeId, status: "error", message: err instanceof Error ? err.message : String(err) });
         return;
@@ -258,8 +316,10 @@ export function createDownloadsApi(runtime: ExtensionRuntime): Omit<HibikiApi["d
         // A half-written file left behind by a cancelled download isn't useful to anyone - clean it
         // up rather than leaving a truncated video sitting in the downloads folder.
         await removeQuietly(state.outFile);
+        logger.info("download", `${label}: cancelled at ${state.lastPercent}%`);
         send({ episodeId, status: "cancelled" });
       } else {
+        logger.info("download", `${label}: paused at ${state.lastPercent}%`);
         // Just paused - the entry (and the partial file on disk) stays put for resume to continue.
         // `percent: state.lastPercent` so the chip keeps showing where it actually left off instead
         // of resetting to 0 (DownloadProgress.percent just wouldn't be there at all otherwise).
@@ -278,8 +338,10 @@ export function createDownloadsApi(runtime: ExtensionRuntime): Omit<HibikiApi["d
     // instead of a normal "error" status on the episode's own card.
     try {
       const links = await runtime.getPlayerLinks(request.sourceId, request.animeId, request.groupId, request.episodeId);
-      const link = selectPlayerLink(links, request.quality);
+      const link = selectPlayerLink(links, request.quality, request.playerName);
       if (!link || link.type === "EMBED" || link.type === "DIRECT_DASH" || link.audioUrl) {
+        const why = !link ? `no link among ${links.length}` : link.audioUrl ? "separate audio track" : link.type;
+        logger.info("download", `${jobLabel(request)}: can't be downloaded (${why})`);
         send({ episodeId: request.episodeId, status: "unsupported" });
         return;
       }
@@ -294,7 +356,8 @@ export function createDownloadsApi(runtime: ExtensionRuntime): Omit<HibikiApi["d
       downloads.set(request.episodeId, state);
       await runDownload(state);
     } catch (err) {
-      send({ episodeId: request.episodeId, status: "error", message: err instanceof Error ? err.message : String(err) });
+      logger.warn("download", `${jobLabel(request)}: could not start: ${errorText(err)}`);
+      send({ episodeId: request.episodeId, status: "error", message: errorText(err) });
     }
   }
 
@@ -381,7 +444,10 @@ export function createDownloadsApi(runtime: ExtensionRuntime): Omit<HibikiApi["d
     async remove(sourceId: string, animeId: string, episodeId: string): Promise<void> {
       const row = await getDownloadedEpisode(sourceId, animeId, episodeId);
       await deleteDownloadedEpisodeRow(sourceId, animeId, episodeId);
-      if (row) await removeQuietly(row.filePath);
+      if (row) {
+        await removeQuietly(row.filePath);
+        await Promise.all(row.subtitles.map((subtitle) => removeQuietly(subtitle.filePath)));
+      }
     },
   };
 }

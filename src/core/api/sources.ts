@@ -1,6 +1,8 @@
 import type { HibikiApi } from "@shared/hibikiApi";
 import type { AnimeTitle, PlaybackGroup } from "@shared/types";
 import type { ExtensionRuntime } from "../extensions/runtime";
+import { logger } from "../logger";
+import { recommendationsForSource } from "../recommendations/forSource";
 import { cacheAnime, cachePlaybackGroups, getCachedAnime, getCachedAnimeMany, getCachedPlaybackGroups, getCachedPlaybackGroupsEntry } from "../offlineCache";
 
 /** Everything `window.hibiki.sources` asks of an installed source: catalog, playback, account. */
@@ -51,6 +53,7 @@ export function createSourcesApi(runtime: ExtensionRuntime): SourcesApi {
     playerLinks: (sourceId, titleId, groupId, episodeId, preference) => runtime.getPlayerLinks(sourceId, titleId, groupId, episodeId, preference),
     resolvePlayerLink: (link) => runtime.resolvePlayerLink(link),
     filterCatalog: (sourceId) => runtime.getFilterCatalog(sourceId),
+    recommendations: (sourceId, sort) => recommendationsForSource(runtime, sourceId, sort),
 
     // Straight through to the source. The password is a parameter of this one call and is written
     // nowhere: whatever the source needs in order to prove itself again later, it puts in its own
@@ -80,7 +83,15 @@ export function createSourcesApi(runtime: ExtensionRuntime): SourcesApi {
     // save and has no business knowing which sources report anything.
     async reportPlayback(sourceId, request) {
       if (!(await runtime.isActivitySyncEnabled(sourceId))) return false;
-      return runtime.reportPlayback(sourceId, request);
+      const label = `${sourceId} video ${request.videoId} at ${request.positionSeconds}/${request.durationSeconds}s, ${request.watchedSeconds.length}s watched`;
+      try {
+        const accepted = await runtime.reportPlayback(sourceId, request);
+        logger.info("account", `playback reported: ${label}${accepted ? "" : " (not accepted)"}`);
+        return accepted;
+      } catch (error) {
+        logger.warn("account", `playback not reported: ${label}: ${error instanceof Error ? error.message : String(error)}`);
+        throw error;
+      }
     },
     async pingOnline(sourceId) {
       if (!(await runtime.isActivitySyncEnabled(sourceId))) return false;

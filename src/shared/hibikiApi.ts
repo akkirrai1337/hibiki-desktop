@@ -10,6 +10,10 @@ import type {
   DeepLinkWatchTarget,
   DiscordPresence,
   DownloadedEpisode,
+  DownloadedEpisodeFile,
+  SourceRecommendations,
+  SyncCandidate,
+  SyncDevice,
   DownloadProgress,
   DownloadRequest,
   InstalledVersions,
@@ -74,6 +78,9 @@ export interface HibikiApi {
     playerLinks(sourceId: string, titleId: string, groupId: string, episodeId: string, preference?: PlayerLinkPreference): Promise<PlayerLink[]>;
     resolvePlayerLink(link: PlayerLink): Promise<PlayerLink[]>;
     filterCatalog(sourceId: string): Promise<SearchFilterCatalog>;
+    /** What to watch next on this source, from what was watched on it. `sort` is the order its genre
+     * searches use - the home screen's own. */
+    recommendations(sourceId: string, sort?: string): Promise<SourceRecommendations>;
     // Account, and what an account unlocks. Answered only by sources declaring the matching
     // capability - see SourceCapability.
     account: {
@@ -167,6 +174,26 @@ export interface HibikiApi {
     isMaximized(): Promise<boolean>;
     onMaximizedChanged(callback: (maximized: boolean) => void): () => void;
   };
+  /**
+   * Syncing the library, progress, ratings and xp between a computer and a phone on the same network
+   * (core/sync). The computer is the one that waits (pairing, answering); the phone finds it, pairs
+   * with its code and syncs. Each side only has its own half of the methods.
+   */
+  sync: {
+    devices(): Promise<SyncDevice[]>;
+    remove(deviceId: string): Promise<void>;
+    /** Something changed: the paired devices, or data a sync brought in. */
+    onChanged(callback: (what: "devices" | "data") => void): () => void;
+    /** Computer: open a pairing window and get the code to show. */
+    startPairing?(): Promise<{ code: string; expiresAt: number }>;
+    stopPairing?(): Promise<void>;
+    /** Computers running hibiki on this network (other than this one). */
+    discover?(): Promise<SyncCandidate[]>;
+    /** Pair with a found computer using its code. Rejects with a message ending in the error code ("bad-code"...). */
+    pair?(candidate: SyncCandidate, code: string): Promise<SyncDevice>;
+    /** Sync now with the computers this device reaches out to. */
+    syncNow?(): Promise<void>;
+  };
   updates: {
     check(): Promise<AppUpdate | null>;
     downloadAndInstall(update: AppUpdate): Promise<void>;
@@ -196,6 +223,11 @@ export interface HibikiApi {
     setSystemBars(options: { hidden?: boolean; style?: "light" | "dark" }): Promise<void>;
     keepAwake(on: boolean): Promise<void>;
     setOrientation(orientation: "landscape" | "portrait" | "auto"): Promise<void>;
+    /**
+     * Work that has to go on with the app in the background (downloads): shown as a notification,
+     * and the app kept alive while it runs. null ends it.
+     */
+    setBackgroundWork(work: { title: string; text?: string; progress?: number } | null): Promise<void>;
     /** Picture in picture - the player in a small window over other apps. Absent where unsupported. */
     pip?: {
       /** The player's state: the window's buttons and shape; enabled while a video is on screen. */
@@ -261,7 +293,10 @@ export interface HibikiApi {
     cancel(episodeId: string): Promise<void>;
     list(): Promise<DownloadedEpisode[]>;
     remove(sourceId: string, animeId: string, episodeId: string): Promise<void>;
-    getForEpisode(sourceId: string, animeId: string, episodeId: string): Promise<{ filePath: string; durationMs: number | null; quality: string | null } | null>;
+    getForEpisode(sourceId: string, animeId: string, episodeId: string): Promise<DownloadedEpisodeFile | null>;
+    /** Where the page loads a downloaded file from, where that is not the desktop's
+     * `hibiki-download:` scheme (Android: its local server). */
+    fileUrl?(filePath: string): string;
     onProgress(callback: (progress: DownloadProgress) => void): () => void;
   };
 }

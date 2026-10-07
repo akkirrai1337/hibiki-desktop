@@ -33,13 +33,18 @@ export function PosterGridSkeleton({ count = 12 }: { count?: number }) {
   return <PosterGrid>{Array.from({ length: count }).map((_, index) => <SkeletonCard key={index} />)}</PosterGrid>;
 }
 
+/** The phone's sideways row, loading: the same card slots the row will hold. */
+export function PosterRowSkeleton({ count = 4 }: { count?: number }) {
+  return <PosterRow>{Array.from({ length: count }).map((_, index) => <SkeletonCard key={index} />)}</PosterRow>;
+}
+
 // Matches AnimeCard's own poster/title/meta proportions so a grid mixing loaded cards and
 // still-loading slots doesn't visibly hitch when a skeleton flips over to the real thing.
 export function SkeletonCard() {
   return <div>
-    <div className="aspect-[2/3] animate-pulse rounded-xl bg-text/[.06]" />
-    <div className="mt-2.5 h-3.5 w-4/5 animate-pulse rounded bg-text/[.06]" />
-    <div className="mt-1.5 h-3 w-2/5 animate-pulse rounded bg-text/[.05]" />
+    <div className="skeleton aspect-[2/3] rounded-xl" />
+    <div className="skeleton mt-2.5 h-3.5 w-4/5 rounded" />
+    <div className="skeleton mt-1.5 h-3 w-2/5 rounded" />
   </div>;
 }
 

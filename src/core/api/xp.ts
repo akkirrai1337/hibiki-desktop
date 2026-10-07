@@ -3,6 +3,7 @@ import type { HibikiApi } from "@shared/hibikiApi";
 import type { XpEvent } from "@shared/types";
 import { xpEvents } from "../db/schema";
 import { getPlatform } from "../platform";
+import { requestSync } from "../sync/client";
 
 const getDb = () => getPlatform().db.get();
 
@@ -18,6 +19,7 @@ export function createXpApi(): HibikiApi["xp"] {
 
     async record(kind: string, xp: number, createdAt: number): Promise<void> {
       await getDb().insert(xpEvents).values({ kind, xp, createdAt }).run();
+      requestSync();
     },
 
     // Only ever clears this log - achievement/level progress is derived from watch time and
@@ -25,6 +27,7 @@ export function createXpApi(): HibikiApi["xp"] {
     // XP or levels away, just the record of how they were earned.
     async clear(): Promise<void> {
       await getDb().delete(xpEvents).run();
+      requestSync();
     },
   };
 }

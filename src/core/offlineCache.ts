@@ -1,5 +1,5 @@
 import { eq, and, or } from "drizzle-orm";
-import type { AnimeTitle, CachedAnimeEntry, CachedPlaybackGroupsEntry, DownloadedEpisode, PlaybackGroup } from "@shared/types";
+import type { AnimeTitle, CachedAnimeEntry, CachedPlaybackGroupsEntry, DownloadedEpisode, DownloadedEpisodeFile, DownloadedSubtitle, PlaybackGroup } from "@shared/types";
 import { getPlatform } from "./platform";
 import { cachedAnime, cachedPlaybackGroups, downloadedEpisodes } from "./db/schema";
 
@@ -103,10 +103,12 @@ export async function recordDownloadedEpisode(entry: {
   fileSizeBytes: number;
   durationMs: number | null;
   quality: string | null;
+  subtitles: DownloadedSubtitle[];
 }): Promise<void> {
+  const subtitles = entry.subtitles.length > 0 ? JSON.stringify(entry.subtitles) : null;
   await getDb()
     .insert(downloadedEpisodes)
-    .values({ ...entry, downloadedAt: Date.now() })
+    .values({ ...entry, subtitles, downloadedAt: Date.now() })
     .onConflictDoUpdate({
       target: [downloadedEpisodes.sourceId, downloadedEpisodes.animeId, downloadedEpisodes.episodeId],
       set: {
@@ -117,6 +119,7 @@ export async function recordDownloadedEpisode(entry: {
         fileSizeBytes: entry.fileSizeBytes,
         durationMs: entry.durationMs,
         quality: entry.quality,
+        subtitles,
         downloadedAt: Date.now(),
       },
     })
@@ -154,13 +157,25 @@ export async function listDownloadedEpisodes(): Promise<DownloadedEpisode[]> {
   });
 }
 
-export async function getDownloadedEpisode(sourceId: string, animeId: string, episodeId: string): Promise<{ filePath: string; durationMs: number | null; quality: string | null } | null> {
+/** The stored subtitle list; anything unreadable (a row written by hand, a future shape) is none. */
+function parseSubtitles(raw: string | null): DownloadedSubtitle[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((entry): entry is DownloadedSubtitle => typeof entry?.filePath === "string" && typeof entry?.label === "string");
+  } catch {
+    return [];
+  }
+}
+
+export async function getDownloadedEpisode(sourceId: string, animeId: string, episodeId: string): Promise<DownloadedEpisodeFile | null> {
   const row = await getDb()
-    .select({ filePath: downloadedEpisodes.filePath, durationMs: downloadedEpisodes.durationMs, quality: downloadedEpisodes.quality })
+    .select({ filePath: downloadedEpisodes.filePath, durationMs: downloadedEpisodes.durationMs, quality: downloadedEpisodes.quality, subtitles: downloadedEpisodes.subtitles })
     .from(downloadedEpisodes)
     .where(and(eq(downloadedEpisodes.sourceId, sourceId), eq(downloadedEpisodes.animeId, animeId), eq(downloadedEpisodes.episodeId, episodeId)))
     .get();
-  return row ?? null;
+  return row ? { ...row, subtitles: parseSubtitles(row.subtitles) } : null;
 }
 
 export async function deleteDownloadedEpisodeRow(sourceId: string, animeId: string, episodeId: string): Promise<void> {

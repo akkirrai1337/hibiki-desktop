@@ -112,6 +112,7 @@ async function activeToken(): Promise<string | null> {
   if (!session.accessToken || session.needsSignIn) return null;
   if (session.expiresAt != null && session.expiresAt <= Date.now()) {
     await saveSession({ ...session, needsSignIn: true });
+    logger.warn("tracking", "AniList token expired; sign-in needed");
     emitChanged();
     return null;
   }
@@ -145,6 +146,7 @@ export async function beginSignIn(): Promise<void> {
   if (!clientId) throw new Error("This build has no AniList client id");
   const session = await loadSession();
   await saveSession({ ...session, pendingSince: Date.now(), signInError: null });
+  logger.info("tracking", "AniList sign-in started in the browser");
   await getPlatform().app.openExternal(anilistAuthorizeUrl(clientId));
 }
 
@@ -158,6 +160,7 @@ export function isAniListRedirect(url: string): boolean {
 export async function completeSignIn(url: string): Promise<void> {
   const session = await loadSession();
   const redirect = parseAniListRedirect(url);
+  logger.info("tracking", `AniList sign-in redirect received (${redirect ? (redirect.ok ? "with a token" : "with an error") : "unreadable"})`);
   const fail = async (error: string) => {
     logger.warn("tracking", `AniList sign-in failed: ${error}`);
     await saveSession({ ...session, pendingSince: null, signInError: error });
@@ -192,6 +195,7 @@ export async function completeSignIn(url: string): Promise<void> {
 export async function signOut(): Promise<void> {
   // Links stay: they describe titles, not the account, and are right for whoever signs in next.
   await saveSession({});
+  logger.info("tracking", "AniList signed out");
   emitChanged();
 }
 
@@ -251,15 +255,27 @@ function comparableOf(anime: AnimeTitle): Comparable {
 async function ensureLink(token: string, sourceId: string, animeId: string, anime: AnimeTitle | null): Promise<LinkRow | null> {
   const existing = await getLinkRow(sourceId, animeId);
   if (existing?.remoteId != null) return existing;
+  const key = `${sourceId}/${animeId}`;
   // Unlinked by hand: that is an answer, not a gap to fill.
-  if (existing?.linkedBy === "user") return null;
-  if (existing && Date.now() - existing.checkedAt < RETRY_UNMATCHED_MS) return null;
+  if (existing?.linkedBy === "user") {
+    logger.debug("tracking", `${key}: unlinked by hand, not matching`);
+    return null;
+  }
+  if (existing && Date.now() - existing.checkedAt < RETRY_UNMATCHED_MS) {
+    logger.debug("tracking", `${key}: no match last time (${new Date(existing.checkedAt).toISOString()}), not searching again yet`);
+    return null;
+  }
 
   const known = anime && trackerNamesOf(anime).length > 0 ? anime : await knownAnime(sourceId, animeId);
-  if (!known) return null;
+  if (!known) {
+    logger.debug("tracking", `${key}: no names known to match by`);
+    return null;
+  }
   const wanted = comparableOf(known);
   const candidates: Array<{ key: number; comparable: Comparable; media: AniListMedia }> = [];
-  for (const query of searchQueriesFor(wanted.names, 2)) {
+  const queries = searchQueriesFor(wanted.names, 2);
+  logger.debug("tracking", `${key}: matching on AniList by ${JSON.stringify(queries)} (year ${wanted.year ?? "?"}, ${wanted.type ?? "?"})`);
+  for (const query of queries) {
     for (const media of await searchMedia(token, query, 8)) {
       candidates.push({ key: media.id, media, comparable: { names: aniListNames(media), year: aniListYear(media), type: anilistFormatToType(media.format) } });
     }
@@ -276,7 +292,9 @@ async function ensureLink(token: string, sourceId: string, animeId: string, anim
     checkedAt: Date.now(),
   };
   await writeLinkRow(row);
-  logger.info("tracking", media ? `${sourceId}/${animeId} linked to AniList ${media.id}` : `${sourceId}/${animeId}: no confident AniList match`);
+  logger.info("tracking", media
+    ? `${key} linked to AniList ${media.id} "${row.remoteTitle}"`
+    : `${key}: no confident AniList match among ${candidates.length} result(s)`);
   return media ? row : null;
 }
 
@@ -287,6 +305,7 @@ async function ensureLink(token: string, sourceId: string, animeId: string, anim
 const titleQueues = new Map<string, Promise<void>>();
 
 function serialize(key: string, work: () => Promise<void>): void {
+  if (titleQueues.has(key)) logger.debug("tracking", `${key}: queued behind the push in progress`);
   const previous = titleQueues.get(key) ?? Promise.resolve();
   const next = previous.then(work).catch(async (error: unknown) => {
     if (error instanceof AniListAuthError) await markSignInNeeded();
@@ -315,7 +334,10 @@ async function pushProgress(token: string, row: LinkRow, sourceId: string, anime
   if (watched <= 0) return;
   const { media, entry } = await getMediaWithEntry(token, row.remoteId);
   const change = progressChange(watched, entry, media.episodes ?? null);
-  if (!change) return;
+  if (!change) {
+    logger.debug("tracking", `${sourceId}/${animeId}: AniList ${row.remoteId} already at ep ${entry?.progress ?? 0} (${entry?.status ?? "not listed"}), watched here ${watched}; nothing to send`);
+    return;
+  }
   await saveEntry(token, row.remoteId, change);
   logger.info("tracking", `${sourceId}/${animeId} -> AniList ${row.remoteId} ep ${change.progress}${change.status ? ` (${change.status})` : ""}`);
 }
@@ -326,10 +348,16 @@ async function pushCategory(token: string, row: LinkRow, category: LibraryCatego
   const { media, entry, favourite } = await getMediaWithEntry(token, row.remoteId);
   const favouriteNext = favouriteChange(previous, category, favourite);
   // ToggleFavourite flips whatever is there, so it goes only when the answer differs.
-  if (favouriteNext !== null) await toggleFavourite(token, row.remoteId);
+  if (favouriteNext !== null) {
+    await toggleFavourite(token, row.remoteId);
+    logger.info("tracking", `${row.sourceId}/${row.animeId} -> AniList ${row.remoteId} favourite ${favouriteNext ? "on" : "off"}`);
+  }
   if (category === "favorite") return;
   const change = categoryChange(category, entry, media.episodes ?? null);
-  if (!change) return;
+  if (!change) {
+    logger.debug("tracking", `${row.sourceId}/${row.animeId}: "${category}" leaves AniList ${row.remoteId} as it is (${entry?.status ?? "not listed"})`);
+    return;
+  }
   await saveEntry(token, row.remoteId, change);
   logger.info("tracking", `${row.sourceId}/${row.animeId} -> AniList ${row.remoteId} ${change.status}`);
 }
@@ -341,9 +369,11 @@ async function pushCategory(token: string, row: LinkRow, category: LibraryCatego
 export function onLibraryChanged(change: { sourceId: string; animeId: string; anime: AnimeTitle | null; previous: LibraryCategory | null; category: LibraryCategory | null }): void {
   if (change.category === null || change.category === change.previous) return;
   const category = change.category;
-  serialize(`${change.sourceId}/${change.animeId}`, async () => {
+  const key = `${change.sourceId}/${change.animeId}`;
+  serialize(key, async () => {
     const token = await activeToken();
     if (!token) return;
+    logger.debug("tracking", `${key}: library ${change.previous ?? "none"} -> ${category}, pushing to AniList`);
     const row = await ensureLink(token, change.sourceId, change.animeId, change.anime);
     if (!row) return;
     await pushCategory(token, row, category, change.previous);
@@ -367,7 +397,10 @@ export function onEpisodeWatched(sourceId: string, animeId: string): void {
     const token = await activeToken();
     if (!token) return;
     const row = await getLinkRow(sourceId, animeId);
-    if (!row || !(await tracksProgress(row))) return;
+    if (!row || !(await tracksProgress(row))) {
+      logger.debug("tracking", `${sourceId}/${animeId}: episode watched; ${row?.remoteId != null ? "not in the library" : "not linked"}, AniList left alone`);
+      return;
+    }
     await pushProgress(token, row, sourceId, animeId);
     emitChanged();
   });
@@ -412,7 +445,9 @@ export function getLink(sourceId: string, animeId: string): Promise<TrackerLink 
     const row = inLibrary ? await ensureLink(token, sourceId, animeId, null) : await getLinkRow(sourceId, animeId);
     if (!row || row.remoteId == null) return null;
     const view = await linkView(token, row);
-    if (view && (await tracksProgress(row)) && (await watchedEpisodes(sourceId, animeId)) > (view.entry?.progress ?? 0)) {
+    const watched = view && (await tracksProgress(row)) ? await watchedEpisodes(sourceId, animeId) : 0;
+    if (view && watched > (view.entry?.progress ?? 0)) {
+      logger.info("tracking", `${sourceId}/${animeId}: AniList at ep ${view.entry?.progress ?? 0}, watched here ${watched}; catching up`);
       onEpisodeWatched(sourceId, animeId);
     }
     return view;
@@ -429,12 +464,14 @@ export function setLink(sourceId: string, animeId: string, mediaId: number | nul
   return guarded(async (token) => {
     if (mediaId == null) {
       await writeLinkRow({ tracker: TRACKER, sourceId, animeId, remoteId: null, remoteTitle: null, linkedBy: "user", checkedAt: Date.now() });
+      logger.info("tracking", `${sourceId}/${animeId}: unlinked from AniList by hand`);
       emitChanged();
       return null;
     }
     const { media } = await getMediaWithEntry(token, mediaId);
     const row: LinkRow = { tracker: TRACKER, sourceId, animeId, remoteId: media.id, remoteTitle: toTrackerMedia(media).title, linkedBy: "user", checkedAt: Date.now() };
     await writeLinkRow(row);
+    logger.info("tracking", `${sourceId}/${animeId}: linked by hand to AniList ${media.id} "${row.remoteTitle}"`);
     const local = await libraryRow(sourceId, animeId);
     if (local) await pushCategory(token, row, local.category as LibraryCategory);
     await pushProgress(token, row, sourceId, animeId);
@@ -469,6 +506,7 @@ export function setFavourite(sourceId: string, animeId: string, favourite: boole
     const current = await getMediaWithEntry(token, row.remoteId);
     // ToggleFavourite flips whatever is there, so it is sent only when the answer differs.
     if (current.favourite !== favourite) await toggleFavourite(token, row.remoteId);
+    logger.info("tracking", `${sourceId}/${animeId} -> AniList ${row.remoteId} favourite ${favourite ? "on" : "off"}${current.favourite === favourite ? " (already)" : ""}`);
     emitChanged();
     return linkView(token, row);
   }, null);
@@ -515,6 +553,8 @@ export async function importLibrary(runtime: ImportRuntime, sourceId: string, on
     .where(and(eq(trackerLinks.tracker, TRACKER), eq(trackerLinks.sourceId, sourceId)))
     .all();
   const animeIdByMedia = new Map(linked.filter((row) => row.remoteId != null).map((row) => [row.remoteId as number, row.animeId]));
+  logger.info("tracking", `AniList import into ${sourceId} started: ${items.length} list entries, ${wanted.length} to bring in, ${animeIdByMedia.size} already linked here`);
+  const startedAt = Date.now();
 
   const report: TrackerImportReport = { added: 0, updated: 0, unmatched: [], failed: 0 };
   let done = 0;
@@ -531,6 +571,7 @@ export async function importLibrary(runtime: ImportRuntime, sourceId: string, on
         const found = known ? { animeId: known, anime: await knownAnime(sourceId, known) } : await findOnSource(runtime, sourceId, item.media);
         if (!found) {
           report.unmatched.push(toTrackerMedia(item.media).title);
+          logger.debug("tracking", `import: AniList ${item.media.id} "${toTrackerMedia(item.media).title}" not found on ${sourceId}`);
         } else {
           const anime = found.anime ?? (await runtime.getById(sourceId, found.animeId));
           const existing = await libraryRow(sourceId, found.animeId);
@@ -561,7 +602,7 @@ export async function importLibrary(runtime: ImportRuntime, sourceId: string, on
   };
   await Promise.all(Array.from({ length: Math.min(IMPORT_CONCURRENCY, wanted.length) }, worker));
   report.unmatched.sort((a, b) => a.localeCompare(b));
-  logger.info("tracking", `AniList import into ${sourceId}: +${report.added} ~${report.updated} ?${report.unmatched.length} !${report.failed}`);
+  logger.info("tracking", `AniList import into ${sourceId} done in ${Math.round((Date.now() - startedAt) / 1000)}s: +${report.added} added, ~${report.updated} recategorised, ?${report.unmatched.length} not found, !${report.failed} failed`);
   emitChanged();
   return report;
 }

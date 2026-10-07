@@ -3,6 +3,7 @@ import type { HibikiApi } from "@shared/hibikiApi";
 import type { RepositoryFetchResult } from "@shared/types";
 import { sourceRepositories } from "../db/schema";
 import { DEFAULT_APK_REPOSITORY_URL, DEFAULT_REPOSITORY_URL, fetchRepositoryIndex, fetchRepositoryResult, isHttpsRepositoryUrl } from "../marketplace";
+import { logger } from "../logger";
 import { getPlatform } from "../platform";
 
 const getDb = () => getPlatform().db.get();
@@ -42,17 +43,30 @@ export function createRepositoriesApi(): Pick<HibikiApi["sources"], "repositorie
 
       async add(url: string): Promise<string[]> {
         if (!isHttpsRepositoryUrl(url)) throw new Error("Repository URL must use HTTPS");
-        await fetchRepositoryIndex(url); // validates it's actually a repository index before saving
+        try {
+          await fetchRepositoryIndex(url); // validates it's actually a repository index before saving
+        } catch (error) {
+          logger.warn("sources", `repository not added, ${url}: ${error instanceof Error ? error.message : String(error)}`);
+          throw error;
+        }
         await getDb().insert(sourceRepositories).values({ url, addedAt: Date.now() }).onConflictDoNothing().run();
+        logger.info("sources", `repository added: ${url}`);
         return listRepositoryUrls();
       },
 
       async remove(url: string): Promise<string[]> {
         await getDb().delete(sourceRepositories).where(eq(sourceRepositories.url, url)).run();
+        logger.info("sources", `repository removed: ${url}`);
         return listRepositoryUrls();
       },
     },
 
-    marketplace: (urls: string[]): Promise<RepositoryFetchResult[]> => Promise.all(urls.map(fetchRepositoryResult)),
+    marketplace: async (urls: string[]): Promise<RepositoryFetchResult[]> => {
+      const results = await Promise.all(urls.map(fetchRepositoryResult));
+      for (const result of results) {
+        if (!result.ok) logger.warn("sources", `repository unavailable, ${result.url}: ${result.error ?? "?"}`);
+      }
+      return results;
+    },
   };
 }

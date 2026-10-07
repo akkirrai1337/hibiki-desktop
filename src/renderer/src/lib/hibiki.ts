@@ -51,7 +51,9 @@ export function searchSource(sourceId: string, request: SearchRequest, signal?: 
 // as cross-origin from the renderer's own origin in dev, where it's served over http). The whole
 // absolute path travels as one url-encoded opaque segment, not real path segments, so it
 // round-trips exactly regardless of platform-specific separators/drive letters.
+// Android has no such scheme: its WebView serves app files from its own local server instead.
 export function downloadFileUrl(filePath: string): string {
+  if (hibiki.downloads.fileUrl) return hibiki.downloads.fileUrl(filePath);
   return `hibiki-download://local/${encodeURIComponent(filePath)}`;
 }
 

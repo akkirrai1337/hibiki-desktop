@@ -10,6 +10,7 @@ import type {
   DeepLinkWatchTarget,
   DiscordPresence,
   DownloadedEpisode,
+  DownloadedEpisodeFile,
   DownloadProgress,
   DownloadRequest,
   InstalledVersions,
@@ -20,6 +21,9 @@ import type {
   PlayerLinkPreference,
   RepositoryFetchResult,
   SearchFilterCatalog,
+  SourceRecommendations,
+  SyncCandidate,
+  SyncDevice,
   SearchRequest,
   SourceAccount,
   SourceComment,
@@ -61,6 +65,8 @@ const api: HibikiApi = {
       ipcRenderer.invoke(IPC.sourceResolvePlayerLink, link),
     filterCatalog: (sourceId: string): Promise<SearchFilterCatalog> =>
       ipcRenderer.invoke(IPC.sourceFilterCatalog, sourceId),
+    recommendations: (sourceId: string, sort?: string): Promise<SourceRecommendations> =>
+      ipcRenderer.invoke(IPC.sourceRecommendations, sourceId, sort),
     account: {
       get: (sourceId: string): Promise<SourceAccount | null> => ipcRenderer.invoke(IPC.sourceAccount, sourceId),
       login: (sourceId: string, credentials: { login: string; password: string }): Promise<SourceAccount> =>
@@ -117,6 +123,20 @@ const api: HibikiApi = {
       const listener = () => callback();
       ipcRenderer.on(IPC.sourcesChanged, listener);
       return () => ipcRenderer.removeListener(IPC.sourcesChanged, listener);
+    },
+  },
+  sync: {
+    devices: (): Promise<SyncDevice[]> => ipcRenderer.invoke(IPC.syncDevices),
+    remove: (deviceId: string): Promise<void> => ipcRenderer.invoke(IPC.syncRemove, deviceId),
+    startPairing: (): Promise<{ code: string; expiresAt: number }> => ipcRenderer.invoke(IPC.syncStartPairing),
+    stopPairing: (): Promise<void> => ipcRenderer.invoke(IPC.syncStopPairing),
+    discover: (): Promise<SyncCandidate[]> => ipcRenderer.invoke(IPC.syncDiscover),
+    pair: (candidate: SyncCandidate, code: string): Promise<SyncDevice> => ipcRenderer.invoke(IPC.syncPair, candidate, code),
+    syncNow: (): Promise<void> => ipcRenderer.invoke(IPC.syncNow),
+    onChanged: (callback: (what: "devices" | "data") => void): (() => void) => {
+      const listener = (_e: Electron.IpcRendererEvent, payload: { what: "devices" | "data" }) => callback(payload.what);
+      ipcRenderer.on(IPC.syncChanged, listener);
+      return () => ipcRenderer.removeListener(IPC.syncChanged, listener);
     },
   },
   tracking: {
@@ -288,7 +308,7 @@ const api: HibikiApi = {
     list: (): Promise<DownloadedEpisode[]> => ipcRenderer.invoke(IPC.downloadsList),
     remove: (sourceId: string, animeId: string, episodeId: string): Promise<void> =>
       ipcRenderer.invoke(IPC.downloadsRemove, sourceId, animeId, episodeId),
-    getForEpisode: (sourceId: string, animeId: string, episodeId: string): Promise<{ filePath: string; durationMs: number | null; quality: string | null } | null> =>
+    getForEpisode: (sourceId: string, animeId: string, episodeId: string): Promise<DownloadedEpisodeFile | null> =>
       ipcRenderer.invoke(IPC.downloadsGetForEpisode, sourceId, animeId, episodeId),
     // Returns an unsubscribe function - the one listener-based API in this bridge (everything
     // else here is a one-shot invoke/response), since a download's progress has to keep reaching

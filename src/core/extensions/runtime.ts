@@ -323,7 +323,6 @@ export class ExtensionRuntime {
     if (!options?.extensionsDir && !this.extensions.has(sourceId)) return Promise.reject(new Error(`Unknown source: ${sourceId}`));
 
     const startedAt = Date.now();
-    logger.debug("ext", `${sourceId}.${method}() start`);
 
     // Registered before anything is awaited: a search the renderer supersedes a keystroke later
     // must be cancellable from the moment it exists. A cancel that lands before the worker is
@@ -377,7 +376,6 @@ export class ExtensionRuntime {
     const port = getPlatform().apkSources;
     if (!port || !this.apkSources.some((source) => source.id === sourceId)) throw new Error(`Unknown source: ${sourceId}`);
     const startedAt = Date.now();
-    logger.debug("ext", `${sourceId}.${method}() start`);
     try {
       const raw = await port.call(sourceId, method, args);
       logger.debug("ext", `${sourceId}.${method}() ok in ${Date.now() - startedAt}ms`);
@@ -816,6 +814,7 @@ export class ExtensionRuntime {
         playerName: candidate.playerName ?? link.playerName,
         segments: candidate.segments && candidate.segments.length > 0 ? candidate.segments : link.segments,
         videoId: candidate.videoId ?? link.videoId,
+        subtitles: candidate.subtitles && candidate.subtitles.length > 0 ? candidate.subtitles : link.subtitles,
       }))
       .filter((candidate): candidate is PlayerLink => candidate.type !== undefined);
   }

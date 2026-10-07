@@ -11,9 +11,15 @@ import { ExtensionRuntime } from "../../core/extensions/runtime";
 import { log, recentEntries, renderLog } from "../../core/logger";
 import { installPlatform } from "../../core/platform";
 import { checkForUpdate, cleanUpdateLeftovers, downloadUpdate, installUpdate } from "../../core/updates";
+import { createSyncServerApi } from "../../core/api/sync";
+import { deviceId } from "../../core/sync/changes";
+import { syncNow } from "../../core/sync/client";
+import { DISCOVERY_PORT, DISCOVERY_PROBE, PROTOCOL_VERSION, SYNC_PORT, type DiscoveryAnswer } from "../../core/sync/protocol";
+import { handleSyncRequest } from "../../core/sync/server";
 import { createAndroidPlatform } from "./index";
+import { previousSessionLog, startAndroidLogFile } from "./logFile";
 import { Capacitor, SystemBars, SystemBarsStyle } from "@capacitor/core";
-import { HibikiApp } from "./native";
+import { HibikiApp, HibikiSync } from "./native";
 
 declare const __APP_VERSION__: string;
 
@@ -45,6 +51,7 @@ export async function installAndroidHibiki(): Promise<void> {
   const version = __APP_VERSION__;
   const { platform, events, migrate } = await createAndroidPlatform(version);
   installPlatform(platform);
+  await startAndroidLogFile(platform.paths.userData);
   log("info", "app", `--- session start (android ${version}) ---`);
 
   const applied = await migrate();
@@ -60,12 +67,21 @@ export async function installAndroidHibiki(): Promise<void> {
   const api: HibikiApi = {
     ...core,
     sources: { ...core.sources, onChanged: (callback) => events.on(IPC.sourcesChanged, () => callback()) },
+    sync: {
+      ...createSyncServerApi(),
+      onChanged: (callback) => events.on(IPC.syncChanged, (payload) => callback((payload as { what: "devices" | "data" }).what)),
+    },
     tracking: {
       ...core.tracking,
       onChanged: (callback) => events.on(IPC.trackingChanged, () => callback()),
       onImportProgress: (callback) => events.on(IPC.trackingImportProgress, (progress) => callback(progress as TrackerImportProgress)),
     },
-    downloads: { ...core.downloads, onProgress: (callback) => events.on(IPC.downloadsProgress, (progress) => callback(progress as DownloadProgress)) },
+    downloads: {
+      ...core.downloads,
+      onProgress: (callback) => events.on(IPC.downloadsProgress, (progress) => callback(progress as DownloadProgress)),
+      // Capacitor's local server hands out files from the app's storage, with Range for seeking.
+      fileUrl: (filePath) => Capacitor.convertFileSrc(filePath),
+    },
     player: {
       registerHeaders: (url, headers) => platform.player.registerHeaders(url, headers),
       registerHeaderOrigin: async (sessionId, url) => platform.player.registerHeaderOrigin(sessionId, url),
@@ -115,6 +131,11 @@ export async function installAndroidHibiki(): Promise<void> {
       },
       keepAwake: (on) => HibikiApp.keepAwake({ value: on }),
       setOrientation: (orientation) => HibikiApp.setOrientation({ value: orientation }),
+      setBackgroundWork: async (work) => {
+        await HibikiApp.setBackgroundWork(work ? { active: true, ...work } : { active: false }).catch((error) => {
+          log("warn", "background", `background work not started: ${error instanceof Error ? error.message : String(error)}`);
+        });
+      },
       pip: {
         update: (state) => void HibikiApp.updatePip({ ...state, width: state.width ? Math.round(state.width) : undefined, height: state.height ? Math.round(state.height) : undefined }).catch(() => undefined),
         enter: async () => (await HibikiApp.enterPip().catch(() => ({ entered: false }))).entered,
@@ -141,12 +162,16 @@ export async function installAndroidHibiki(): Promise<void> {
       // Resolves null like a cancelled desktop dialog - there is no saved path to report.
       export: async () => {
         const sources = await core.sources.list().then((list) => list.map((source) => source.id).join(", ")).catch(() => "?");
-        const text = renderLog({
+        const current = renderLog({
           app: `hibiki ${version} (android)`,
           webview: navigator.userAgent,
           exportedAt: new Date().toISOString(),
           sources: sources || "none",
         });
+        // The session before this one too: a report is often sent right after a crash, when this
+        // session holds nothing about what happened.
+        const previous = await previousSessionLog();
+        const text = previous ? `${current}\n# --- previous session ---\n\n${previous}` : current;
         // Local time, as the user will look for it.
         const now = new Date();
         const stamp = new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 19).replace(/[T:]/g, "-");
@@ -167,4 +192,45 @@ export async function installAndroidHibiki(): Promise<void> {
   // link the app was (re)started with when Android had ended it while the browser was in front.
   void HibikiApp.addListener("deepLink", (event) => void handleTrackingRedirect(event.url));
   void HibikiApp.takeLaunchUrl().then(({ url }) => url && handleTrackingRedirect(url)).catch(() => undefined);
+
+  // Device sync with the paired computer (core/sync): soon after start, on coming back to the
+  // screen, on leaving it (a moment later, so the progress saved on the way out goes too - Android
+  // may freeze the app soon after), and every few minutes while it is open. Without a paired
+  // computer each of these is a single empty read.
+  const syncQuietly = () => void syncNow().catch(() => undefined);
+  window.setTimeout(syncQuietly, 3_000);
+  document.addEventListener("visibilitychange", () => {
+    window.setTimeout(syncQuietly, document.visibilityState === "visible" ? 500 : 1_500);
+  });
+
+  // While on screen this phone also waits for other devices, as a computer does all the time - so
+  // another phone can pair with it (moving to a new phone) and sync while both are open.
+  const phoneName = (await HibikiSync.deviceName().catch(() => ({ name: "Android" }))).name;
+  void HibikiSync.addListener("request", (event) => {
+    void handleSyncRequest(event.message, event.address, phoneName)
+      .then((message) => HibikiSync.respond({ id: event.id, message }))
+      .catch((error) => log("warn", "sync", `request from ${event.address} not answered: ${error instanceof Error ? error.message : String(error)}`));
+  });
+  // The socket side's own troubles (a timed-out connection, discovery not started), which happen in
+  // Java and would otherwise be seen only in logcat.
+  void HibikiSync.addListener("log", (event) => log(event.level, "sync", event.message));
+  const listen = async () => {
+    const answer: DiscoveryAnswer = { app: "hibiki", v: PROTOCOL_VERSION, deviceId: await deviceId(), name: phoneName, port: SYNC_PORT, kind: "phone" };
+    await HibikiSync.startServer({ port: SYNC_PORT, discoveryPort: DISCOVERY_PORT, probe: DISCOVERY_PROBE, answer: JSON.stringify(answer) })
+      .then(() => log("debug", "sync", `waiting for other devices on port ${SYNC_PORT} as "${phoneName}"`))
+      .catch((error) => log("warn", "sync", `not waiting for other devices: ${error instanceof Error ? error.message : String(error)}`));
+  };
+  if (document.visibilityState === "visible") void listen();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") void listen();
+    else {
+      log("debug", "sync", "in the background; no longer waiting for other devices");
+      void HibikiSync.stopServer().catch(() => undefined);
+    }
+  });
+  window.setInterval(() => {
+    if (document.visibilityState === "visible") syncQuietly();
+  }, SYNC_INTERVAL_MS);
 }
+
+const SYNC_INTERVAL_MS = 3 * 60 * 1000;

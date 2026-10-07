@@ -13,6 +13,16 @@
   animation: hibiki-shimmer 1.35s ease-in-out infinite;
 }
 
+/* Loading placeholders on the app's own surfaces (the player's menus keep the white one above). */
+.skeleton {
+  background: linear-gradient(110deg, rgb(var(--color-text) / .05) 30%, rgb(var(--color-text) / .11) 45%, rgb(var(--color-text) / .05) 60%);
+  background-size: 200% 100%;
+  animation: hibiki-shimmer 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+
 :root {
   --color-bg: 250 250 251;
   --color-surface: 255 255 255;

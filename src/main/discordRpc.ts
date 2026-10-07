@@ -2,6 +2,7 @@ import { Client } from "@xhayper/discord-rpc";
 import { ActivityType } from "discord-api-types/v10";
 import type { DiscordPresence } from "@shared/types";
 import { buildWatchDeepLink } from "../core/deepLink";
+import { logger } from "../core/logger";
 
 // Same Application ID as the Android app's own DiscordRpcManager (DISCORD_APPLICATION_ID) - an
 // "Application" isn't platform-locked, it's just a shared identity (name/icon/Rich Presence
@@ -31,6 +32,15 @@ type PendingState = { kind: "watching"; presence: DiscordPresence } | { kind: "i
 
 let client: Client | null = null;
 let ready = false;
+// Discord not running (or quit since) is the normal case, not an error: the connection is simply
+// tried again every RETRY_MS until it is there, so the activity appears within seconds of Discord
+// starting - whichever of the two was opened first.
+const RETRY_MS = 5_000;
+// A Discord still starting up can accept the connection and not answer it for a while.
+const LOGIN_TIMEOUT_MS = 15_000;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+// Said once per wait, not every five seconds.
+let waitingLogged = false;
 let enabled = false;
 let pending: PendingState = null;
 // Set once, the moment the app actually goes idle - not recomputed on every idle call, so the
@@ -85,7 +95,7 @@ function resolveLargeImage(posterUrl: string | null): string {
 }
 
 function log(message: string, error?: unknown): void {
-  console.warn(`[discord] ${message}`, error instanceof Error ? error.message : (error ?? ""));
+  logger.warn("discord", error === undefined ? message : `${message}: ${error instanceof Error ? error.message : String(error)}`);
 }
 
 // @xhayper/discord-rpc's own ClientUser#clearActivity() sends SET_ACTIVITY with no `activity`
@@ -98,18 +108,59 @@ function clearActivity(c: Client): void {
   );
 }
 
-function createClient(): Client {
+/** Connects to the local Discord client, unless already connected or connecting. */
+function connect(): void {
+  if (!enabled || !DISCORD_CLIENT_ID || client) return;
   const c = new Client({ clientId: DISCORD_CLIENT_ID });
+  client = c;
+  // This attempt is over: forget it and try again later, if it is still the current one.
+  const giveUp = () => {
+    if (client !== c) return;
+    client = null;
+    ready = false;
+    c.destroy().catch(() => {});
+    scheduleRetry();
+  };
   c.on("ready", () => {
+    if (client !== c) return;
     ready = true;
-    console.log("[discord] connected");
+    waitingLogged = false;
+    logger.info("discord", "connected");
     applyPending();
   });
+  // Discord quit (or restarted): back to waiting for it.
   c.on("disconnected", () => {
-    ready = false;
+    if (client !== c) return;
+    logger.info("discord", "disconnected; waiting for Discord");
+    giveUp();
   });
-  c.login().catch((error) => log("could not connect to the local Discord client", error));
-  return c;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error("no answer from Discord")), LOGIN_TIMEOUT_MS);
+  });
+  Promise.race([c.login(), timeout])
+    .catch((error) => {
+      if (!waitingLogged) {
+        waitingLogged = true;
+        logger.info("discord", `Discord is not running or not answering (${error instanceof Error ? error.message : String(error)}); retrying every ${RETRY_MS / 1000}s`);
+      }
+      giveUp();
+    })
+    .finally(() => clearTimeout(timer));
+}
+
+function scheduleRetry(): void {
+  if (!enabled || retryTimer) return;
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    connect();
+  }, RETRY_MS);
+}
+
+function stopRetrying(): void {
+  if (retryTimer) clearTimeout(retryTimer);
+  retryTimer = null;
+  waitingLogged = false;
 }
 
 function formatDuration(ms: number): string {
@@ -197,6 +248,7 @@ export function setDiscordRpcEnabled(next: boolean): void {
   if (enabled === next) return;
   enabled = next;
   if (!enabled) {
+    stopRetrying();
     pending = null;
     idleSinceMs = null;
     const c = client;
@@ -212,13 +264,13 @@ export function setDiscordRpcEnabled(next: boolean): void {
     log("enabled, but no DISCORD_CLIENT_ID is configured - see the comment at the top of discordRpc.ts");
     return;
   }
-  client ??= createClient();
+  connect();
 }
 
 export function updateDiscordPresence(presence: DiscordPresence): void {
   pending = { kind: "watching", presence };
   if (!enabled || !DISCORD_CLIENT_ID) return;
-  client ??= createClient();
+  connect();
   applyPending();
 }
 
@@ -229,7 +281,7 @@ export function setIdleDiscordPresence(): void {
   if (pending?.kind !== "idle") idleSinceMs = null; // fresh idle stretch - restart its own timer
   pending = { kind: "idle" };
   if (!enabled || !DISCORD_CLIENT_ID) return;
-  client ??= createClient();
+  connect();
   applyPending();
 }
 
@@ -240,6 +292,8 @@ export function clearDiscordPresence(): void {
 }
 
 export function shutdownDiscordRpc(): void {
+  stopRetrying();
+  enabled = false;
   const c = client;
   client = null;
   ready = false;

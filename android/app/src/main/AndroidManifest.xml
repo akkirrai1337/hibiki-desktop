@@ -35,6 +35,11 @@
 
         </activity>
 
+        <service
+            android:name=".BackgroundWorkService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -49,5 +54,13 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Device sync finds the computer through the Wi-Fi network's broadcast address. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- While waiting for another device, some phones drop broadcast packets unless asked not to. -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Episode downloads keep going in the background (BackgroundWorkService). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

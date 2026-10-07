@@ -6,7 +6,8 @@
 // embed page and report findings back through a `HibikiResolver.*` bridge - mirrors Android's
 // WebView + @JavascriptInterface bridge one-to-one, just backed by a hidden BrowserWindow instead.
 import { BrowserWindow } from "electron";
-import type { PlayerLink } from "@shared/types";
+import type { PlayerLink, SubtitleTrack } from "@shared/types";
+import { subtitleTracksFrom, type ReportedSubtitle } from "@shared/resolverSubtitles";
 import { logger } from "../../core/logger";
 
 // Anything that can run JS in a given browsing context and give back its completion value - a
@@ -152,6 +153,7 @@ export interface ResolvedStream {
   quality: string | null;
   headers: Record<string, string>;
   segments: [];
+  subtitles?: SubtitleTrack[];
 }
 
 // Every resolve used to build and tear down its own hidden window, which means a full Chromium
@@ -319,7 +321,10 @@ const BRIDGE_SCRIPT = `
     video: function (url) { window.__hibikiCaptures.push({ kind: "video", url: String(url), quality: window.__hibikiLastQuality }); },
     audio: function (url) { window.__hibikiCaptures.push({ kind: "audio", url: String(url), quality: window.__hibikiLastQuality }); },
     stream: function (url) { window.__hibikiCaptures.push({ kind: "stream", url: String(url), quality: window.__hibikiLastQuality }); },
-    subtitle: function () {},
+    subtitle: function (url, label, language) {
+      window.__hibikiSubtitles = window.__hibikiSubtitles || [];
+      window.__hibikiSubtitles.push({ url: url == null ? null : String(url), label: label == null ? null : String(label), language: language == null ? null : String(language) });
+    },
     done: function () { window.__hibikiDone = true; },
   };
   if (!window.__hibikiVideoWatcherInstalled) {
@@ -345,13 +350,14 @@ interface PageState {
   done: boolean;
   captures: Capture[];
   lastQuality: string | null;
+  subtitles?: ReportedSubtitle[];
 }
 
 async function readPageState(target: ScriptTarget, deadline: number): Promise<PageState> {
   try {
     return (await withTimeout(
       target.executeJavaScript(
-        `({ done: window.__hibikiDone === true, captures: window.__hibikiCaptures || [], lastQuality: window.__hibikiLastQuality || null })`,
+        `({ done: window.__hibikiDone === true, captures: window.__hibikiCaptures || [], lastQuality: window.__hibikiLastQuality || null, subtitles: window.__hibikiSubtitles || [] })`,
       ),
       deadline - Date.now(),
       "Browser resolver state probe timed out",
@@ -562,6 +568,13 @@ export async function performBrowserResolve(
     let started = false;
     let done = false;
     let lastCount = 0;
+    const reportedSubtitles: ReportedSubtitle[] = [];
+    // Every stream gets the tracks the page reported, whichever probe it was found on.
+    const withSubtitles = (streams: ResolvedStream[]): ResolvedStream[] => {
+      const subtitles = subtitleTracksFrom(reportedSubtitles, link.url, streams[0]?.headers["User-Agent"]);
+      if (subtitles.length > 0) logger.info("resolve", `browser resolver reported ${subtitles.length} subtitle track(s): ${subtitles.map((track) => track.label).join(", ")}`);
+      return subtitles.length > 0 ? streams.map((stream) => ({ ...stream, subtitles })) : streams;
+    };
     let lastChangeAt = Date.now();
     // One reachability check per URL for the whole resolve, shared between the master-playlist
     // check below and the final validation in buildResult.
@@ -602,6 +615,7 @@ export async function performBrowserResolve(
       const probeStartedAt = Date.now();
       const state = await readPageState(target, deadline);
       currentQuality = state.lastQuality; // tags network captures made before the *next* tick
+      reportedSubtitles.push(...(state.subtitles ?? []));
       done = state.done;
       if (probe < 8 || done || state.captures.length > 0 || networkCaptures.length > 0) {
         logger.debug("resolve", `browser probe ${probe + 1}: state read ${Date.now() - probeStartedAt}ms; done=${done}; captured=${state.captures.length + networkCaptures.length}; quality=${state.lastQuality ?? "?"}; elapsed=${Date.now() - resolveStartedAt}ms`);
@@ -610,7 +624,7 @@ export async function performBrowserResolve(
       const masters = state.captures.filter((capture) => capture.kind === "master" && !PLACEHOLDER_URL_PATTERN.test(capture.url));
       if (masters.length > 0) {
         logger.debug("resolve", `master playlist(s) captured on probe ${probe + 1}: ${masters.length}; stopping early`);
-        return await buildResult(masters, [], link, win, target, deadline, probes, capturedRequestHeaders);
+        return withSubtitles(await buildResult(masters, [], link, win, target, deadline, probes, capturedRequestHeaders));
       }
 
       if (networkCaptures.some((capture) => MASTER_PLAYLIST_REQUEST_PATTERN.test(capture.url))) {
@@ -618,7 +632,7 @@ export async function performBrowserResolve(
         break;
       }
 
-      const totalCount = state.captures.length + networkCaptures.length;
+      const totalCount = state.captures.length + networkCaptures.length + (state.subtitles?.length ?? 0);
       if (totalCount !== lastCount) {
         lastCount = totalCount;
         lastChangeAt = Date.now();
@@ -627,13 +641,14 @@ export async function performBrowserResolve(
       }
 
       if (done) {
-        return await buildResult(state.captures, networkCaptures, link, win, target, deadline, probes, capturedRequestHeaders);
+        return await withSubtitles(await buildResult(state.captures, networkCaptures, link, win, target, deadline, probes, capturedRequestHeaders));
       }
     }
 
     const finalState = await readPageState(target, deadline);
     logger.info("resolve", `browser probing finished after ${Date.now() - resolveStartedAt}ms: page=${finalState.captures.length}, network=${networkCaptures.length}; validating candidates`);
-    return await buildResult(finalState.captures, networkCaptures, link, win, target, deadline, probes, capturedRequestHeaders);
+    reportedSubtitles.push(...(finalState.subtitles ?? []));
+    return withSubtitles(await buildResult(finalState.captures, networkCaptures, link, win, target, deadline, probes, capturedRequestHeaders));
   } finally {
     removeNetworkCapture(webContentsId);
     void releaseResolverWindow(win, heldRefererUrl);
