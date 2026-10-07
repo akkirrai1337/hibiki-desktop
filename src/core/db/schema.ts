@@ -125,19 +125,6 @@ export const cachedPlaybackGroups = sqliteTable(
   (t) => [primaryKey({ columns: [t.sourceId, t.animeId] })],
 );
 
-// Whole *result lists* a source screen was last built from - the home page's hero row and its
-// "popular" pool, a source's latest feed. cachedAnime above answers "what is this one title",
-// which is not enough to paint a screen that doesn't yet know which titles it is about.
-//
-// Keyed by a caller-chosen string rather than by the request shape, on purpose: the home pool is
-// fetched at a random offset every visit, and the point is to paint the *previous* visit's slice
-// while the new one loads, not to look for an exact match that will never be there.
-export const cachedSourceQueries = sqliteTable("cached_source_queries", {
-  queryKey: text("query_key").primaryKey(),
-  titlesJson: text("titles_json").notNull(),
-  cachedAt: integer("cached_at").notNull(),
-});
-
 // What the user rated a title, on the source's own scale (YummyAnime and every other site here
 // rate out of 10).
 //
@@ -153,4 +140,23 @@ export const titleRatings = sqliteTable(
     ratedAt: integer("rated_at").notNull(),
   },
   (t) => [primaryKey({ columns: [t.sourceId, t.animeId] })],
+);
+
+// Which entry on a tracker (AniList) a title of a source is. One row per title and tracker, also for
+// a title that was searched for and not found (remoteId null), so it is not searched again on every
+// library change - see core/tracking. Only identifiers and the name shown on the title page: what a
+// tracker says about the show is never stored as the title's own data.
+export const trackerLinks = sqliteTable(
+  "tracker_links",
+  {
+    tracker: text("tracker").notNull(),
+    sourceId: text("source_id").notNull(),
+    animeId: text("anime_id").notNull(),
+    remoteId: integer("remote_id"),
+    remoteTitle: text("remote_title"),
+    // "auto" (matched by the app) or "user" (picked by hand, never replaced automatically).
+    linkedBy: text("linked_by").notNull(),
+    checkedAt: integer("checked_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.tracker, t.sourceId, t.animeId] })],
 );

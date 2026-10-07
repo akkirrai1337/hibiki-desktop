@@ -8,10 +8,6 @@ export const IPC = {
   // answers. See offlineCache.getCachedAnimeMany.
   sourceCachedTitles: "source:cachedTitles",
   sourceCachedPlaybackGroups: "source:cachedPlaybackGroups",
-  // The last title list a source screen was built from, and the write that records it. See
-  // offlineCache.cacheSourceQuery.
-  sourceCachedQuery: "source:cachedQuery",
-  sourceCacheQuery: "source:cacheQuery",
   sourcePlaybackGroups: "source:playbackGroups",
   sourcePlayerLinks: "source:playerLinks",
   sourceResolvePlayerLink: "source:resolvePlayerLink",
@@ -123,6 +119,18 @@ export const IPC = {
   // Pushed main -> renderer once the "Watch" button on a friend's Discord Rich Presence card opens
   // a "hibiki://watch/..." link (see main/deepLink.ts) and this window is ready to act on it.
   appDeepLinkWatch: "app:deepLinkWatch",
+
+  trackingAccount: "tracking:account",
+  trackingSignIn: "tracking:signIn",
+  trackingSignOut: "tracking:signOut",
+  trackingGetLink: "tracking:getLink",
+  trackingSearch: "tracking:search",
+  trackingSetLink: "tracking:setLink",
+  trackingImport: "tracking:import",
+  // Pushed backend -> renderer: an account signed in or out, or a title's link changed.
+  trackingChanged: "tracking:changed",
+  // Pushed backend -> renderer while an import runs, same idea as downloadsProgress.
+  trackingImportProgress: "tracking:importProgress",
 
   updatesCheck: "updates:check",
   updatesDownloadAndInstall: "updates:downloadAndInstall",

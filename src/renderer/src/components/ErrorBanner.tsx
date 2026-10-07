@@ -8,7 +8,7 @@ import { cn } from "@/lib/cn";
 // whether the specific source that just failed is reachable), but a query failing while it reads
 // false is a good enough proxy for "you're offline" to point at something actually useful (already
 // downloaded episodes) instead of just leaving a bare error message with nothing to do about it.
-export function ErrorBanner({ message, className }: { message: string; className?: string }) {
+export function ErrorBanner({ message, className, onRetry }: { message: string; className?: string; onRetry?: () => void }) {
   const { t } = useTranslation();
   const offline = typeof navigator !== "undefined" && !navigator.onLine;
   return (
@@ -23,6 +23,11 @@ export function ErrorBanner({ message, className }: { message: string; className
               {t("common.openDownloads")}
             </Link>
           </p>
+        )}
+        {onRetry && (
+          <button onClick={onRetry} className="mt-2 font-semibold text-rose-800 underline underline-offset-2 hover:text-rose-950 dark:text-rose-100 dark:hover:text-white">
+            {t("common.retry")}
+          </button>
         )}
       </div>
     </div>

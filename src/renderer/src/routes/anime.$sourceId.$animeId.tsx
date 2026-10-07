@@ -9,6 +9,7 @@ import * as ContextMenu from "@radix-ui/react-context-menu";
 import { ArrowDown01, ArrowDown10, ArrowLeft, ArrowUpDown, ChevronRight, LayoutGrid, List, Mic, Play, Bookmark, Check, ChevronDown, Clock, Download, Eraser, ExternalLink, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
 import { CommentsSection } from "@/components/CommentsSection";
 import { RatingButton, SourceRatings } from "@/components/RatingButton";
+import { TrackerLinkButton } from "@/components/TrackerLinkButton";
 import { hibiki } from "@/lib/hibiki";
 import { findListedTitle } from "@/lib/listedTitles";
 import { usePlaybackGroups } from "@/lib/playbackGroups";
@@ -891,6 +892,7 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
         {/* This user's own score (a chip, first so its star panel opens on screen), the next episode. */}
         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs empty:hidden">
           {source && <RatingButton source={source} animeId={animeId} />}
+          <TrackerLinkButton sourceId={sourceId} animeId={animeId} searchName={anime.englishName || anime.originalName || title} />
           {nextEpisodeLabel && <span className="flex items-center gap-1 rounded-md bg-emerald-400/15 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-500 dark:text-emerald-400"><Clock className="h-3 w-3" strokeWidth={2.5} />{nextEpisodeLabel}</span>}
         </div>
       </div>
@@ -945,6 +947,7 @@ function Overview({ anime, libraryCategory, onSetLibraryCategory, onRemoveFromLi
             : <span className="inline-flex items-center gap-2 rounded-xl bg-text/10 px-5 py-3 text-sm font-bold text-muted">{t("detail.noEpisodes")}</span>}
           <LibraryButton category={libraryCategory} onSelect={onSetLibraryCategory} onRemove={onRemoveFromLibrary} />
           {source && <RatingButton source={source} animeId={animeId} />}
+          <TrackerLinkButton sourceId={sourceId} animeId={animeId} searchName={anime.englishName || anime.originalName || title} />
           {/* This title's own page when the source supplied one (an id here is whatever that site
               identifies titles by, which is often not what its URLs use, so nothing outside the
               source can build this) - falling back to the source's own homepage from its manifest

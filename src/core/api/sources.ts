@@ -1,7 +1,7 @@
 import type { HibikiApi } from "@shared/hibikiApi";
 import type { AnimeTitle, PlaybackGroup } from "@shared/types";
 import type { ExtensionRuntime } from "../extensions/runtime";
-import { cacheAnime, cachePlaybackGroups, cacheSourceQuery, getCachedAnime, getCachedAnimeMany, getCachedPlaybackGroups, getCachedPlaybackGroupsEntry, getCachedSourceQuery } from "../offlineCache";
+import { cacheAnime, cachePlaybackGroups, getCachedAnime, getCachedAnimeMany, getCachedPlaybackGroups, getCachedPlaybackGroupsEntry } from "../offlineCache";
 
 /** Everything `window.hibiki.sources` asks of an installed source: catalog, playback, account. */
 export type SourcesApi = Omit<HibikiApi["sources"], "repositories" | "marketplace" | "install" | "uninstall" | "installedVersions" | "onChanged">;
@@ -36,14 +36,6 @@ export function createSourcesApi(runtime: ExtensionRuntime): SourcesApi {
     // without waiting on any source.
     cachedTitles: (keys) => getCachedAnimeMany(keys),
     cachedPlaybackGroups: (sourceId, titleId) => getCachedPlaybackGroupsEntry(sourceId, titleId),
-    cachedQuery: (queryKey) => getCachedSourceQuery(queryKey),
-    // Fire-and-forget: the renderer has already rendered these titles, and nothing it does next
-    // depends on the write landing.
-    cacheQuery: (queryKey, titles) => {
-      cacheSourceQuery(queryKey, titles).catch(() => {
-        // A first paint that is one round trip slower next launch, and nothing worse.
-      });
-    },
 
     async playbackGroups(sourceId: string, titleId: string): Promise<PlaybackGroup[]> {
       try {

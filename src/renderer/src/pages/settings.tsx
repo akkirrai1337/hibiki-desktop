@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
-import { MemoryStick, ArrowDownToLine, ArrowUpDown, Ban, Check, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, DatabaseBackup, FileText, FolderOpen, Home, Info, Languages, MessageCircle, MonitorPlay, Moon, Palette, Radio, RefreshCw, RotateCcw, ScrollText, SlidersHorizontal, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ListChecks, LogIn, LogOut, MemoryStick, ArrowDownToLine, ArrowUpDown, Ban, Check, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, DatabaseBackup, FileText, FolderOpen, Home, Info, Languages, MessageCircle, MonitorPlay, Moon, Palette, Radio, RefreshCw, RotateCcw, ScrollText, SlidersHorizontal, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { isMobile, useBackHandler } from "@/lib/mobile";
 import { motion } from "motion/react";
@@ -16,6 +16,8 @@ import { ACCENT_PRESETS, BACKGROUND_THEME_PRESETS, CUSTOM_BACKGROUND_THEME_ID, c
 import { sortLabel } from "@/lib/catalogSort";
 import { SelectDropdown } from "@/components/SelectDropdown";
 import { hibiki, type LogEntry } from "@/lib/hibiki";
+import { TRACKING_KEY, useTrackerAccount } from "@/lib/tracking";
+import type { TrackerImportProgress, TrackerImportReport } from "@shared/types";
 import type { MemorySnapshot } from "@shared/types";
 
 // Loaded with its category, not with Settings itself (the desktop never shows it here).
@@ -646,6 +648,164 @@ function BackupSection() {
   );
 }
 
+/**
+ * AniList: the account, and bringing its lists in. Everything after signing in runs by itself (see
+ * core/tracking), so this is the one place tracking asks anything of the user.
+ */
+function TrackingSection() {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const account = useTrackerAccount();
+  const [waiting, setWaiting] = useState(false);
+  const signIn = useMutation({
+    mutationFn: () => hibiki.tracking.signIn("anilist"),
+    onSuccess: () => setWaiting(true),
+  });
+  const signOut = useMutation({
+    mutationFn: () => hibiki.tracking.signOut("anilist"),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: [TRACKING_KEY] }),
+  });
+  const data = account.data;
+  // The browser came back: whichever way it went, stop saying it is awaited.
+  useEffect(() => {
+    if (data?.user || data?.signInError) setWaiting(false);
+  }, [data?.user, data?.signInError]);
+  if (!data) return null;
+  const user = data.user;
+
+  return (
+    <SettingsSection>
+      <SettingsRow icon={<ListChecks className="h-[18px] w-[18px]" strokeWidth={2} />}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-text">AniList</p>
+            {user ? (
+              <div className="mt-2 flex items-center gap-2.5">
+                {user.avatarUrl
+                  ? <img src={user.avatarUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+                  : <span className="h-8 w-8 shrink-0 rounded-full bg-text/10" />}
+                <span className="truncate text-sm font-medium text-text">{user.name}</span>
+              </div>
+            ) : (
+              <p className="mt-0.5 text-xs leading-relaxed text-muted">{data.configured ? t("tracking.anilist.signedOutHint") : t("tracking.anilist.notConfigured")}</p>
+            )}
+          </div>
+          {user && (
+            <button
+              onClick={() => signOut.mutate()}
+              disabled={signOut.isPending}
+              className="flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-text/[.06] hover:text-text disabled:opacity-50"
+            >
+              <LogOut className="h-3.5 w-3.5" strokeWidth={2} />
+              {t("tracking.anilist.signOut")}
+            </button>
+          )}
+        </div>
+        {data.needsSignIn && (
+          <p className="mt-3 flex items-start gap-1.5 text-xs leading-relaxed text-amber-600 dark:text-amber-300">
+            <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+            {t("tracking.anilist.expired")}
+          </p>
+        )}
+        {data.configured && (!user || data.needsSignIn) && (
+          <button
+            onClick={() => signIn.mutate()}
+            disabled={signIn.isPending}
+            className="mt-3 flex items-center gap-2 rounded-lg bg-text/[.08] px-3 py-1.5 text-sm font-semibold text-text transition-colors hover:bg-text/[.14] disabled:opacity-50 mobile:rounded-full mobile:px-4 mobile:py-2"
+          >
+            <LogIn className="h-4 w-4" strokeWidth={2} />
+            {data.needsSignIn ? t("tracking.anilist.signInAgain") : t("tracking.anilist.signIn")}
+          </button>
+        )}
+        {waiting && !user && <p className="mt-2 text-xs leading-relaxed text-muted">{t("tracking.anilist.waiting")}</p>}
+        {data.signInError && <p className="mt-2 select-text text-xs leading-relaxed text-rose-500">{t("tracking.anilist.signInFailed", { error: data.signInError })}</p>}
+        {user && !data.needsSignIn && (
+          <p className="mt-3 flex items-start gap-1.5 text-xs leading-relaxed text-muted">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+            {t("tracking.anilist.howItWorks")}
+          </p>
+        )}
+      </SettingsRow>
+      {user && !data.needsSignIn && <TrackingImportRow />}
+    </SettingsSection>
+  );
+}
+
+function TrackingImportRow() {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const sources = useQuery({ queryKey: ["sources"], queryFn: () => hibiki.sources.list() });
+  const activeSourceId = useUiStore((s) => s.activeSourceId);
+  const [picked, setPicked] = useState<string | null>(null);
+  const sourceId = picked ?? activeSourceId ?? sources.data?.[0]?.id ?? "";
+  const sourceName = sources.data?.find((source) => source.id === sourceId)?.name ?? sourceId;
+  const [progress, setProgress] = useState<TrackerImportProgress | null>(null);
+  const [report, setReport] = useState<TrackerImportReport | null>(null);
+  const [unmatchedOpen, setUnmatchedOpen] = useState(false);
+  useEffect(() => hibiki.tracking.onImportProgress(setProgress), []);
+  const run = useMutation({
+    mutationFn: () => hibiki.tracking.importLibrary("anilist", sourceId),
+    onMutate: () => {
+      setReport(null);
+      setProgress(null);
+      setUnmatchedOpen(false);
+    },
+    onSuccess: (result) => setReport(result),
+    onSettled: () => {
+      setProgress(null);
+      void queryClient.invalidateQueries({ queryKey: ["library"] });
+    },
+  });
+
+  return (
+    <SettingsRow icon={<ArrowDownToLine className="h-[18px] w-[18px]" strokeWidth={2} />}>
+      <p className="text-sm font-semibold text-text">{t("tracking.import.title")}</p>
+      <p className="mt-0.5 text-xs leading-relaxed text-muted">{t("tracking.import.hint")}</p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <SelectDropdown
+          className="min-w-[12rem] flex-1"
+          value={sourceId}
+          onChange={setPicked}
+          disabled={run.isPending || !sources.data?.length}
+          placeholder={t("tracking.import.source")}
+          options={(sources.data ?? []).map((source) => ({ id: source.id, label: source.name }))}
+        />
+        <button
+          onClick={() => run.mutate()}
+          disabled={run.isPending || !sourceId}
+          className="rounded-lg bg-text/[.08] px-3 py-1.5 text-sm font-semibold text-text transition-colors hover:bg-text/[.14] disabled:opacity-50 mobile:rounded-full mobile:px-4 mobile:py-2"
+        >
+          {t("tracking.import.action")}
+        </button>
+      </div>
+      {run.isPending && progress && progress.total > 0 && (
+        <div className="mt-3">
+          <p className="text-xs tabular-nums text-muted">{t("tracking.import.running", { done: progress.done, total: progress.total })}</p>
+          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-text/10">
+            <div className="h-full rounded-full bg-accent-solid transition-[width] duration-300" style={{ width: `${(progress.done / progress.total) * 100}%` }} />
+          </div>
+        </div>
+      )}
+      {run.error && <p className="mt-2 select-text text-xs leading-relaxed text-rose-500">{t("tracking.import.error", { error: run.error instanceof Error ? run.error.message : String(run.error) })}</p>}
+      {report && (
+        <div className="mt-3 text-xs leading-relaxed">
+          <p className="font-semibold text-text">{t("tracking.import.result", { added: report.added, updated: report.updated, missing: report.unmatched.length })}</p>
+          {report.failed > 0 && <p className="mt-1 text-muted">{t("tracking.import.failed", { count: report.failed })}</p>}
+          {report.unmatched.length > 0 && (
+            <>
+              <button onClick={() => setUnmatchedOpen((v) => !v)} className="mt-1.5 inline-flex items-center gap-1 font-semibold text-muted transition-colors hover:text-text">
+                {t("tracking.import.unmatched", { source: sourceName })}
+                <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", unmatchedOpen && "rotate-180")} strokeWidth={2.5} />
+              </button>
+              {unmatchedOpen && <ul className="mt-1.5 max-h-56 select-text list-disc space-y-0.5 overflow-y-auto pl-4 text-muted">{report.unmatched.map((name) => <li key={name}>{name}</li>)}</ul>}
+            </>
+          )}
+        </div>
+      )}
+    </SettingsRow>
+  );
+}
+
 // Which of the active source's own catalog sort orders fills the home page's hero and "popular"
 // row - "Auto" (see pickRelevanceSort, in home.tsx) sends the source's own relevance ordering, or
 // no sort at all where it has no such concept. A source's sort ids are its own vocabulary, not a
@@ -720,6 +880,7 @@ export function SettingsPage() {
     ...(isMobile ? [{ id: "sources" as const, label: t("nav.sources"), icon: Radio }] : []),
     { id: "general" as const, label: t("settings.general"), icon: SlidersHorizontal },
     { id: "player" as const, label: t("settings.player.title"), icon: MonitorPlay },
+    { id: "tracking" as const, label: t("tracking.settings.title"), icon: ListChecks },
     ...(hasSource ? [{ id: "home" as const, label: t("settings.home.title"), icon: Home }] : []),
     // Backups write and read a file through the desktop's save/open dialogs; the phone has none yet.
     ...(isMobile ? [] : [{ id: "data" as const, label: t("settings.data.title"), icon: DatabaseBackup }]),
@@ -920,6 +1081,7 @@ export function SettingsPage() {
       )}
 
       {activeCategory === "sources" && <div className="-mx-4"><Suspense fallback={null}><SourcesPage embedded /></Suspense></div>}
+      {activeCategory === "tracking" && <TrackingSection />}
       {activeCategory === "home" && <HomeSortSection />}
       {activeCategory === "data" && <BackupSection />}
       {activeCategory === "diagnostics" && <DiagnosticsSection />}
@@ -964,8 +1126,8 @@ function MobileLanguagePicker() {
 
 /** Phone: the settings sections as one card of rows, like a system settings screen. */
 function MobileSettingsList({ categories, onOpen }: {
-  categories: Array<{ id: "appearance" | "sources" | "general" | "player" | "home" | "data" | "diagnostics"; label: string; icon: typeof Sun }>;
-  onOpen: (id: "appearance" | "sources" | "general" | "player" | "home" | "data" | "diagnostics") => void;
+  categories: Array<{ id: "appearance" | "sources" | "general" | "player" | "tracking" | "home" | "data" | "diagnostics"; label: string; icon: typeof Sun }>;
+  onOpen: (id: "appearance" | "sources" | "general" | "player" | "tracking" | "home" | "data" | "diagnostics") => void;
 }) {
   const updates = useSourceUpdateCount();
   return (

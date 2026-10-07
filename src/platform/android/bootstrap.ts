@@ -4,8 +4,9 @@
 // lib/hibiki.ts reads window.hibiki once at import time.
 import type { HibikiApi, PipAction } from "@shared/hibikiApi";
 import { IPC } from "@shared/ipc";
-import type { DownloadProgress } from "@shared/types";
+import type { DownloadProgress, TrackerImportProgress } from "@shared/types";
 import { createCoreApi } from "../../core/api";
+import { handleTrackingRedirect } from "../../core/api/tracking";
 import { ExtensionRuntime } from "../../core/extensions/runtime";
 import { log, recentEntries, renderLog } from "../../core/logger";
 import { installPlatform } from "../../core/platform";
@@ -55,6 +56,11 @@ export async function installAndroidHibiki(): Promise<void> {
   const api: HibikiApi = {
     ...core,
     sources: { ...core.sources, onChanged: (callback) => events.on(IPC.sourcesChanged, () => callback()) },
+    tracking: {
+      ...core.tracking,
+      onChanged: (callback) => events.on(IPC.trackingChanged, () => callback()),
+      onImportProgress: (callback) => events.on(IPC.trackingImportProgress, (progress) => callback(progress as TrackerImportProgress)),
+    },
     downloads: { ...core.downloads, onProgress: (callback) => events.on(IPC.downloadsProgress, (progress) => callback(progress as DownloadProgress)) },
     player: {
       registerHeaders: (url, headers) => platform.player.registerHeaders(url, headers),
@@ -139,4 +145,8 @@ export async function installAndroidHibiki(): Promise<void> {
 
   window.hibiki = api;
   runtime.warmWorkers();
+  // AniList's sign-in comes back as hibiki://anilist-auth: to a running app as an event, or as the
+  // link the app was (re)started with when Android had ended it while the browser was in front.
+  void HibikiApp.addListener("deepLink", (event) => void handleTrackingRedirect(event.url));
+  void HibikiApp.takeLaunchUrl().then(({ url }) => url && handleTrackingRedirect(url)).catch(() => undefined);
 }

@@ -62,7 +62,9 @@
     "openCatalog": "Open catalog",
     "emptySourcesTitle": "Your catalog starts with a source",
     "emptySourcesText": "Add an anime source to see what is popular, browse its catalog, and continue watching.",
-    "openSources": "Open sources"
+    "openSources": "Open sources",
+    "sourceUnavailableTitle": "{{source}} isn't responding",
+    "sourceUnavailableText": "Check your connection or try again in a bit."
   },
   "detail": {
     "back": "Back",
@@ -686,5 +688,55 @@
     "downloading": "Downloading… {{received}} of {{total}}",
     "willRestart": "The app will close and start the installer.",
     "failed": "Update failed: {{message}}"
+  },
+  "tracking": {
+    "settings": {
+      "title": "Sync"
+    },
+    "anilist": {
+      "notConfigured": "This build has no AniList key, so signing in isn't available.",
+      "signedOutHint": "Sign in, and the episodes you finish and the categories you pick will go to your AniList lists.",
+      "signIn": "Sign in with AniList",
+      "signInAgain": "Sign in again",
+      "signOut": "Sign out",
+      "waiting": "Finish signing in in the browser, then come back here.",
+      "expired": "Your AniList sign-in has expired. Sign in again to keep syncing.",
+      "signInFailed": "Couldn't sign in: {{error}}",
+      "howItWorks": "Progress goes up as you finish episodes, and picking a category here sets the status there. Nothing is ever deleted on AniList."
+    },
+    "import": {
+      "title": "Import from AniList",
+      "hint": "Adds the titles on your AniList lists to the library, finding each one on the source you pick.",
+      "source": "Source",
+      "action": "Import",
+      "running": "Importing… {{done}} / {{total}}",
+      "result": "Added {{added}} · updated {{updated}} · not found {{missing}}",
+      "failed": "{{count}} couldn't be checked: the source didn't answer.",
+      "unmatched": "Not found on {{source}}",
+      "error": "Import failed: {{error}}"
+    },
+    "link": {
+      "chipUnlinked": "Link AniList",
+      "notOnList": "Not on your list",
+      "dialogTitle": "AniList",
+      "linkedAuto": "Matched automatically",
+      "linkedUser": "Picked by you",
+      "change": "Choose another",
+      "unlink": "Unlink",
+      "search": "Search AniList",
+      "noResults": "Nothing found",
+      "open": "Open on AniList",
+      "none": "This title isn't linked yet. Pick it on AniList, and its progress will sync from now on.",
+      "episodes": "{{count}} ep.",
+      "favourite": "Favourite"
+    },
+    "status": {
+      "watching": "Watching",
+      "planned": "Planning",
+      "completed": "Completed",
+      "dropped": "Dropped",
+      "on_hold": "Paused",
+      "rewatching": "Rewatching"
+    }
   }
 }

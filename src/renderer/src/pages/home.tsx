@@ -3,15 +3,15 @@ import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { useTranslation } from "react-i18next";
-import { Play, Radio } from "lucide-react";
+import { Play, Radio, RefreshCw, WifiOff } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
-import { useCachedTitleList } from "@/lib/cachedTitleList";
 import { AnimeCard, PosterGrid, PosterGridSkeleton, PosterRow, animeTitle } from "@/components/AnimeCard";
 import { ContinueWatchingFrameRow } from "@/components/ContinueWatchingRow";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { HERO_ACTION_CLASS, HeroCarousel, type HeroSlide } from "@/components/Hero";
 import { MobileHero } from "@/components/MobileHero";
 import { isMobile } from "@/lib/mobile";
+import { cn } from "@/lib/cn";
 import { useContinueWatching } from "@/lib/continueWatching";
 import { useUiStore } from "@/stores/uiStore";
 import { pickRelevanceSort } from "@/lib/catalogSort";
@@ -63,9 +63,8 @@ export function CatalogPage() {
     ? homeSortOverride
     : pickRelevanceSort(sortOptions);
   const settingsReady = settings.isFetched;
-  const hero = useCachedTitleList({
+  const hero = useQuery({
     queryKey: ["hero", source?.id, sortMode ?? ""],
-    cacheKey: source ? `hero:${source.id}` : null,
     enabled: !!source && settingsReady,
     queryFn: () => hibiki.sources.search(source!.id, { limit: HERO_SLIDE_COUNT, sort: sortMode }),
   });
@@ -73,11 +72,8 @@ export function CatalogPage() {
   // and replacing it from an effect after `source` arrived let React Query start one request with
   // the old offset and then immediately start a second with the new one.
   const poolOffset = useMemo(randomPoolOffset, [source?.id]);
-  const pool = useCachedTitleList({
+  const pool = useQuery({
     queryKey: ["popular-pool", source?.id, poolOffset, sortMode ?? ""],
-    // Deliberately without the offset: this visit's slice is meant to be a different one, so the
-    // useful thing to paint while it loads is the slice from last time.
-    cacheKey: source ? `popular-pool:${source.id}` : null,
     enabled: !!source && settingsReady,
     queryFn: async () => {
       const window = await hibiki.sources.search(source!.id, { offset: poolOffset, limit: POOL_WINDOW, sort: sortMode });
@@ -120,22 +116,26 @@ export function CatalogPage() {
     <PullToRefresh onRefresh={refreshHome} />
     {sources.isLoading && <HeroSkeleton />}{sources.data?.length === 0 && <EmptySources />}{sources.isError && <ErrorBanner message={(sources.error as Error).message} className="m-8" />}
     {source && <>
-      {heroSlides.length > 0
+      {/* Neither answered: the source is down or the phone is offline. One plain statement of that,
+          instead of a missing hero over an empty section under a raw error. What is local - the
+          continue-watching row - still shows below. (The previous visit's titles used to be painted
+          from disk meanwhile; they were always different titles, swapped out a second later.) */}
+      {hero.isError && pool.isError ? <SourceUnavailable name={source.name} retrying={hero.isFetching || pool.isFetching} onRetry={() => void refreshHome()} /> : heroSlides.length > 0
         ? isMobile
           ? <MobileHero slides={heroSlides.map((slide) => toHeroSlide(slide, t("catalog.openTitle"), source.iconUrl))} label={t("catalog.trendingOnPrefix")} sourceName={source.name} />
           : <HeroCarousel slides={heroSlides.map((slide) => toHeroSlide(slide, t("catalog.openTitle"), source.iconUrl))} label={t("catalog.trendingOnPrefix")} sourceName={source.name} />
         : hero.isLoading && <HeroSkeleton />}
       <div className="space-y-12 px-8 pt-10 mobile:space-y-8 mobile:px-4 mobile:pt-5">
-        {pool.isError && <ErrorBanner message={(pool.error as Error).message} />}
+        {pool.isError && !hero.isError && <ErrorBanner message={(pool.error as Error).message} onRetry={() => void pool.refetch()} />}
         {/* Always the frame row: swapping to poster cards below a threshold meant the section
             changed shape as history filled up, and a single captured frame still reads as "here's
             where you left off" better than a poster does. */}
         {!isNew && <Section title={t("catalog.continueWatching")} action={t("catalog.viewHistory")} to="/history">
           <ContinueWatchingFrameRow sourceById={sourceById} />
         </Section>}
-        <Section title={isNew ? t("catalog.popularNow") : t("catalog.becauseYouWatched")} action={t("catalog.openCatalog")} to="/catalog">
+        {!pool.isError && <Section title={isNew ? t("catalog.popularNow") : t("catalog.becauseYouWatched")} action={t("catalog.openCatalog")} to="/catalog">
           {pool.isLoading ? <PosterGridSkeleton count={isMobile ? 3 : 15} /> : <HomeTitles>{recommended.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</HomeTitles>}
-        </Section>
+        </Section>}
         {genreSection && <Section title={t("catalog.genreSection", { genre: genreSection.genre })} action={t("catalog.openCatalog")} to="/catalog">
           <HomeTitles>{genreSection.items.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</HomeTitles>
         </Section>}
@@ -171,4 +171,21 @@ function Section({ title, action, to, children }: { title: string; action: strin
 // A grid on desktop; on the phone a row the thumb scrolls sideways, so a section stays one screen-line tall.
 function HomeTitles({ children }: { children: React.ReactNode }) { return isMobile ? <PosterRow>{children}</PosterRow> : <PosterGrid>{children}</PosterGrid>; }
 function HeroSkeleton() { return <div className="min-h-[420px] animate-pulse border-b border-white/[.04] bg-white/[.03] px-8 py-16"><div className="h-3 w-40 rounded bg-white/[.08]" /><div className="mt-5 h-12 w-96 rounded bg-white/[.08]" /><div className="mt-5 h-3 w-full max-w-lg rounded bg-white/[.06]" /><div className="mt-2 h-3 w-4/5 max-w-lg rounded bg-white/[.06]" /></div>; }
+function SourceUnavailable({ name, retrying, onRetry }: { name: string; retrying: boolean; onRetry: () => void }) {
+  const { t } = useTranslation();
+  const offline = typeof navigator !== "undefined" && !navigator.onLine;
+  return <div className="flex min-h-[340px] items-center justify-center px-8 py-16 mobile:min-h-[300px] mobile:px-6 mobile:pb-6 mobile:pt-[calc(4rem+var(--safe-top))]">
+    <div className="max-w-sm text-center">
+      <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-text/[.06]"><WifiOff className="h-6 w-6 text-muted" strokeWidth={1.75} /></div>
+      <h1 className="text-xl font-bold text-text">{t("catalog.sourceUnavailableTitle", { source: name })}</h1>
+      <p className="mt-3 text-sm leading-6 text-muted">{offline ? t("common.offlineHint") : t("catalog.sourceUnavailableText")}</p>
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+        <button onClick={onRetry} disabled={retrying} className="inline-flex items-center gap-2 rounded-xl bg-text/[.08] px-4 py-2.5 text-sm font-bold text-text transition-colors hover:bg-text/[.14] disabled:opacity-60 mobile:rounded-full mobile:px-5">
+          <RefreshCw className={cn("h-4 w-4", retrying && "animate-spin")} strokeWidth={2} />{t("common.retry")}
+        </button>
+        {offline && <Link to="/downloads" className="rounded-xl px-4 py-2.5 text-sm font-semibold text-muted transition-colors hover:text-text mobile:rounded-full">{t("common.openDownloads")}</Link>}
+      </div>
+    </div>
+  </div>;
+}
 function EmptySources() { const { t } = useTranslation(); return <div className="flex min-h-[calc(100vh-76px)] items-center justify-center p-8"><div className="max-w-sm text-center"><div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-text/[.06]"><Radio className="h-6 w-6 text-muted" strokeWidth={1.75} /></div><h1 className="text-xl font-bold text-text">{t("catalog.emptySourcesTitle")}</h1><p className="mt-3 text-sm leading-6 text-muted">{t("catalog.emptySourcesText")}</p><Link to="/sources" className="mt-6 inline-block rounded-xl bg-accent px-4 py-2.5 text-sm font-bold text-accent-fg">{t("catalog.openSources")}</Link></div></div>; }

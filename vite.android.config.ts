@@ -8,9 +8,12 @@ import path from "node:path";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
+import { buildSecret } from "./scripts/buildSecret";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const shim = (name: string) => path.join(root, `src/platform/android/shims/${name}.ts`);
+// See vite.config.ts.
+const anilistClientId = buildSecret("ANILIST_CLIENT_ID", root);
 const { version } = JSON.parse(readFileSync(path.join(root, "package.json"), "utf-8")) as { version: string };
 
 const androidEntry: Plugin = {
@@ -45,7 +48,7 @@ const aliases = {
 
 export default defineConfig({
   root: "src/renderer",
-  define: { __APP_VERSION__: JSON.stringify(version) },
+  define: { __APP_VERSION__: JSON.stringify(version), __ANILIST_CLIENT_ID__: JSON.stringify(anilistClientId) },
   resolve: { alias: aliases },
   plugins: [
     TanStackRouterVite({

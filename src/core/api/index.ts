@@ -9,11 +9,13 @@ import { createLibraryApi } from "./library";
 import { createProfileApi } from "./profile";
 import { createRepositoriesApi } from "./repositories";
 import { createSourcesApi } from "./sources";
+import { createTrackingApi, type TrackingApi } from "./tracking";
 import { createXpApi } from "./xp";
 
 export interface CoreApi extends Pick<HibikiApi, "ratings" | "library" | "progress" | "xp" | "profile"> {
   sources: Omit<HibikiApi["sources"], "onChanged">;
   downloads: Omit<HibikiApi["downloads"], "onProgress">;
+  tracking: TrackingApi;
 }
 
 export function createCoreApi(runtime: ExtensionRuntime): CoreApi {
@@ -24,5 +26,6 @@ export function createCoreApi(runtime: ExtensionRuntime): CoreApi {
     xp: createXpApi(),
     profile: createProfileApi(),
     downloads: createDownloadsApi(runtime),
+    tracking: createTrackingApi(runtime),
   };
 }

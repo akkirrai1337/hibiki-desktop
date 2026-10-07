@@ -11,6 +11,8 @@ import { destroyIdleResolverWindows } from "./extensions/browserResolveHost";
 import { destroyAllLoginWindows } from "./extensions/webLogin";
 import { registerSourceHandlers } from "./ipc/sources";
 import { registerLibraryHandlers } from "./ipc/library";
+import { registerTrackingHandlers } from "./ipc/tracking";
+import { handleTrackingRedirect } from "../core/api/tracking";
 import { registerXpEventHandlers } from "./ipc/xpEvents";
 import { registerMarketplaceHandlers } from "./ipc/marketplace";
 import { repairMissingResolverDependencies } from "../core/api/extensions";
@@ -112,6 +114,9 @@ let pendingDeepLinkUrl: string | null = null;
 // forward it to yet, remembers it for the flush below. Invalid/unrelated links are dropped here -
 // nothing downstream ever sees a link this app didn't itself produce.
 function handleDeepLink(rawUrl: string): void {
+  // AniList coming back from a sign-in started in Settings (see core/tracking): the account is
+  // finished in core and announced to the renderer through tracking:changed.
+  if (handleTrackingRedirect(rawUrl)) return;
   const target = parseWatchDeepLink(rawUrl);
   if (!target) return;
   if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isLoadingMainFrame()) {
@@ -315,6 +320,7 @@ app.whenReady().then(async () => {
   registerSourceHandlers(runtime);
   registerMarketplaceHandlers(runtime);
   registerLibraryHandlers(runtime);
+  registerTrackingHandlers(runtime);
   registerXpEventHandlers();
   // Progress goes out through platform.events, whose window getter is read at send-time: a download
   // can still be running long after the window is recreated (e.g. closed and reopened via the

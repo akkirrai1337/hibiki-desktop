@@ -1,6 +1,6 @@
 import { ipcMain } from "electron";
 import { IPC } from "@shared/ipc";
-import type { AnimeTitle, PlayerLink, PlayerLinkPreference, SearchRequest } from "@shared/types";
+import type { PlayerLink, PlayerLinkPreference, SearchRequest } from "@shared/types";
 import { createSourcesApi, type SourcesApi } from "../../core/api/sources";
 import type { ExtensionRuntime } from "../../core/extensions/runtime";
 
@@ -14,9 +14,6 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   ipcMain.handle(IPC.sourceGetById, (_e, sourceId: string, id: string) => sources.getById(sourceId, id));
   ipcMain.handle(IPC.sourceCachedTitles, (_e, keys: Array<{ sourceId: string; animeId: string }>) => sources.cachedTitles(keys));
   ipcMain.handle(IPC.sourceCachedPlaybackGroups, (_e, sourceId: string, titleId: string) => sources.cachedPlaybackGroups(sourceId, titleId));
-  ipcMain.handle(IPC.sourceCachedQuery, (_e, queryKey: string) => sources.cachedQuery(queryKey));
-  // `on`, not `handle`: nothing the renderer does next depends on the write landing.
-  ipcMain.on(IPC.sourceCacheQuery, (_e, queryKey: string, titles: AnimeTitle[]) => sources.cacheQuery(queryKey, titles));
   ipcMain.handle(IPC.sourcePlaybackGroups, (_e, sourceId: string, titleId: string) => sources.playbackGroups(sourceId, titleId));
   ipcMain.handle(
     IPC.sourcePlayerLinks,

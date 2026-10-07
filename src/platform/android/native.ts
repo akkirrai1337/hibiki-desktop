@@ -88,6 +88,10 @@ export interface HibikiAppPlugin {
   updatePip(options: { enabled: boolean; playing: boolean; hasPrevious: boolean; hasNext: boolean; width?: number; height?: number; labels: Record<string, string> }): Promise<void>;
   enterPip(): Promise<{ entered: boolean }>;
   addListener(event: "pipAction", listener: (event: { action: string }) => void): Promise<PluginListenerHandle>;
+  /** A hibiki:// link opened while the app runs (AniList's sign-in redirect). */
+  addListener(event: "deepLink", listener: (event: { url: string }) => void): Promise<PluginListenerHandle>;
+  /** The hibiki:// link the app was started with, once. */
+  takeLaunchUrl(): Promise<{ url: string | null }>;
 }
 
 /** An APK source extension installed inside the app (see android/.../apk/HibikiApkPlugin.kt). */

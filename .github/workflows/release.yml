@@ -9,6 +9,9 @@
 # The Android build is signed with the Kotlin Hibiki's key, from the same secrets that repository
 # uses: HIBIKI_RELEASE_KEYSTORE_BASE64 (base64 of the keystore file), HIBIKI_RELEASE_STORE_PASSWORD,
 # HIBIKI_RELEASE_KEY_ALIAS and HIBIKI_RELEASE_KEY_PASSWORD - add them to this repository too.
+#
+# Both builds also take ANILIST_CLIENT_ID (the Kotlin Hibiki's secret of the same name) for AniList
+# sign-in; without it they still build, with the sign-in hidden.
 name: Release
 
 on:
@@ -198,6 +201,8 @@ jobs:
       # The installer is unsigned - there's no code-signing certificate here - so SmartScreen will
       # warn on first run until the download builds up reputation.
       - name: Build the installer
+        env:
+          ANILIST_CLIENT_ID: ${{ secrets.ANILIST_CLIENT_ID }}
         run: npm run build -- --publish never
 
       - name: Rename the installer
@@ -249,6 +254,8 @@ jobs:
 
       # The web layer goes into the Android project's assets, as `npm run android:build` does.
       - name: Build the web layer and copy it into the Android project
+        env:
+          ANILIST_CLIENT_ID: ${{ secrets.ANILIST_CLIENT_ID }}
         run: |
           npx vite build -c vite.android.config.ts
           npx cap sync android

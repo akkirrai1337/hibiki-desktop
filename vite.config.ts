@@ -4,8 +4,13 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import electron from "vite-plugin-electron/simple";
 import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
+import { buildSecret } from "./scripts/buildSecret";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
+// AniList's client id (core/tracking/anilist.ts), from wherever the Kotlin app's build finds its own
+// (see scripts/buildSecret.ts). Not a secret - it is in every sign-in URL - but it belongs to
+// whoever registered it, so it stays out of the repository.
+const anilistClientId = buildSecret("ANILIST_CLIENT_ID", root);
 
 export default defineConfig({
   root: "src/renderer",
@@ -29,6 +34,7 @@ export default defineConfig({
           extensionWorker: path.join(root, "src/main/extensions/worker.ts"),
         },
         vite: {
+          define: { __ANILIST_CLIENT_ID__: JSON.stringify(anilistClientId) },
           resolve: {
             alias: {
               "@shared": fileURLToPath(new URL("./src/shared", import.meta.url)),

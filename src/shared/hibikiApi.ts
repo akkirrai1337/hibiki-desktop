@@ -6,7 +6,6 @@ import type {
   AppUpdate,
   CachedAnimeEntry,
   CachedPlaybackGroupsEntry,
-  CachedTitleListEntry,
   DailyActivity,
   DeepLinkWatchTarget,
   DiscordPresence,
@@ -28,6 +27,12 @@ import type {
   SourceInfo,
   SourceLibraryEntry,
   SourceReview,
+  TrackerAccount,
+  TrackerId,
+  TrackerImportProgress,
+  TrackerImportReport,
+  TrackerLink,
+  TrackerMedia,
   UpdateDownloadProgress,
   WatchProgress,
   XpEvent,
@@ -65,8 +70,6 @@ export interface HibikiApi {
     getById(sourceId: string, id: string): Promise<AnimeTitle>;
     cachedTitles(keys: Array<{ sourceId: string; animeId: string }>): Promise<Record<string, CachedAnimeEntry>>;
     cachedPlaybackGroups(sourceId: string, titleId: string): Promise<CachedPlaybackGroupsEntry | null>;
-    cachedQuery(queryKey: string): Promise<CachedTitleListEntry | null>;
-    cacheQuery(queryKey: string, titles: AnimeTitle[]): void;
     playbackGroups(sourceId: string, titleId: string): Promise<PlaybackGroup[]>;
     playerLinks(sourceId: string, titleId: string, groupId: string, episodeId: string, preference?: PlayerLinkPreference): Promise<PlayerLink[]>;
     resolvePlayerLink(link: PlayerLink): Promise<PlayerLink[]>;
@@ -216,6 +219,26 @@ export interface HibikiApi {
   backup: {
     create(localStorageEntries: Record<string, string>): Promise<string | null>;
     restore(): Promise<{ localStorage: Record<string, string> } | null>;
+  };
+  /**
+   * List sites the library is mirrored to (AniList). Once signed in it runs by itself: a finished
+   * episode raises the progress there, a category picked here sets the status there. Only forward,
+   * and nothing is ever deleted on the tracker.
+   */
+  tracking: {
+    account(tracker: TrackerId): Promise<TrackerAccount>;
+    /** Opens the tracker's sign-in page in the system browser; the account arrives through onChanged. */
+    signIn(tracker: TrackerId): Promise<void>;
+    signOut(tracker: TrackerId): Promise<void>;
+    /** The title's link with the account's entry for it; a title in the library is linked first. */
+    getLink(tracker: TrackerId, sourceId: string, animeId: string): Promise<TrackerLink | null>;
+    search(tracker: TrackerId, query: string): Promise<TrackerMedia[]>;
+    /** Links the title to `mediaId` by hand, or unlinks it (null). */
+    setLink(tracker: TrackerId, sourceId: string, animeId: string, mediaId: number | null): Promise<TrackerLink | null>;
+    /** Brings the account's lists into the library, finding each title on `sourceId`. */
+    importLibrary(tracker: TrackerId, sourceId: string): Promise<TrackerImportReport>;
+    onImportProgress(callback: (progress: TrackerImportProgress) => void): () => void;
+    onChanged(callback: () => void): () => void;
   };
   xp: {
     list(): Promise<XpEvent[]>;

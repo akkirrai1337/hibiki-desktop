@@ -163,8 +163,12 @@ public class HibikiAppPlugin extends Plugin {
     private JSObject pipLabels = new JSObject();
     private BroadcastReceiver pipReceiver;
 
+    /** A hibiki:// link the app was started with, kept until the page asks for it (takeLaunchUrl). */
+    private String launchUrl;
+
     @Override
     public void load() {
+        launchUrl = deepLinkOf(getActivity().getIntent());
         pipReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
@@ -174,6 +178,32 @@ public class HibikiAppPlugin extends Plugin {
             }
         };
         ContextCompat.registerReceiver(getContext(), pipReceiver, new IntentFilter(PIP_ACTION), ContextCompat.RECEIVER_NOT_EXPORTED);
+    }
+
+    /** A hibiki:// link arriving while the app runs (singleTask: the same activity gets it). */
+    @Override
+    protected void handleOnNewIntent(Intent intent) {
+        super.handleOnNewIntent(intent);
+        String url = deepLinkOf(intent);
+        if (url == null) return;
+        JSObject event = new JSObject();
+        event.put("url", url);
+        notifyListeners("deepLink", event, true);
+    }
+
+    /** The link the app was started with, once: a later call answers null. */
+    @PluginMethod
+    public void takeLaunchUrl(PluginCall call) {
+        JSObject result = new JSObject();
+        result.put("url", launchUrl);
+        launchUrl = null;
+        call.resolve(result);
+    }
+
+    private static String deepLinkOf(Intent intent) {
+        if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())) return null;
+        String url = intent.getDataString();
+        return url != null && url.startsWith("hibiki://") ? url : null;
     }
 
     @Override

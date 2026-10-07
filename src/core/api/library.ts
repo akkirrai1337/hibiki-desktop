@@ -4,6 +4,7 @@ import type { DailyActivity, LibraryEntry, RatingSyncResult, SourceAccount, Sour
 import { library, watchProgress, dailyActivity, titleRatings } from "../db/schema";
 import { logger } from "../logger";
 import { getPlatform } from "../platform";
+import { onEpisodeWatched, onLibraryChanged } from "../tracking/tracker";
 
 const getDb = () => getPlatform().db.get();
 
@@ -147,6 +148,13 @@ export function createLibraryApi(runtime: LibrarySyncRuntime): Pick<HibikiApi, "
       },
 
       async upsert(entry: LibraryEntry): Promise<void> {
+        // Read before the write: AniList hears only of a category that actually changed, not of every
+        // refresh of a title's stored data (see tracking/tracker.ts).
+        const previous = await getDb()
+          .select({ category: library.category })
+          .from(library)
+          .where(and(eq(library.sourceId, entry.sourceId), eq(library.animeId, entry.animeId)))
+          .get();
         await getDb()
           .insert(library)
           .values({
@@ -162,6 +170,13 @@ export function createLibraryApi(runtime: LibrarySyncRuntime): Pick<HibikiApi, "
           })
           .run();
         pushToAccount(runtime, entry.sourceId, entry.animeId, entry.category);
+        onLibraryChanged({
+          sourceId: entry.sourceId,
+          animeId: entry.animeId,
+          anime: entry.anime,
+          previous: (previous?.category as LibraryEntry["category"] | undefined) ?? null,
+          category: entry.category,
+        });
       },
 
       async remove(sourceId: string, animeId: string): Promise<void> {
@@ -243,6 +258,7 @@ export function createLibraryApi(runtime: LibrarySyncRuntime): Pick<HibikiApi, "
             ? Math.max(0, measuredWatchedMs)
             : Math.max(0, Math.min(progress.positionMs - (previous?.positionMs ?? 0), MAX_WATCHED_DELTA_MS));
         const newlyCompleted = progress.watched && !(previous?.watched ?? false);
+        if (newlyCompleted) onEpisodeWatched(progress.sourceId, progress.titleId);
         if (watchedDeltaMs > 0 || newlyCompleted) {
           const date = localDateKey(progress.updatedAt);
           await db

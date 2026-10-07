@@ -25,6 +25,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- AniList coming back from a sign-in (core/tracking): handed to the page by HibikiAppPlugin. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="hibiki" android:host="anilist-auth" />
+            </intent-filter>
+
         </activity>
 
         <provider

@@ -6,7 +6,6 @@ import type {
   AppUpdate,
   CachedAnimeEntry,
   CachedPlaybackGroupsEntry,
-  CachedTitleListEntry,
   DailyActivity,
   DeepLinkWatchTarget,
   DiscordPresence,
@@ -32,6 +31,12 @@ import type {
   RatingSyncResult,
   XpEvent,
   MemorySnapshot,
+  TrackerAccount,
+  TrackerId,
+  TrackerImportProgress,
+  TrackerImportReport,
+  TrackerLink,
+  TrackerMedia,
 } from "@shared/types";
 
 const api: HibikiApi = {
@@ -48,10 +53,6 @@ const api: HibikiApi = {
       ipcRenderer.invoke(IPC.sourceCachedTitles, keys),
     cachedPlaybackGroups: (sourceId: string, titleId: string): Promise<CachedPlaybackGroupsEntry | null> =>
       ipcRenderer.invoke(IPC.sourceCachedPlaybackGroups, sourceId, titleId),
-    cachedQuery: (queryKey: string): Promise<CachedTitleListEntry | null> =>
-      ipcRenderer.invoke(IPC.sourceCachedQuery, queryKey),
-    cacheQuery: (queryKey: string, titles: AnimeTitle[]): void =>
-      ipcRenderer.send(IPC.sourceCacheQuery, queryKey, titles),
     playbackGroups: (sourceId: string, titleId: string): Promise<PlaybackGroup[]> =>
       ipcRenderer.invoke(IPC.sourcePlaybackGroups, sourceId, titleId),
     playerLinks: (sourceId: string, titleId: string, groupId: string, episodeId: string, preference?: PlayerLinkPreference): Promise<PlayerLink[]> =>
@@ -116,6 +117,28 @@ const api: HibikiApi = {
       const listener = () => callback();
       ipcRenderer.on(IPC.sourcesChanged, listener);
       return () => ipcRenderer.removeListener(IPC.sourcesChanged, listener);
+    },
+  },
+  tracking: {
+    account: (tracker: TrackerId): Promise<TrackerAccount> => ipcRenderer.invoke(IPC.trackingAccount, tracker),
+    signIn: (tracker: TrackerId): Promise<void> => ipcRenderer.invoke(IPC.trackingSignIn, tracker),
+    signOut: (tracker: TrackerId): Promise<void> => ipcRenderer.invoke(IPC.trackingSignOut, tracker),
+    getLink: (tracker: TrackerId, sourceId: string, animeId: string): Promise<TrackerLink | null> =>
+      ipcRenderer.invoke(IPC.trackingGetLink, tracker, sourceId, animeId),
+    search: (tracker: TrackerId, query: string): Promise<TrackerMedia[]> => ipcRenderer.invoke(IPC.trackingSearch, tracker, query),
+    setLink: (tracker: TrackerId, sourceId: string, animeId: string, mediaId: number | null): Promise<TrackerLink | null> =>
+      ipcRenderer.invoke(IPC.trackingSetLink, tracker, sourceId, animeId, mediaId),
+    importLibrary: (tracker: TrackerId, sourceId: string): Promise<TrackerImportReport> =>
+      ipcRenderer.invoke(IPC.trackingImport, tracker, sourceId),
+    onImportProgress: (callback: (progress: TrackerImportProgress) => void): (() => void) => {
+      const listener = (_e: Electron.IpcRendererEvent, progress: TrackerImportProgress) => callback(progress);
+      ipcRenderer.on(IPC.trackingImportProgress, listener);
+      return () => ipcRenderer.removeListener(IPC.trackingImportProgress, listener);
+    },
+    onChanged: (callback: () => void): (() => void) => {
+      const listener = () => callback();
+      ipcRenderer.on(IPC.trackingChanged, listener);
+      return () => ipcRenderer.removeListener(IPC.trackingChanged, listener);
     },
   },
   ratings: {

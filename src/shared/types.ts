@@ -513,13 +513,6 @@ export interface CachedPlaybackGroupsEntry {
   cachedAt: number;
 }
 
-/** A whole title list read from the on-disk cache, with when it was last refreshed. Lets a source
- * screen paint its rows before the source itself has answered. */
-export interface CachedTitleListEntry {
-  titles: AnimeTitle[];
-  cachedAt: number;
-}
-
 /** One Electron process in a memory snapshot - see main/memoryDiagnostics.ts. */
 export interface MemoryProcess {
   pid: number;
@@ -542,4 +535,65 @@ export interface MemorySnapshot {
   mainHeapUsedMb: number;
   /** Windows the app created that are not the visible main one (hidden resolver/fetch windows). */
   rendererCount: number;
+}
+
+// --- Tracking (AniList now, MyAnimeList later) ----------------------------------------------------
+// A tracker is a list site the library is mirrored to. Only tracking: a linked entry's names and
+// numbers are shown as what the tracker says, never written over the source's own title data.
+
+export type TrackerId = "anilist";
+
+/** A list status on a tracker, in the app's own words (each tracker maps its own onto these). */
+export type TrackerStatus = "watching" | "planned" | "completed" | "dropped" | "on_hold" | "rewatching";
+
+export interface TrackerAccount {
+  tracker: TrackerId;
+  /** Whether this build can sign in at all (AniList needs a client id baked in at build time). */
+  configured: boolean;
+  user: { id: number; name: string; avatarUrl: string | null } | null;
+  /** Epoch ms the sign-in runs out (AniList: a year), null when unknown. */
+  expiresAt: number | null;
+  /** A sign-in that ran out or was revoked: the account is still shown, and asks to sign in again. */
+  needsSignIn: boolean;
+  /** Why the last sign-in did not complete, until the next attempt. */
+  signInError: string | null;
+}
+
+/** One title on the tracker, as its search shows it - for picking a link by hand. */
+export interface TrackerMedia {
+  id: number;
+  title: string;
+  /** Other names, for telling candidates apart. */
+  altTitle: string | null;
+  year: number | null;
+  /** The tracker's own format label (TV, MOVIE, OVA...). */
+  format: string | null;
+  episodes: number | null;
+  coverUrl: string | null;
+  url: string;
+}
+
+/** Where a title of a source stands on a tracker. */
+export interface TrackerLink {
+  tracker: TrackerId;
+  sourceId: string;
+  animeId: string;
+  /** "auto": matched by the app; "user": picked by hand. */
+  linkedBy: "auto" | "user";
+  media: TrackerMedia;
+  /** The account's list entry for it; null when the title is on no list there. */
+  entry: { status: TrackerStatus | null; progress: number; favourite: boolean } | null;
+}
+
+export interface TrackerImportReport {
+  added: number;
+  updated: number;
+  /** Tracker titles no title of the source could be confidently matched to. */
+  unmatched: string[];
+  failed: number;
+}
+
+export interface TrackerImportProgress {
+  done: number;
+  total: number;
 }
