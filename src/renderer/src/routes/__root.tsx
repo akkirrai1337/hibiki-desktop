@@ -275,7 +275,11 @@ function RootLayoutContent() {
   // bundle, while extensions live in Electron's stable per-user data directory. An existing
   // source is therefore conclusive evidence that this is not a first launch. Mirror that back
   // into the UI store so later launches do not need this fallback either.
-  const onboardingInferredFromSources = sourcesQuery.isSuccess && sourcesQuery.data.length > 0;
+  // Judged once, by what was installed at launch: a source installed during onboarding itself ended
+  // it on the spot, before a second could be added or the onboarding's own button was ever pressed.
+  const launchHadSources = useRef<boolean | null>(null);
+  if (launchHadSources.current === null && sourcesQuery.isSuccess) launchHadSources.current = sourcesQuery.data.length > 0;
+  const onboardingInferredFromSources = launchHadSources.current === true;
   useEffect(() => {
     if (onboardingInferredFromSources && !onboardingCompleted) setOnboardingCompleted(true);
   }, [onboardingInferredFromSources, onboardingCompleted, setOnboardingCompleted]);

@@ -17,12 +17,18 @@
     "done": "Done",
     "welcome": {
       "title": "Welcome to hibiki",
-      "description": "Let's set up the app in a couple of steps so you can start watching right away."
+      "description": "Let's set up the app in a couple of steps so you can start watching right away.",
+      "kicker": "Welcome",
+      "lead": "A catalog, a player and a library that remembers where you stopped. The anime comes from sources you add.",
+      "note": "hibiki doesn't host or share any content: sources are installed from outside repositories."
     },
     "sources": {
       "title": "Add sources",
-      "description": "Install at least one source and pick it as active - without one there's nothing to work with."
-    }
+      "description": "Install at least one source and pick it as active - without one there's nothing to work with.",
+      "mobileDescription": "Install at least one: the catalog starts from it. You can add more later in Settings."
+    },
+    "skip": "Skip for now",
+    "continue": "Continue"
   },
   "common": {
     "secondsShort": "{{count}} s",
