@@ -9,6 +9,20 @@ const DROPDOWN_VIEWPORT_MARGIN = 16;
 export interface SelectDropdownOption {
   id: string;
   label: string;
+  /** Drawn before the label, in the button and in the list (a source's icon). */
+  icon?: React.ReactNode;
+  /** A short tag after the label (APK). */
+  badge?: string;
+}
+
+function OptionContent({ option }: { option: SelectDropdownOption }) {
+  return (
+    <span className="flex min-w-0 items-center gap-2.5">
+      {option.icon && <span className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full bg-text/[.06]">{option.icon}</span>}
+      <span className="truncate">{option.label}</span>
+      {option.badge && <span className="shrink-0 rounded bg-text/[.08] px-1 py-px text-[9.5px] font-bold tracking-wide text-muted">{option.badge}</span>}
+    </span>
+  );
 }
 
 /**
@@ -65,7 +79,7 @@ export function SelectDropdown({ options, value, onChange, placeholder, disabled
         disabled={disabled}
         className="flex w-full items-center justify-between gap-2 rounded-lg border border-border bg-text/[.04] px-3 py-2 text-left text-sm text-text outline-none transition-colors focus:border-accent/70 disabled:opacity-50"
       >
-        <span className="truncate">{active?.label ?? placeholder}</span>
+        {active ? <OptionContent option={active} /> : <span className="truncate">{placeholder}</span>}
         <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted transition-transform", open && "rotate-180")} strokeWidth={2} />
       </button>
       <AnimatePresence>
@@ -89,7 +103,7 @@ export function SelectDropdown({ options, value, onChange, placeholder, disabled
                 onClick={() => { onChange(option.id); setOpen(false); }}
                 className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left text-sm text-text transition-colors hover:bg-text/[.06]"
               >
-                <span className="truncate">{option.label}</span>
+                <OptionContent option={option} />
                 {option.id === value && <Check className="h-4 w-4 shrink-0 text-accent-text" strokeWidth={2.5} />}
               </button>
             ))}

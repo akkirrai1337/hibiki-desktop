@@ -126,6 +126,8 @@ export const IPC = {
   trackingGetLink: "tracking:getLink",
   trackingSearch: "tracking:search",
   trackingSetLink: "tracking:setLink",
+  trackingRemoveFromList: "tracking:removeFromList",
+  trackingSetFavourite: "tracking:setFavourite",
   trackingImport: "tracking:import",
   // Pushed backend -> renderer: an account signed in or out, or a title's link changed.
   trackingChanged: "tracking:changed",

@@ -14,5 +14,9 @@ export function registerTrackingHandlers(runtime: ExtensionRuntime): void {
   ipcMain.handle(IPC.trackingSetLink, (_e, tracker: TrackerId, sourceId: string, animeId: string, mediaId: number | null) =>
     tracking.setLink(tracker, sourceId, animeId, mediaId),
   );
+  ipcMain.handle(IPC.trackingRemoveFromList, (_e, tracker: TrackerId, sourceId: string, animeId: string) => tracking.removeFromList(tracker, sourceId, animeId));
+  ipcMain.handle(IPC.trackingSetFavourite, (_e, tracker: TrackerId, sourceId: string, animeId: string, favourite: boolean) =>
+    tracking.setFavourite(tracker, sourceId, animeId, favourite),
+  );
   ipcMain.handle(IPC.trackingImport, (_e, tracker: TrackerId, sourceId: string) => tracking.importLibrary(tracker, sourceId));
 }

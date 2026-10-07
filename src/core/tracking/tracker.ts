@@ -24,6 +24,7 @@ import {
   aniListNames,
   aniListYear,
   anilistAuthorizeUrl,
+  deleteEntry,
   anilistClientId,
   getMediaWithEntry,
   getUserLibrary,
@@ -37,7 +38,7 @@ import {
   type AniListViewer,
 } from "./anilist";
 import { anilistFormatToType, pickConfident, scoreMatch, searchQueriesFor, trackerNamesOf, type Comparable } from "./matching";
-import { categoryChange, importedCategory, progressChange } from "./rules";
+import { categoryChange, favouriteChange, importedCategory, progressChange } from "./rules";
 
 const TRACKER: TrackerId = "anilist";
 const getDb = () => getPlatform().db.get();
@@ -320,13 +321,13 @@ async function pushProgress(token: string, row: LinkRow, sourceId: string, anime
 }
 
 /** Sets AniList's status from a category picked here. */
-async function pushCategory(token: string, row: LinkRow, category: LibraryCategory): Promise<void> {
+async function pushCategory(token: string, row: LinkRow, category: LibraryCategory, previous: LibraryCategory | null = null): Promise<void> {
   if (row.remoteId == null) return;
   const { media, entry, favourite } = await getMediaWithEntry(token, row.remoteId);
-  if (category === "favorite") {
-    if (!favourite) await toggleFavourite(token, row.remoteId);
-    return;
-  }
+  const favouriteNext = favouriteChange(previous, category, favourite);
+  // ToggleFavourite flips whatever is there, so it goes only when the answer differs.
+  if (favouriteNext !== null) await toggleFavourite(token, row.remoteId);
+  if (category === "favorite") return;
   const change = categoryChange(category, entry, media.episodes ?? null);
   if (!change) return;
   await saveEntry(token, row.remoteId, change);
@@ -345,7 +346,7 @@ export function onLibraryChanged(change: { sourceId: string; animeId: string; an
     if (!token) return;
     const row = await ensureLink(token, change.sourceId, change.animeId, change.anime);
     if (!row) return;
-    await pushCategory(token, row, category);
+    await pushCategory(token, row, category, change.previous);
     // Progress made before the title was linked (watched first, added after) goes along now.
     await pushProgress(token, row, change.sourceId, change.animeId);
     emitChanged();
@@ -437,6 +438,37 @@ export function setLink(sourceId: string, animeId: string, mediaId: number | nul
     const local = await libraryRow(sourceId, animeId);
     if (local) await pushCategory(token, row, local.category as LibraryCategory);
     await pushProgress(token, row, sourceId, animeId);
+    emitChanged();
+    return linkView(token, row);
+  }, null);
+}
+
+/**
+ * Takes the title off the account's list, asked for on the title page. It also stops syncing it:
+ * otherwise the next finished episode would put it straight back, which would look like the delete
+ * had failed. The link goes the way an unlink by hand does, so it is never re-made on its own.
+ */
+export function removeFromList(sourceId: string, animeId: string): Promise<TrackerLink | null> {
+  return guarded(async (token) => {
+    const row = await getLinkRow(sourceId, animeId);
+    if (row?.remoteId == null) return null;
+    const { entry } = await getMediaWithEntry(token, row.remoteId);
+    if (entry?.id != null) await deleteEntry(token, entry.id);
+    logger.info("tracking", `${sourceId}/${animeId}: removed from the AniList list (${row.remoteId}), syncing stopped`);
+    await writeLinkRow({ tracker: TRACKER, sourceId, animeId, remoteId: null, remoteTitle: null, linkedBy: "user", checkedAt: Date.now() });
+    emitChanged();
+    return null;
+  }, null);
+}
+
+/** Puts the title in the account's favourites, or takes it out. */
+export function setFavourite(sourceId: string, animeId: string, favourite: boolean): Promise<TrackerLink | null> {
+  return guarded(async (token) => {
+    const row = await getLinkRow(sourceId, animeId);
+    if (row?.remoteId == null) return null;
+    const current = await getMediaWithEntry(token, row.remoteId);
+    // ToggleFavourite flips whatever is there, so it is sent only when the answer differs.
+    if (current.favourite !== favourite) await toggleFavourite(token, row.remoteId);
     emitChanged();
     return linkView(token, row);
   }, null);

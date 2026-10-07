@@ -83,6 +83,8 @@ export interface AniListMedia {
 export interface AniListEntry {
   status: TrackerStatus | null;
   progress: number;
+  /** The list entry's own id, which deleting it needs; absent where AniList did not send it. */
+  id?: number;
 }
 
 export interface AniListViewer {
@@ -116,9 +118,9 @@ export function toTrackerMedia(media: AniListMedia): TrackerMedia {
   };
 }
 
-function entryFrom(raw: { status?: string | null; progress?: number | null } | null | undefined): AniListEntry | null {
+function entryFrom(raw: { id?: number | null; status?: string | null; progress?: number | null } | null | undefined): AniListEntry | null {
   if (!raw) return null;
-  return { status: raw.status ? (STATUS_FROM_ANILIST[raw.status] ?? null) : null, progress: raw.progress ?? 0 };
+  return { status: raw.status ? (STATUS_FROM_ANILIST[raw.status] ?? null) : null, progress: raw.progress ?? 0, ...(raw.id != null ? { id: raw.id } : {}) };
 }
 
 // AniList allows 90 requests a minute (30 while it is under load). Everything this app sends goes
@@ -212,7 +214,7 @@ export async function searchMedia(token: string | null, query: string, perPage =
 export async function getMediaWithEntry(token: string, mediaId: number): Promise<{ media: AniListMedia; entry: AniListEntry | null; favourite: boolean }> {
   const data = await anilistQuery<{ Media: AniListMedia & { isFavourite?: boolean; mediaListEntry?: { status?: string | null; progress?: number | null } | null } }>(
     token,
-    `query ($id: Int) { Media(id: $id, type: ANIME) { ${MEDIA_FIELDS} isFavourite mediaListEntry { status progress } } }`,
+    `query ($id: Int) { Media(id: $id, type: ANIME) { ${MEDIA_FIELDS} isFavourite mediaListEntry { id status progress } } }`,
     { id: mediaId },
   );
   return { media: data.Media, entry: entryFrom(data.Media.mediaListEntry), favourite: data.Media.isFavourite ?? false };
@@ -230,6 +232,11 @@ export async function saveEntry(token: string, mediaId: number, change: { status
     },
   );
   return entryFrom(data.SaveMediaListEntry) ?? { status: change.status ?? null, progress: change.progress ?? 0 };
+}
+
+/** Deletes a list entry by its own id (not the title's). */
+export async function deleteEntry(token: string, entryId: number): Promise<void> {
+  await anilistQuery(token, "mutation ($id: Int) { DeleteMediaListEntry(id: $id) { deleted } }", { id: entryId });
 }
 
 /** Flips the favourite - so the caller checks it is off first. */

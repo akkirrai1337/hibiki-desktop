@@ -50,6 +50,18 @@ export function categoryChange(category: LibraryCategory, entry: RemoteEntry | n
   return { status };
 }
 
+/**
+ * Whether the tracker's favourite should change with a category move here: on when the title goes
+ * into favourites, off when it leaves them for another category. The library holds one category
+ * per title, so leaving favourites here is leaving them there. Null leaves it as it is - anything
+ * else, including a favourite set on the website for a title that was never one here.
+ */
+export function favouriteChange(previous: LibraryCategory | null, category: LibraryCategory, favourite: boolean): boolean | null {
+  if (category === "favorite") return favourite ? null : true;
+  if (previous === "favorite" && favourite) return false;
+  return null;
+}
+
 const STATUS_TO_CATEGORY: Record<TrackerStatus, LibraryCategory> = {
   watching: "watching",
   rewatching: "watching",

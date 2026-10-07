@@ -235,6 +235,9 @@ export interface HibikiApi {
     search(tracker: TrackerId, query: string): Promise<TrackerMedia[]>;
     /** Links the title to `mediaId` by hand, or unlinks it (null). */
     setLink(tracker: TrackerId, sourceId: string, animeId: string, mediaId: number | null): Promise<TrackerLink | null>;
+    /** Deletes the title's entry from the account's list and stops syncing the title (it is unlinked). */
+    removeFromList(tracker: TrackerId, sourceId: string, animeId: string): Promise<TrackerLink | null>;
+    setFavourite(tracker: TrackerId, sourceId: string, animeId: string, favourite: boolean): Promise<TrackerLink | null>;
     /** Brings the account's lists into the library, finding each title on `sourceId`. */
     importLibrary(tracker: TrackerId, sourceId: string): Promise<TrackerImportReport>;
     onImportProgress(callback: (progress: TrackerImportProgress) => void): () => void;

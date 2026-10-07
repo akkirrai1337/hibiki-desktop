@@ -702,7 +702,7 @@
       "waiting": "Finish signing in in the browser, then come back here.",
       "expired": "Your AniList sign-in has expired. Sign in again to keep syncing.",
       "signInFailed": "Couldn't sign in: {{error}}",
-      "howItWorks": "Progress goes up as you finish episodes, and picking a category here sets the status there. Nothing is ever deleted on AniList."
+      "howItWorks": "Progress goes up as you finish episodes, and picking a category here sets the status there. Syncing never deletes anything on AniList on its own."
     },
     "import": {
       "title": "Import from AniList",
@@ -721,14 +721,18 @@
       "dialogTitle": "AniList",
       "linkedAuto": "Matched automatically",
       "linkedUser": "Picked by you",
-      "change": "Choose another",
-      "unlink": "Unlink",
       "search": "Search AniList",
       "noResults": "Nothing found",
       "open": "Open on AniList",
       "none": "This title isn't linked yet. Pick it on AniList, and its progress will sync from now on.",
       "episodes": "{{count}} ep.",
-      "favourite": "Favourite"
+      "favourite": "Favourite",
+      "addFavourite": "Add to favourites",
+      "removeFavourite": "Remove from favourites",
+      "remove": "Remove from list",
+      "removeAction": "Remove",
+      "removeConfirm": "Remove “{{title}}” from your AniList list? This title will stop syncing.",
+      "wrongTitle": "Wrong title?"
     },
     "status": {
       "watching": "Watching",

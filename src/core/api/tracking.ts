@@ -20,6 +20,8 @@ export function createTrackingApi(runtime: anilist.ImportRuntime): TrackingApi {
     getLink: async (tracker, sourceId, animeId) => (only(tracker), anilist.getLink(sourceId, animeId)),
     search: async (tracker, query) => (only(tracker), anilist.search(query)),
     setLink: async (tracker, sourceId, animeId, mediaId) => (only(tracker), anilist.setLink(sourceId, animeId, mediaId)),
+    removeFromList: async (tracker, sourceId, animeId) => (only(tracker), anilist.removeFromList(sourceId, animeId)),
+    setFavourite: async (tracker, sourceId, animeId, favourite) => (only(tracker), anilist.setFavourite(sourceId, animeId, favourite)),
     importLibrary: async (tracker, sourceId) => {
       only(tracker);
       return anilist.importLibrary(runtime, sourceId, (done, total) => getPlatform().events.emit(IPC.trackingImportProgress, { done, total }));

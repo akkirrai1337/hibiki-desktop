@@ -128,6 +128,10 @@ const api: HibikiApi = {
     search: (tracker: TrackerId, query: string): Promise<TrackerMedia[]> => ipcRenderer.invoke(IPC.trackingSearch, tracker, query),
     setLink: (tracker: TrackerId, sourceId: string, animeId: string, mediaId: number | null): Promise<TrackerLink | null> =>
       ipcRenderer.invoke(IPC.trackingSetLink, tracker, sourceId, animeId, mediaId),
+    removeFromList: (tracker: TrackerId, sourceId: string, animeId: string): Promise<TrackerLink | null> =>
+      ipcRenderer.invoke(IPC.trackingRemoveFromList, tracker, sourceId, animeId),
+    setFavourite: (tracker: TrackerId, sourceId: string, animeId: string, favourite: boolean): Promise<TrackerLink | null> =>
+      ipcRenderer.invoke(IPC.trackingSetFavourite, tracker, sourceId, animeId, favourite),
     importLibrary: (tracker: TrackerId, sourceId: string): Promise<TrackerImportReport> =>
       ipcRenderer.invoke(IPC.trackingImport, tracker, sourceId),
     onImportProgress: (callback: (progress: TrackerImportProgress) => void): (() => void) => {

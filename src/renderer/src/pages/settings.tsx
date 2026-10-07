@@ -768,7 +768,13 @@ function TrackingImportRow() {
           onChange={setPicked}
           disabled={run.isPending || !sources.data?.length}
           placeholder={t("tracking.import.source")}
-          options={(sources.data ?? []).map((source) => ({ id: source.id, label: source.name }))}
+          options={(sources.data ?? []).map((source) => ({
+            id: source.id,
+            label: source.name,
+            icon: source.iconUrl ? <img src={source.iconUrl} alt="" className="h-full w-full object-cover" /> : <Radio className="h-3 w-3 text-muted" strokeWidth={1.75} />,
+            // An Aniyomi extension (Android), the way the Sources screen marks one.
+            badge: source.id.startsWith("apk:") ? "APK" : undefined,
+          }))}
         />
         <button
           onClick={() => run.mutate()}

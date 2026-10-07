@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseAniListRedirect } from "./anilist";
-import { categoryChange, importedCategory, progressChange } from "./rules";
+import { categoryChange, favouriteChange, importedCategory, progressChange } from "./rules";
 
 describe("progressChange", () => {
   it("never lowers progress, and writes nothing when there is nothing new", () => {
@@ -50,6 +50,22 @@ describe("categoryChange", () => {
   it("fills the progress in on completing", () => {
     expect(categoryChange("completed", { status: "watching", progress: 5 }, 12)).toEqual({ status: "completed", progress: 12 });
     expect(categoryChange("completed", { status: "watching", progress: 5 }, null)).toEqual({ status: "completed" });
+  });
+});
+
+describe("favouriteChange", () => {
+  it("marks a favourite going into favourites, once", () => {
+    expect(favouriteChange("watching", "favorite", false)).toBe(true);
+    expect(favouriteChange("watching", "favorite", true)).toBeNull();
+  });
+
+  it("unmarks it when the title leaves favourites for another category", () => {
+    expect(favouriteChange("favorite", "watching", true)).toBe(false);
+  });
+
+  it("leaves alone a favourite that was never one here", () => {
+    expect(favouriteChange("planned", "watching", true)).toBeNull();
+    expect(favouriteChange(null, "completed", true)).toBeNull();
   });
 });
 
