@@ -26,7 +26,6 @@
 
 ### 🖼️ Скриншоты
 
-<!-- Добавьте android-home.png, android-details.png, desktop-home.png и desktop-details.png в docs/screenshots/. -->
 
 <div align="center">
 
@@ -34,8 +33,8 @@
 
 <table>
   <tr>
-    <td><img src="./docs/screenshots/android-home.png" alt="Главная — Android" width="250"/></td>
-    <td><img src="./docs/screenshots/android-details.png" alt="Страница тайтла — Android" width="250"/></td>
+    <td><img src="./docs/screenshots/android-home.jpg" alt="Главная — Android" width="250"/></td>
+    <td><img src="./docs/screenshots/android-details.jpg" alt="Страница тайтла — Android" width="250"/></td>
   </tr>
 </table>
 

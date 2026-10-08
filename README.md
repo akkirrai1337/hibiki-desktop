@@ -26,7 +26,6 @@
 
 ### 🖼️ Screenshots
 
-<!-- Add android-home.png, android-details.png, desktop-home.png, and desktop-details.png to docs/screenshots/. -->
 
 <div align="center">
 
@@ -34,8 +33,8 @@
 
 <table>
   <tr>
-    <td><img src="./docs/screenshots/android-home.png" alt="Android home screen" width="250"/></td>
-    <td><img src="./docs/screenshots/android-details.png" alt="Android title details" width="250"/></td>
+    <td><img src="./docs/screenshots/android-home.jpg" alt="Android home screen" width="250"/></td>
+    <td><img src="./docs/screenshots/android-details.jpg" alt="Android title details" width="250"/></td>
   </tr>
 </table>
 
