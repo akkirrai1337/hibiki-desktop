@@ -1,10 +1,10 @@
 // Device sync, the phone's side: finding a computer, pairing with it, and syncing - on start, when
 // the app comes back to the screen, every few minutes while it is open, and shortly after anything
 // synced changes here. The computer only ever answers (server.ts), so this is where sync happens.
-import type { SyncCandidate, SyncDevice } from "@shared/types";
+import type { SyncCandidate, SyncDevice, SyncPairMode } from "@shared/types";
 import { logger } from "../logger";
 import { getPlatform } from "../platform";
-import { applyChanges, changeCount, collectChanges, describeChanges, deviceId } from "./changes";
+import { applyChanges, changeCount, collectChanges, currentSeq, describeChanges, deviceId, wipeSyncedData } from "./changes";
 import { checkProof, deriveSharedKey, keyProof, newPairingKeys, open, seal } from "./crypto";
 import { listPeers, peerKey, savePeer, toDevice, updatePeer, type PeerRow } from "./peers";
 import { PROTOCOL_VERSION, SYNC_PORT, type SyncAnswer, type SyncErrorCode, type SyncPayload, type SyncRequest, type SyncResponse } from "./protocol";
@@ -78,18 +78,21 @@ export async function discover(): Promise<SyncCandidate[]> {
   return list;
 }
 
-/** Pairs with a computer using the code it shows. Fails with SyncError("bad-code") on a wrong code. */
-export async function pair(candidate: SyncCandidate, code: string): Promise<SyncDevice> {
-  logger.info("sync", `pairing with "${candidate.name}" (${candidate.kind}) at ${candidate.host}:${candidate.port}`);
+/**
+ * Pairs with a device using the code it shows. Fails with SyncError("bad-code") on a wrong code.
+ * `mode` says whose data stays; a replacement is carried out by the first exchange (see syncWith).
+ */
+export async function pair(candidate: SyncCandidate, code: string, mode: SyncPairMode = "merge"): Promise<SyncDevice> {
+  logger.info("sync", `pairing with "${candidate.name}" (${candidate.kind}) at ${candidate.host}:${candidate.port}, ${mode}`);
   try {
-    return await pairSteps(candidate, code);
+    return await pairSteps(candidate, code, mode);
   } catch (error) {
     logger.warn("sync", `pairing with "${candidate.name}" failed: ${errorText(error)}`);
     throw error;
   }
 }
 
-async function pairSteps(candidate: SyncCandidate, code: string): Promise<SyncDevice> {
+async function pairSteps(candidate: SyncCandidate, code: string, mode: SyncPairMode): Promise<SyncDevice> {
   const keys = await newPairingKeys();
   const hello = await request(candidate.host, candidate.port, {
     v: PROTOCOL_VERSION,
@@ -103,7 +106,11 @@ async function pairSteps(candidate: SyncCandidate, code: string): Promise<SyncDe
   // A different code (or someone in between) gives a different key: the computer's proof fails here.
   if (!(await checkProof(key, "server", hello.proof))) throw new SyncError("bad-code", "the other device's proof does not match this code");
   await request(candidate.host, candidate.port, { v: PROTOCOL_VERSION, type: "pair-confirm", from: await deviceId(), proof: await keyProof(key, "client") });
-  const peer = await savePeer(hello.from, hello.name, key, `${candidate.host}:${candidate.port}`, true);
+  const peer = await savePeer(hello.from, hello.name, key, `${candidate.host}:${candidate.port}`, true, {
+    replace: mode === "keep-here" ? "send" : mode === "take-there" ? "take" : null,
+    // Taking the other device's data: what is here now goes, so none of it is sent.
+    sentSeq: mode === "take-there" ? await currentSeq() : 0,
+  });
   logger.info("sync", `paired with "${hello.name}" (${hello.from.slice(0, 8)}); this device starts the syncs`);
   notifySyncChanged("devices");
   void syncNow().catch(() => {});
@@ -127,6 +134,7 @@ async function syncWith(peer: PeerRow): Promise<void> {
   let changedHere = 0;
   let sentRows = 0;
   let receivedRows = 0;
+  let pendingReplace = peer.pendingReplace as "send" | "take" | null;
   const startedAt = Date.now();
 
   const exchange = async (target: { host: string; port: number }) => {
@@ -137,10 +145,16 @@ async function syncWith(peer: PeerRow): Promise<void> {
         v: PROTOCOL_VERSION,
         type: "sync",
         from,
-        sealed: await seal(key, { want: receivedSeq, changes: outgoing } satisfies SyncPayload),
+        sealed: await seal(key, { want: receivedSeq, changes: outgoing, ...(pendingReplace === "send" ? { replace: true } : {}) } satisfies SyncPayload),
       });
       if (response.type !== "sync") throw new SyncError("bad-message");
       const { changes } = await open<SyncAnswer>(key, response.sealed);
+      // Taking the other device's data: cleared here only once it has answered, so an unreachable
+      // device never leaves this one empty.
+      if (pendingReplace === "take") {
+        logger.info("sync", `replacing this device's data with "${peer.name}"'s`);
+        await wipeSyncedData();
+      }
       const { changed } = await applyChanges(changes);
       changedHere += changed;
       sentRows += changeCount(outgoing);
@@ -149,7 +163,11 @@ async function syncWith(peer: PeerRow): Promise<void> {
       // Both sides have what this round carried: the cursors move on, and stay put if it failed.
       sentSeq = outgoing.upTo;
       receivedSeq = changes.upTo;
-      await updatePeer(peer.deviceId, { sentSeq, receivedSeq, lastAddress: `${target.host}:${target.port}`, lastSyncAt: Date.now() });
+      // A replacement is done once its first exchange has gone through; the rest is an ordinary sync.
+      if (pendingReplace === "send") logger.info("sync", `"${peer.name}" replaced its data with this device's`);
+      await updatePeer(peer.deviceId, { sentSeq, receivedSeq, lastAddress: `${target.host}:${target.port}`, lastSyncAt: Date.now(), pendingReplace: null });
+      if (pendingReplace) changedHere++;
+      pendingReplace = null;
       if (!outgoing.more && !changes.more) return;
     }
   };

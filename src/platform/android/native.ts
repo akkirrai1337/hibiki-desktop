@@ -80,10 +80,17 @@ export interface HibikiResolverPlugin {
 }
 
 export interface HibikiAppPlugin {
+  /** The Kotlin hibiki's library rows and saved positions, if it was installed before this app replaced it. */
+  legacyData(): Promise<{
+    found: boolean;
+    library: Array<{ titleId: string; animeJson?: string; categories: string; addedAt?: number }>;
+    progress: Record<string, string>;
+    libraryError?: string;
+  }>;
   minimize(): Promise<void>;
   keepAwake(options: { value: boolean }): Promise<void>;
   setImmersive(options: { value: boolean }): Promise<void>;
-  setOrientation(options: { value: "landscape" | "portrait" | "auto" }): Promise<void>;
+  setOrientation(options: { value: "landscape" | "portrait" | "sensor" | "auto" }): Promise<void>;
   /** The system share sheet with a text file of that name. */
   shareText(options: { name: string; text: string }): Promise<void>;
   updatePip(options: { enabled: boolean; playing: boolean; hasPrevious: boolean; hasNext: boolean; width?: number; height?: number; labels: Record<string, string> }): Promise<void>;

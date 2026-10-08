@@ -4,7 +4,7 @@ import { AnimatePresence } from "motion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Laptop, Loader2, RefreshCw, Smartphone, Trash2, Wifi } from "lucide-react";
-import type { SyncCandidate, SyncDevice } from "@shared/types";
+import type { SyncCandidate, SyncDevice, SyncPairMode } from "@shared/types";
 import { BottomSheet } from "@/components/BottomSheet";
 import { Modal } from "@/components/Modal";
 import { cn } from "@/lib/cn";
@@ -51,18 +51,8 @@ export function DeviceSyncSection() {
   const devices = useQuery({ queryKey: DEVICES_KEY, queryFn: () => hibiki.sync.devices() });
   const list = devices.data ?? [];
 
-  return (
-    <section className="rounded-2xl border border-border bg-text/[.03] p-4">
-      <div className="flex items-start gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-text/[.07] text-text">
-          <Wifi className="h-[18px] w-[18px]" strokeWidth={2} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-text">{t("deviceSync.title")}</p>
-          <p className="mt-0.5 text-xs leading-relaxed text-muted">{t(isMobile ? "deviceSync.hintPhone" : "deviceSync.hint")}</p>
-        </div>
-      </div>
-
+  const devicesAndActions = (
+    <>
       {list.length > 0 && (
         <div className="mt-3 space-y-1.5">
           {list.map((device) => <DeviceRow key={device.deviceId} device={device} />)}
@@ -75,6 +65,25 @@ export function DeviceSyncSection() {
         <ShowCode />
         {!isMobile && <ConnectToDevice paired={list.some((device) => device.connects)} />}
       </div>
+    </>
+  );
+
+  // The same card as the settings rows beside it (settings.tsx's SettingsRow): the icon in its own
+  // column, everything else lined up under the title - on a phone the list and buttons take the
+  // card's whole width instead.
+  return (
+    <section className="rounded-2xl border border-border bg-text/[.03] p-4">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-text/[.06] text-muted">
+          <Wifi className="h-[18px] w-[18px]" strokeWidth={2} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-text">{t("deviceSync.title")}</p>
+          <p className="mt-0.5 text-xs leading-relaxed text-muted">{t(isMobile ? "deviceSync.hintPhone" : "deviceSync.hint")}</p>
+          {!isMobile && devicesAndActions}
+        </div>
+      </div>
+      {isMobile && devicesAndActions}
     </section>
   );
 }
@@ -269,9 +278,10 @@ function PairFlow({ onDone }: { onDone: () => void }) {
   const queryClient = useQueryClient();
   const [target, setTarget] = useState<SyncCandidate | null>(null);
   const [code, setCode] = useState("");
+  const [mode, setMode] = useState<SyncPairMode>("merge");
   const found = useQuery({ queryKey: ["syncDiscover"], queryFn: () => hibiki.sync.discover!(), staleTime: 0, gcTime: 0 });
   const pair = useMutation({
-    mutationFn: () => hibiki.sync.pair!(target!, code),
+    mutationFn: () => hibiki.sync.pair!(target!, code, mode),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: DEVICES_KEY });
       onDone();
@@ -338,17 +348,60 @@ function PairFlow({ onDone }: { onDone: () => void }) {
         placeholder="••••••"
       />
       {error && <p className="mt-2 text-xs leading-relaxed text-rose-500">{syncErrorText(error, t)}</p>}
+      <PairModePicker mode={mode} onChange={setMode} otherName={target.name} />
       <button
         type="submit"
         disabled={code.length !== 6 || pair.isPending}
         className="mt-4 flex h-[3.25rem] w-full items-center justify-center gap-2 rounded-full bg-accent-solid text-[15px] font-bold text-accent-solid-fg disabled:opacity-50"
       >
         {pair.isPending && <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.25} />}
-        {t("deviceSync.pair")}
+        {t(mode === "merge" ? "deviceSync.pair" : "deviceSync.pairReplace")}
       </button>
       <button type="button" onClick={() => { setTarget(null); setCode(""); pair.reset(); }} className="mt-1 h-10 w-full text-sm font-semibold text-muted">
         {t("deviceSync.back")}
       </button>
     </form>
+  );
+}
+
+/** Whose data stays: both, joined - or one device's, replacing the other's entirely. */
+function PairModePicker({ mode, onChange, otherName }: { mode: SyncPairMode; onChange: (mode: SyncPairMode) => void; otherName: string }) {
+  const { t } = useTranslation();
+  const options: Array<{ value: SyncPairMode; title: string; hint: string }> = [
+    { value: "merge", title: t("deviceSync.mode.merge"), hint: t("deviceSync.mode.mergeHint") },
+    { value: "keep-here", title: t("deviceSync.mode.keepHere"), hint: t("deviceSync.mode.keepHereHint", { name: otherName }) },
+    { value: "take-there", title: t("deviceSync.mode.takeThere", { name: otherName }), hint: t("deviceSync.mode.takeThereHint", { name: otherName }) },
+  ];
+  return (
+    <fieldset className="mt-4">
+      <legend className="text-[13px] font-semibold text-text">{t("deviceSync.mode.title")}</legend>
+      <div className="mt-2 space-y-1.5" role="radiogroup">
+        {options.map((option) => {
+          const selected = option.value === mode;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onChange(option.value)}
+              className={cn(
+                "flex w-full items-start gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors",
+                selected ? "border-accent/60 bg-accent/[.06]" : "border-border bg-text/[.03] hover:bg-text/[.06]",
+              )}
+            >
+              <span className={cn("mt-[3px] flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2", selected ? "border-accent" : "border-text/30")}>
+                {selected && <span className="h-1.5 w-1.5 rounded-full bg-accent" />}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-text">{option.title}</span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-muted">{option.hint}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {mode !== "merge" && <p className="mt-2 text-xs leading-relaxed text-rose-500">{t("deviceSync.mode.warning")}</p>}
+    </fieldset>
   );
 }

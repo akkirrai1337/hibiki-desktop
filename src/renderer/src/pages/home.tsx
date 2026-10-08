@@ -1,13 +1,14 @@
-import { useMemo } from "react";
+import { Children, useMemo } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { useTranslation } from "react-i18next";
-import { Play, Radio, RefreshCw, WifiOff } from "lucide-react";
+import { Play, Radio, RefreshCw, ShieldAlert, WifiOff } from "lucide-react";
 import { hibiki } from "@/lib/hibiki";
 import { AnimeCard, PosterGrid, PosterGridSkeleton, PosterRow, PosterRowSkeleton, animeTitle } from "@/components/AnimeCard";
 import { ContinueWatchingFrameRow } from "@/components/ContinueWatchingRow";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { CloudflareCheckButton, useCloudflareText } from "@/components/CloudflareCheck";
 import { HERO_ACTION_CLASS, HeroCarousel, type HeroSlide } from "@/components/Hero";
 import { MobileHero } from "@/components/MobileHero";
 import { isMobile } from "@/lib/mobile";
@@ -83,6 +84,14 @@ export function CatalogPage() {
       return hibiki.sources.search(source!.id, { offset: 0, limit: POOL_WINDOW, sort: sortMode });
     },
   });
+  // What just came out on the source, as the Android app's home had it - for the sources that keep
+  // such a list (LATEST_RELEASES). A failure only hides the row: the popular row speaks for the source.
+  const hasLatest = source?.capabilities.includes("LATEST_RELEASES") ?? false;
+  const latest = useQuery({
+    queryKey: ["latest", source?.id],
+    enabled: !!source && hasLatest,
+    queryFn: () => hibiki.sources.latest(source!.id, RECOMMENDED_COUNT),
+  });
   // What was watched on this source, turned into what to watch next on it (core/recommendations).
   // Only asked once there is history; the backend reuses its answer until the history changes.
   const { hasHistory } = useContinueWatching();
@@ -119,7 +128,7 @@ export function CatalogPage() {
   const refreshHome = () => Promise.all([
     sources.refetch(),
     // Only with a source: without one these have nothing to ask (and are switched off).
-    ...(source ? [hero.refetch(), pool.refetch()] : []),
+    ...(source ? [hero.refetch(), pool.refetch(), ...(hasLatest ? [latest.refetch()] : [])] : []),
     queryClient.invalidateQueries({ queryKey: ["recent-progress"] }),
     queryClient.invalidateQueries({ queryKey: ["recommendations"] }),
   ]);
@@ -131,13 +140,13 @@ export function CatalogPage() {
           instead of a missing hero over an empty section under a raw error. What is local - the
           continue-watching row - still shows below. (The previous visit's titles used to be painted
           from disk meanwhile; they were always different titles, swapped out a second later.) */}
-      {hero.isError && pool.isError ? <SourceUnavailable name={source.name} retrying={hero.isFetching || pool.isFetching} onRetry={() => void refreshHome()} /> : heroSlides.length > 0
+      {hero.isError && pool.isError ? <SourceUnavailable name={source.name} error={hero.error} retrying={hero.isFetching || pool.isFetching} onRetry={() => void refreshHome()} /> : heroSlides.length > 0
         ? isMobile
           ? <MobileHero slides={heroSlides.map((slide) => toHeroSlide(slide, t("catalog.openTitle"), source.iconUrl))} label={t("catalog.trendingOnPrefix")} sourceName={source.name} />
           : <HeroCarousel slides={heroSlides.map((slide) => toHeroSlide(slide, t("catalog.openTitle"), source.iconUrl))} label={t("catalog.trendingOnPrefix")} sourceName={source.name} />
         : hero.isPending && <HeroSkeleton />}
       <div className="space-y-12 px-8 pt-10 mobile:space-y-8 mobile:px-4 mobile:pt-5">
-        {pool.isError && !hero.isError && <ErrorBanner message={(pool.error as Error).message} onRetry={() => void pool.refetch()} />}
+        {pool.isError && !hero.isError && <ErrorBanner message={(pool.error as Error).message} error={pool.error} onRetry={() => void pool.refetch()} />}
         {/* Always the frame row: swapping to poster cards below a threshold meant the section
             changed shape as history filled up, and a single captured frame still reads as "here's
             where you left off" better than a poster does. */}
@@ -148,14 +157,17 @@ export function CatalogPage() {
           <HomeTitles>{continuations.map(({ anime }) => <AnimeCard key={anime.id} anime={anime} />)}</HomeTitles>
         </Section>}
         {picks.length > 0 && <Section title={t("catalog.forYou", { source: source.name })}>
-          <HomeTitles>{picks.map(({ anime }) => <AnimeCard key={anime.id} anime={anime} />)}</HomeTitles>
+          <HomeTitles layout="grid">{picks.map(({ anime }) => <AnimeCard key={anime.id} anime={anime} />)}</HomeTitles>
+        </Section>}
+        {hasLatest && !latest.isError && (latest.isPending || (latest.data?.length ?? 0) > 0) && <Section title={t("catalog.latestReleases")}>
+          {latest.isPending ? (isMobile ? <PosterRowSkeleton /> : <PosterGridSkeleton count={15} />) : <HomeTitles>{(latest.data ?? []).map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</HomeTitles>}
         </Section>}
         {/* The pool is what is popular on the source, nothing more - personal picks are above. */}
         {!pool.isError && <Section title={t("catalog.popularNow")} action={t("catalog.openCatalog")} to="/catalog">
-          {pool.isPending ? (isMobile ? <PosterRowSkeleton /> : <PosterGridSkeleton count={15} />) : <HomeTitles>{recommended.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</HomeTitles>}
+          {pool.isPending ? <PosterGridSkeleton count={isMobile ? MOBILE_GRID_COUNT : 15} /> : <HomeTitles layout="grid">{recommended.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</HomeTitles>}
         </Section>}
         {genreSection && <Section title={t("catalog.genreSection", { genre: genreSection.genre })} action={t("catalog.openCatalog")} to="/catalog">
-          <HomeTitles>{genreSection.items.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</HomeTitles>
+          <HomeTitles layout="grid">{genreSection.items.map(item => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</HomeTitles>
         </Section>}
       </div>
     </>}
@@ -187,7 +199,18 @@ function toHeroSlide(anime: AnimeTitle, openLabel: string, sourceIconUrl?: strin
 
 function Section({ title, action, to, children }: { title: string; action?: string; to?: "/catalog" | "/history"; children: React.ReactNode }) { return <section><div className="mb-5 flex items-center justify-between gap-3 mobile:mb-3"><h2 className="text-2xl font-bold tracking-[-.02em] text-text mobile:truncate mobile:text-[19px]">{title}</h2>{action && to && <Link to={to} className="text-sm font-semibold text-muted transition-colors hover:text-accent-text mobile:shrink-0 mobile:text-[13px]">{action} →</Link>}</div>{children}</section>; }
 // A grid on desktop; on the phone a row the thumb scrolls sideways, so a section stays one screen-line tall.
-function HomeTitles({ children }: { children: React.ReactNode }) { return isMobile ? <PosterRow>{children}</PosterRow> : <PosterGrid>{children}</PosterGrid>; }
+// On the phone the two kinds of section read differently: a feed of what is new (latest episodes,
+// continuations) is a row the thumb runs through, while a selection (for you, popular, a genre) is a
+// 3x3 block the eye takes in at once - nine posters down the page, the rest a tap away in the catalog.
+const MOBILE_GRID_COUNT = 9;
+function HomeTitles({ layout = "row", children }: { layout?: "row" | "grid"; children: React.ReactNode }) {
+  if (!isMobile) return <PosterGrid>{children}</PosterGrid>;
+  if (layout === "row") return <PosterRow>{children}</PosterRow>;
+  // Whole rows only: a fourth title alone under three looks like something failed to load.
+  const items = Children.toArray(children);
+  const count = items.length < 3 ? items.length : Math.min(MOBILE_GRID_COUNT, items.length - (items.length % 3));
+  return <PosterGrid>{items.slice(0, count)}</PosterGrid>;
+}
 /**
  * The hero while its titles load, in the hero's own shape - the full-bleed slide with its text at
  * the bottom on the phone, the tall banner on the desktop - so nothing below moves when it arrives.
@@ -221,15 +244,17 @@ function HeroSkeleton() {
     </div>
   </div>;
 }
-function SourceUnavailable({ name, retrying, onRetry }: { name: string; retrying: boolean; onRetry: () => void }) {
+function SourceUnavailable({ name, error, retrying, onRetry }: { name: string; error: unknown; retrying: boolean; onRetry: () => void }) {
   const { t } = useTranslation();
   const offline = typeof navigator !== "undefined" && !navigator.onLine;
+  const cloudflare = useCloudflareText(error);
   return <div className="flex min-h-[340px] items-center justify-center px-8 py-16 mobile:min-h-[300px] mobile:px-6 mobile:pb-6 mobile:pt-[calc(4rem+var(--safe-top))]">
     <div className="max-w-sm text-center">
-      <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-text/[.06]"><WifiOff className="h-6 w-6 text-muted" strokeWidth={1.75} /></div>
+      <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-text/[.06]">{cloudflare ? <ShieldAlert className="h-6 w-6 text-muted" strokeWidth={1.75} /> : <WifiOff className="h-6 w-6 text-muted" strokeWidth={1.75} />}</div>
       <h1 className="text-xl font-bold text-text">{t("catalog.sourceUnavailableTitle", { source: name })}</h1>
-      <p className="mt-3 text-sm leading-6 text-muted">{offline ? t("common.offlineHint") : t("catalog.sourceUnavailableText")}</p>
+      <p className="mt-3 text-sm leading-6 text-muted">{cloudflare ?? (offline ? t("common.offlineHint") : t("catalog.sourceUnavailableText"))}</p>
       <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+        <CloudflareCheckButton error={error} className="rounded-xl bg-accent px-4 py-2.5 text-sm font-bold text-accent-fg transition-[filter] hover:brightness-110 mobile:rounded-full mobile:px-5" />
         <button onClick={onRetry} disabled={retrying} className="inline-flex items-center gap-2 rounded-xl bg-text/[.08] px-4 py-2.5 text-sm font-bold text-text transition-colors hover:bg-text/[.14] disabled:opacity-60 mobile:rounded-full mobile:px-5">
           <RefreshCw className={cn("h-4 w-4", retrying && "animate-spin")} strokeWidth={2} />{t("common.retry")}
         </button>

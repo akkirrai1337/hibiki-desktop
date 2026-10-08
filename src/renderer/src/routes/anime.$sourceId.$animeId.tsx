@@ -8,6 +8,8 @@ import { AnimatePresence, motion, useIsPresent } from "motion/react";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import { ArrowDown01, ArrowDown10, ArrowLeft, ArrowUpDown, Captions, ChevronRight, Sparkles, LayoutGrid, List, Mic, Play, Bookmark, Check, ChevronDown, Clock, Download, Eraser, ExternalLink, Eye, Heart, Pause, Trash2, TriangleAlert, X } from "lucide-react";
 import { CommentsSection } from "@/components/CommentsSection";
+import { CloudflareCheckButton, useCloudflareText } from "@/components/CloudflareCheck";
+import { cloudflareCheckOf } from "@shared/cloudflare";
 import { RatingButton, SourceRatings } from "@/components/RatingButton";
 import { TrackerLinkButton } from "@/components/TrackerLinkButton";
 import { useRecommendationReason } from "@/lib/recommendations";
@@ -1189,7 +1191,10 @@ function DownloadDialog({
         {linksQuery.isLoading ? (
           <p className="text-sm text-muted">{t("detail.downloadDialog.loadingQualities")}</p>
         ) : linksQuery.isError ? (
-          <p className="text-sm text-rose-400">{t("common.loadFailed", { message: (linksQuery.error as Error).message })}</p>
+          <div className="text-sm text-rose-400">
+            <p>{cloudflareCheckOf(linksQuery.error) ? t("common.cloudflareBlocked", { host: cloudflareCheckOf(linksQuery.error)!.host }) : t("common.loadFailed", { message: (linksQuery.error as Error).message })}</p>
+            <CloudflareCheckButton error={linksQuery.error} className="mt-1.5 font-semibold underline underline-offset-2" />
+          </div>
         ) : unsupported ? (
           <p className="text-sm text-rose-400">{t("detail.episodeMenu.downloadUnsupported")}</p>
         ) : variants.length === 0 ? (
@@ -1260,7 +1265,7 @@ function Modal({ onDismiss, children }: { onDismiss: () => void; children: React
 }
 
 function Dot() { return <span className="h-0.5 w-0.5 rounded-full bg-muted" />; }
-function ErrorBanner({ message }: { message: string }) { const { t } = useTranslation(); return <div className="flex items-start gap-3 rounded-2xl border border-rose-400/30 bg-rose-400/10 p-4 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/5 dark:text-rose-200"><TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} /><span>{t("common.loadFailed", { message })}</span></div>; }
+function ErrorBanner({ message }: { message: string }) { const { t } = useTranslation(); const cloudflare = useCloudflareText(message); return <div className="flex items-start gap-3 rounded-2xl border border-rose-400/30 bg-rose-400/10 p-4 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/5 dark:text-rose-200"><TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} /><div className="min-w-0"><p>{cloudflare ?? t("common.loadFailed", { message })}</p><CloudflareCheckButton error={message} className="mt-2 font-semibold text-rose-800 underline underline-offset-2 hover:text-rose-950 dark:text-rose-100 dark:hover:text-white" /></div></div>; }
 // Phone: the shape of the phone's own layout (MobileOverview) - the desktop one's big poster and
 // right-hand column ran off the side of the screen.
 function MobileDetailSkeleton() {

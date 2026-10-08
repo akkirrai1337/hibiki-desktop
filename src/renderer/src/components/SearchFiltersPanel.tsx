@@ -337,9 +337,9 @@ function AgeRatingSlider({ options, included, onChange }: { options: SearchFilte
         onChange={(e) => setDrag(Number(e.target.value))}
         onPointerUp={() => drag !== null && commit(drag)}
         onKeyUp={() => drag !== null && commit(drag)}
-        // Phone: the app's own slider look (see .mobile-range in globals.css), filled up to the level.
-        className={isMobile ? "mobile-range w-full" : "w-full accent-[rgb(var(--color-accent))]"}
-        style={isMobile ? ({ "--fill": `${ordered.length ? (shown / ordered.length) * 100 : 0}%` } as React.CSSProperties) : undefined}
+        // The app's own slider look (see .range-slider in globals.css), filled up to the level.
+        className="range-slider w-full"
+        style={{ "--fill": `${ordered.length ? (shown / ordered.length) * 100 : 0}%` } as React.CSSProperties}
       />
     </div>
   );
@@ -367,9 +367,9 @@ function YearPickSlider({ years, value, onChange }: { years: Array<{ year: numbe
         onChange={(e) => setDrag(Number(e.target.value))}
         onPointerUp={() => drag !== null && commit(drag)}
         onKeyUp={() => drag !== null && commit(drag)}
-        // Phone: the app's own slider look (see .mobile-range in globals.css), filled up to the year.
-        className={isMobile ? "mobile-range w-full" : "w-full accent-[rgb(var(--color-accent))]"}
-        style={isMobile ? ({ "--fill": `${years.length ? (shown / years.length) * 100 : 0}%` } as React.CSSProperties) : undefined}
+        // The app's own slider look (see .range-slider in globals.css), filled up to the year.
+        className="range-slider w-full"
+        style={{ "--fill": `${years.length ? (shown / years.length) * 100 : 0}%` } as React.CSSProperties}
       />
     </div>
   );

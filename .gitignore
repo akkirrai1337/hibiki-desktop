@@ -13,6 +13,7 @@ dist-release/
 !.env.example
 *.local
 AGENTS.md
+.claude
 
 # Tooling output
 playwright-report/
@@ -32,3 +33,4 @@ Thumbs.db
 .codex*
 
 docs/*.md
+docs/page/

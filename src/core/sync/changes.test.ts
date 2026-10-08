@@ -288,6 +288,50 @@ describe("pairing and syncing over the protocol", () => {
     expect((await listPeers()).map((peer) => peer.name)).toEqual(["Test phone"]);
   });
 
+  /** Each device with its own title and an xp event, then paired in `mode` and synced. */
+  async function pairWithData(mode: "keep-here" | "take-there") {
+    const net = connect(pc, phone);
+    await phone.insert(library).values({ sourceId: "s", animeId: "from-phone", category: "watching", addedAt: 1, animeJson: "{}" }).run();
+    await phone.insert(xpEvents).values({ kind: "phone", xp: 5, createdAt: 1 }).run();
+    net.asComputer();
+    await pc.insert(library).values({ sourceId: "s", animeId: "from-pc", category: "planned", addedAt: 2, animeJson: "{}" }).run();
+    await pc.insert(watchProgress).values(progress({ titleId: "from-pc" })).run();
+    await pc.insert(xpEvents).values({ kind: "pc", xp: 7, createdAt: 2 }).run();
+    const { code } = startPairing();
+    net.asPhone();
+    const [found] = await discover();
+    await pair(found, code, mode);
+    await syncNow();
+    const state = async (db: Db) => ({
+      library: (await db.select().from(library).all()).map((row) => row.animeId).sort(),
+      progress: (await db.select().from(watchProgress).all()).map((row) => row.titleId),
+      xp: (await db.select().from(xpEvents).all()).map((row) => row.kind).sort(),
+    });
+    return { net, state };
+  }
+
+  it("replaces the other device's data with this one's when asked to keep this one's", async () => {
+    const { net, state } = await pairWithData("keep-here");
+    const expected = { library: ["from-phone"], progress: [], xp: ["phone"] };
+    expect(await state(phone)).toEqual(expected);
+    net.asComputer();
+    expect(await state(pc)).toEqual(expected);
+
+    // Done once: what either adds afterwards is an ordinary merge.
+    await pc.insert(library).values({ sourceId: "s", animeId: "later", category: "planned", addedAt: 3, animeJson: "{}" }).run();
+    net.asPhone();
+    await syncNow();
+    expect((await state(phone)).library).toEqual(["from-phone", "later"]);
+  });
+
+  it("replaces this device's data with the other one's when asked to take it", async () => {
+    const { net, state } = await pairWithData("take-there");
+    const expected = { library: ["from-pc"], progress: ["from-pc"], xp: ["pc"] };
+    expect(await state(phone)).toEqual(expected);
+    net.asComputer();
+    expect(await state(pc)).toEqual(expected);
+  });
+
   it("does not pair when no pairing window is open", async () => {
     const net = connect(pc, phone);
     net.asComputer();

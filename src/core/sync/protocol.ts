@@ -39,6 +39,10 @@ export type SyncResponse =
 export interface SyncPayload {
   want: number;
   changes: ChangeSet;
+  /** Set on the first exchange after pairing with "keep the other device's data": the answering
+   * device clears its own synced data before taking these changes. Sealed, so only a paired device
+   * can ask for it. */
+  replace?: boolean;
 }
 
 /** Inside a sealed sync answer. */

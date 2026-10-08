@@ -186,8 +186,31 @@ export function SourcesPage({ embedded = false }: { embedded?: boolean } = {}) {
     return { mergedExtensions: merged, originByExtensionId: origins };
   }, [repositoryUrls, resultByUrl]);
 
-  const sourceExtensions = useMemo(() => mergedExtensions.filter((e) => e.type === "source"), [mergedExtensions]);
-  const languages = useMemo(() => [...new Set(sourceExtensions.map((e) => e.lang))].sort(), [sourceExtensions]);
+  // The cards come from the repositories' indexes, so a source installed from none of them (the
+  // diagnostics source, or one its repository has since dropped) would be installed and invisible -
+  // nowhere to see or remove it. Those get a card from their own manifest, once the indexes are in.
+  const sourceExtensions = useMemo(() => {
+    const listed = mergedExtensions.filter((e) => e.type === "source");
+    if (marketplace.isPending) return listed;
+    const known = new Set(mergedExtensions.map((e) => e.id));
+    const unlisted: MarketplaceExtension[] = (installedSources.data ?? [])
+      .filter((source) => !known.has(source.id))
+      .map((source) => ({
+        id: source.id,
+        name: source.name,
+        version: source.version,
+        website: source.website ?? null,
+        iconUrl: source.iconUrl,
+        lang: source.lang ?? "",
+        capabilities: source.capabilities,
+        resolverDependencies: [],
+        isNsfw: source.isNsfw === true,
+        type: "source",
+        manifestUrl: "",
+      }));
+    return [...listed, ...unlisted];
+  }, [mergedExtensions, marketplace.isPending, installedSources.data]);
+  const languages = useMemo(() => [...new Set(sourceExtensions.map((e) => e.lang).filter(Boolean))].sort(), [sourceExtensions]);
   // One snapshot of everything installed, sources and resolvers together. They used to be two
   // queries, and that is what let them drift: the resolver half was read once at app start and
   // nothing refreshed it, so a source that had genuinely just updated stayed under "updates
@@ -923,16 +946,40 @@ function AddRepositoryDialog({ onAdd, onClose }: { onAdd: (url: string) => Promi
   const [url, setUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [validating, setValidating] = useState(false);
+  // A repository's sources run inside the app with everything the app can reach - its data, the
+  // sign-ins of other sources, on the phone native code (APK sources) - so adding one is a decision
+  // about trust, asked as one before anything is fetched from it.
+  const [confirming, setConfirming] = useState(false);
 
   const submit = async () => {
     const trimmed = url.trim();
     if (!trimmed) return;
+    if (!confirming) {
+      setConfirming(true);
+      return;
+    }
     setValidating(true);
     const validationError = await onAdd(trimmed);
     setValidating(false);
-    if (validationError) setError(validationError);
-    else onClose();
+    if (validationError) {
+      setError(validationError);
+      setConfirming(false);
+    } else onClose();
   };
+
+  if (confirming) {
+    return (
+      <Modal onDismiss={onClose}>
+        <h2 className="text-base font-bold text-text">{t("sources.repositoriesTrustTitle")}</h2>
+        <p className="mt-2 select-text break-all text-sm font-semibold text-text/80">{repositoryDisplayName(url.trim())}</p>
+        <p className="mt-2 text-sm leading-relaxed text-muted">{t("sources.repositoriesTrustMessage")}</p>
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={() => setConfirming(false)} disabled={validating} className="rounded-lg px-3.5 py-2 text-sm font-semibold text-muted transition-colors hover:bg-text/[.06] disabled:opacity-50">{t("common.cancel")}</button>
+          <button onClick={submit} disabled={validating} className="rounded-lg bg-text px-3.5 py-2 text-sm font-bold text-bg transition-opacity hover:opacity-90 disabled:opacity-50">{t("sources.repositoriesTrustConfirm")}</button>
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal onDismiss={onClose}>

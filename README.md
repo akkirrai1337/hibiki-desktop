@@ -2,67 +2,57 @@
 
   <img src="./docs/hibiki-round.svg" alt="hibiki icon" width="120" height="120"/>
 
-  # hibiki desktop
+  # hibiki
 
   [Русский](README_RU.md)
 
-  **hibiki desktop is a Windows app with a personal anime catalogue, local library, player, and on-device watch progress. Content providers are selected through external source repositories; the app does not host or distribute content.**
+  **hibiki is an anime client for browsing titles, managing a personal library, and watching episodes with saved progress. Sources are connected through external repositories; the app does not host or distribute content.**
 
-  There is also an [Android app](https://github.com/akkirrai1337/hibiki), which uses the same source format.
-
-  ![Windows](https://img.shields.io/badge/windows-10+-0078D4)
-  ![Electron](https://img.shields.io/badge/electron-34-47848F)
-  ![React](https://img.shields.io/badge/react-19-61DAFB)
-  ![TypeScript](https://img.shields.io/badge/typescript-5.7-3178C6)
   [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 </div>
 
 ### 📚 Features
 
-* Switchable anime sources, with source-aware catalog, search, filters, and sorting
-* External source repositories, installed and updated from an in-app extension marketplace ([hibiki-sources](https://github.com/akkirrai1337/hibiki-sources))
-* Detailed title pages with descriptions, genres, ratings, related, franchise, and similar titles
-* Episode and voice-over selection, with the player and dub remembered per title
-* Built-in player with HLS, DASH, and MP4 support, plus an embedded fallback for sources that only expose one
-* Playback controls: quality, player engine, dub, speed, autoplay, and opening/ending skip
-* Keyboard shortcuts, hold-to-fast-forward, and remembered volume
-* Watch progress, continue watching with captured frames, and watch history
-* Local profile with viewing statistics, watch streaks, XP, and achievements
-* Local library: watching, planned, completed, dropped, on hold, and favourites
-* Offline episode downloads and playback
-* Light and dark themes, a custom accent color, and Discord-style background gradients
-* Russian, English, and Ukrainian app languages
-* Optional Discord Rich Presence
-* Local backup and restore of library, history, sources, and settings
+* Browse anime from your chosen sources, with search, filters, and sorting
+* Connect external source repositories and manage extensions ([hibiki-sources](https://github.com/akkirrai1337/hibiki-sources))
+* Explore title details, descriptions, genres, related and similar anime
+* Choose episodes and voice-overs, and adjust playback quality and speed
+* Built-in player with HLS, DASH, and MP4 support, autoplay, and opening/ending skip
+* Save watch progress, resume episodes, and view your watch history and statistics
+* Organize your local library: watching, planned, completed, dropped, on hold, and favourites
+* Download episodes for offline viewing
+* Customize the appearance and interface language, and optionally enable Discord Rich Presence
+
+### 🖼️ Screenshots
+
+<!-- Add android-home.png, android-details.png, desktop-home.png, and desktop-details.png to docs/screenshots/. -->
 
 <div align="center">
 
-### 🖼️ App screenshots
+<h4>Android</h4>
 
 <table>
   <tr>
-    <td><img src="./docs/home.png" alt="Home screen" width="400"/></td>
-    <td><img src="./docs/search.png" alt="Search screen" width="400"/></td>
+    <td><img src="./docs/screenshots/android-home.png" alt="Android home screen" width="250"/></td>
+    <td><img src="./docs/screenshots/android-details.png" alt="Android title details" width="250"/></td>
   </tr>
+</table>
+
+<h4>Desktop</h4>
+
+<table>
   <tr>
-    <td><img src="./docs/details.png" alt="Title details screen" width="400"/></td>
-    <td><img src="./docs/library.png" alt="Library screen" width="400"/></td>
+    <td><img src="./docs/screenshots/desktop-home.png" alt="Desktop home screen" width="400"/></td>
+    <td><img src="./docs/screenshots/desktop-details.png" alt="Desktop title details" width="400"/></td>
   </tr>
 </table>
 
 </div>
 
-### 🛠️ Building from source
+### 🎬 Credits
 
-Requires Node.js 20+ and npm.
-
-```bash
-npm install
-npm run dev
-```
-
-`npm run build` produces an NSIS installer. Windows is the only platform this app is built and tested on; nothing here is cross-compiled, since `better-sqlite3` is a native module compiled for the host it's built on.
+- [Anikku](https://github.com/komikku-app/anikku) and [Yuzono anime-extensions](https://github.com/yuzono/anime-extensions): the Aniyomi extension API and compatibility code, used under Apache-2.0.
 
 ### 💬 Contact
 
@@ -70,7 +60,7 @@ For questions, suggestions, or bug reports, you can contact me on Discord: `akki
 
 ### 📄 License
 
-hibiki desktop is licensed under the [GNU General Public License v3.0](LICENSE).
+hibiki is licensed under the [GNU General Public License v3.0](LICENSE).
 
 ### ⚖️ DMCA Disclaimer
 

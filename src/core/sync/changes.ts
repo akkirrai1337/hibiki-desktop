@@ -139,6 +139,17 @@ async function keepDeletionTime(tbl: SyncedTable, key: string, deletedAt: number
   await getDb().update(syncTombstones).set({ deletedAt }).where(and(eq(syncTombstones.tbl, tbl), eq(syncTombstones.key, key))).run();
 }
 
+/**
+ * Clears every synced table, for a replacement picked at pairing: this device's data gives way to
+ * another's. The deletions are not kept as tombstones - they would travel to the other device and
+ * delete what is about to come from it - so a third paired device keeps its copy and syncs it back.
+ */
+export async function wipeSyncedData(): Promise<void> {
+  const db = getDb();
+  for (const table of [library, watchProgress, titleRatings, xpEvents, dailyActivity]) await db.delete(table).run();
+  await db.delete(syncTombstones).run();
+}
+
 /** A batch in a few words, for the log: "library 2, progress 14 (up to 913, more)". */
 export function describeChanges(changes: ChangeSet): string {
   const parts = ([

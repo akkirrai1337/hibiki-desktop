@@ -1,6 +1,6 @@
 import { ipcMain } from "electron";
 import { IPC } from "@shared/ipc";
-import type { SyncCandidate } from "@shared/types";
+import type { SyncCandidate, SyncPairMode } from "@shared/types";
 import { createSyncServerApi } from "../../core/api/sync";
 import { startSyncServer } from "../sync";
 
@@ -12,7 +12,7 @@ export function registerSyncHandlers(): void {
   ipcMain.handle(IPC.syncStartPairing, () => sync.startPairing!());
   ipcMain.handle(IPC.syncStopPairing, () => sync.stopPairing!());
   ipcMain.handle(IPC.syncDiscover, () => sync.discover!());
-  ipcMain.handle(IPC.syncPair, (_e, candidate: SyncCandidate, code: string) => sync.pair!(candidate, code));
+  ipcMain.handle(IPC.syncPair, (_e, candidate: SyncCandidate, code: string, mode: SyncPairMode) => sync.pair!(candidate, code, mode));
   ipcMain.handle(IPC.syncNow, () => sync.syncNow!());
   startSyncServer();
   // Computers this one reaches out to: at start and every few minutes (the phone does the same).

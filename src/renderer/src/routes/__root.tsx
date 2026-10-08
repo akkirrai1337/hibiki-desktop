@@ -1,8 +1,9 @@
 import { type CSSProperties, lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createRootRoute, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useUiStore } from "@/stores/uiStore";
 import { useKnownSourcesStore } from "@/stores/knownSourcesStore";
+import { usePlayerPrefsStore } from "@/stores/playerPrefsStore";
 import { applyAccentColor, applyBackgroundTheme, DEFAULT_MOBILE_ACCENT, DEFAULT_MOBILE_ACCENT_LIGHT, BACKGROUND_THEME_PRESETS, CUSTOM_BACKGROUND_THEME_ID, customBackgroundGradientCss } from "@/lib/theme";
 import { TitleBar } from "@/components/TitleBar";
 import { MobileUpdateSheet } from "@/components/MobileUpdateSheet";
@@ -79,6 +80,14 @@ export const Route = createRootRoute({ component: RootLayout });
  * detail page and the player alike can refuse an action that needs a source account.
  */
 function RootLayout() {
+  // App-wide, not per screen: an install can happen with no source-listing screen open (the carry-over
+  // from the previous Android app installs in the background at start), and a list fetched before it
+  // would otherwise stay "fresh" and empty - the first-run sources step kept offering to skip.
+  const queryClient = useQueryClient();
+  useEffect(() => hibiki.sources.onChanged(() => {
+    void queryClient.invalidateQueries({ queryKey: ["sources"] });
+    void queryClient.invalidateQueries({ queryKey: ["installedVersions"] });
+  }), [queryClient]);
   return (
     <SignInPromptProvider>
       <DeepLinkHandler />
@@ -244,12 +253,13 @@ function RootLayoutContent() {
   useEffect(() => {
     if (discordRpcEnabled && !isWatching) hibiki.discord.setIdlePresence();
   }, [discordRpcEnabled, isWatching]);
-  // Phone: watching is landscape, edge to edge without the system bars, and keeps the screen on;
-  // leaving the player hands all three back.
+  // Phone: watching is landscape (or any way up, as chosen in Settings > Player), edge to edge without
+  // the system bars, and keeps the screen on; leaving the player hands all three back.
+  const playerOrientation = usePlayerPrefsStore((s) => s.playerOrientation);
   useEffect(() => {
     const device = hibiki.device;
     if (!device || !isWatching) return;
-    void device.setOrientation("landscape");
+    void device.setOrientation(playerOrientation === "any" ? "sensor" : "landscape");
     void device.setSystemBars({ hidden: true });
     void device.keepAwake(true);
     return () => {
@@ -257,7 +267,7 @@ function RootLayoutContent() {
       void device.setSystemBars({ hidden: false });
       void device.keepAwake(false);
     };
-  }, [isWatching]);
+  }, [isWatching, playerOrientation]);
   // Kept mounted for the whole session (not just while the profile page is open) - an episode
   // finishing (the most common trigger, via the "finisher" family) happens on the watch page, not
   // profile, so the tier-crossing check this owns has to keep running regardless of where the user

@@ -13,6 +13,7 @@ import type {
   DownloadedEpisodeFile,
   SourceRecommendations,
   SyncCandidate,
+  SyncPairMode,
   SyncDevice,
   DownloadProgress,
   DownloadRequest,
@@ -120,6 +121,10 @@ export interface HibikiApi {
     uninstall(id: string): Promise<SourceInfo[]>;
     installedVersions(): Promise<InstalledVersions>;
     onChanged(callback: () => void): () => void;
+    /** Opens the site in a window for the person to pass its Cloudflare check (the page named by a
+     * source error, see shared/cloudflare.ts); true once passed, false if the window was closed
+     * first. Later requests to the site carry the clearance. */
+    solveChallenge(url: string): Promise<boolean>;
   };
   ratings: {
     get(sourceId: string, animeId: string): Promise<number | null>;
@@ -190,7 +195,7 @@ export interface HibikiApi {
     /** Computers running hibiki on this network (other than this one). */
     discover?(): Promise<SyncCandidate[]>;
     /** Pair with a found computer using its code. Rejects with a message ending in the error code ("bad-code"...). */
-    pair?(candidate: SyncCandidate, code: string): Promise<SyncDevice>;
+    pair?(candidate: SyncCandidate, code: string, mode: SyncPairMode): Promise<SyncDevice>;
     /** Sync now with the computers this device reaches out to. */
     syncNow?(): Promise<void>;
   };
@@ -222,7 +227,7 @@ export interface HibikiApi {
     minimize(): void;
     setSystemBars(options: { hidden?: boolean; style?: "light" | "dark" }): Promise<void>;
     keepAwake(on: boolean): Promise<void>;
-    setOrientation(orientation: "landscape" | "portrait" | "auto"): Promise<void>;
+    setOrientation(orientation: "landscape" | "portrait" | "sensor" | "auto"): Promise<void>;
     /**
      * Work that has to go on with the app in the background (downloads): shown as a notification,
      * and the app kept alive while it runs. null ends it.

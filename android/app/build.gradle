@@ -21,7 +21,7 @@ android {
     namespace = "app.hibiki"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "app.hibiki"
+        applicationId "org.akkirrai.hibiki"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode appVersionCode
@@ -44,6 +44,12 @@ android {
         }
     }
     buildTypes {
+        // Its own package, so a debug install sits next to the release one instead of blocking it
+        // (the two are signed with different keys and cannot update each other).
+        debug {
+            applicationIdSuffix ".dev"
+            versionNameSuffix "-dev"
+        }
         release {
             if (hasReleaseSigning) signingConfig signingConfigs.release
             // Off: APK sources link against the host's classes by name at run time (see app/hibiki/apk),

@@ -161,9 +161,9 @@ export function ContinueWatchingFrameRow({ sourceById }: { sourceById?: Map<stri
     // Phone: wide frames that run to the screen edges, the next one peeking in; the thumb scrolls,
     // so no arrows.
     return (
-      <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-1">
+      <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto overscroll-x-contain px-4 pb-1">
         {visible.map((slot) => (
-          <div key={`${slot.progress.sourceId}:${slot.progress.titleId}`} className="w-[64vw] max-w-[300px] min-w-0 shrink-0 snap-start">
+          <div key={`${slot.progress.sourceId}:${slot.progress.titleId}`} className="w-[64vw] max-w-[300px] min-w-0 shrink-0">
             <WatchFrameCard slot={slot} sourceById={sourceById} />
           </div>
         ))}

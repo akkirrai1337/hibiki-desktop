@@ -38,6 +38,7 @@ export function registerSourceHandlers(runtime: ExtensionRuntime): void {
   ipcMain.handle(IPC.sourceListLibrary, (_e, sourceId: string) => sources.listLibrary(sourceId));
   ipcMain.handle(IPC.sourceSettingsRead, (_e, sourceId: string) => sources.settings.read(sourceId));
   ipcMain.handle(IPC.sourceSettingsWrite, (_e, sourceId: string, key: string, value: string | null) => sources.settings.write(sourceId, key, value));
+  ipcMain.handle(IPC.sourceChallengeSolve, (_e, url: string) => sources.solveChallenge(url));
   ipcMain.handle(IPC.sourceSyncLibraryEntry, (_e, sourceId: string, request: Parameters<SourcesApi["syncLibraryEntry"]>[1]) =>
     sources.syncLibraryEntry(sourceId, request),
   );

@@ -51,7 +51,7 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: s
 // and its lookalikes use, plus the containers their widget mounts into. Deliberately a "still
 // challenged?" test and not a "real page?" test - the app cannot know what any given source's real
 // page looks like, but it does know what a challenge looks like.
-const CHALLENGE_PROBE_SCRIPT = `
+export const CHALLENGE_PROBE_SCRIPT = `
   (function () {
     var title = (document.title || "").toLowerCase();
     var challenged = /just a moment|attention required|checking your browser|verifying you are human|один момент/.test(title)

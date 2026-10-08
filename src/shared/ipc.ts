@@ -44,6 +44,8 @@ export const IPC = {
   // Pushed main -> renderer whenever anything is installed or uninstalled, so no caller has to
   // remember to refresh what it just changed - which is exactly what went wrong before.
   sourcesChanged: "sources:changed",
+  // The window that lets a person pass a source's Cloudflare check.
+  sourceChallengeSolve: "sources:challenge:solve",
 
   // The profile banner's bytes, written to disk (see main/ipc/profileBanner.ts) rather than kept
   // in the same localStorage-backed store as the rest of the profile - too big for that.

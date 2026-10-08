@@ -25,8 +25,11 @@ export function PosterGrid({ children }: { children: React.ReactNode }) {
  * Phone only: posters in one row that scrolls sideways, running to the screen edges (the parent's
  * px-4 is undone and given back as scroll padding) with the next card peeking in.
  */
+// Free scrolling with the system's own fling, no snapping: mandatory snap pulled every fling back to
+// a card edge once it slowed, which read as the row jerking to a stop. overscroll-x-contain keeps a
+// sideways swipe at the row's end from turning into the system's back gesture.
 export function PosterRow({ children }: { children: React.ReactNode }) {
-  return <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 [&>*]:w-[30vw] [&>*]:max-w-[150px] [&>*]:shrink-0 [&>*]:snap-start">{children}</div>;
+  return <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto overscroll-x-contain px-4 [&>*]:w-[30vw] [&>*]:max-w-[150px] [&>*]:shrink-0">{children}</div>;
 }
 
 export function PosterGridSkeleton({ count = 12 }: { count?: number }) {

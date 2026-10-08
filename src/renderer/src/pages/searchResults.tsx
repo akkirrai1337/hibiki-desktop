@@ -70,7 +70,7 @@ function DesktopSearchResults() {
     <div className="min-h-full bg-app-bg px-8 py-8 pb-16">
       <h1 className="mb-5 select-text text-lg font-bold text-text">{longEnough ? t("search.resultsFor", { query }) : t("search.filteredResults")}</h1>
       {results.isLoading && <PosterGridSkeleton count={12} />}
-      {results.isError && <ErrorBanner message={t("search.errorGeneric", { source: source?.name ?? t("search.source") })} />}
+      {results.isError && <ErrorBanner message={t("search.errorGeneric", { source: source?.name ?? t("search.source") })} error={results.error} />}
       {results.isSuccess && items.length === 0 && <div className="py-16 text-center text-sm text-muted">{longEnough ? t("search.empty", { query }) : t("search.filteredEmpty")}</div>}
       {items.length > 0 && <PosterGrid>{items.map((item) => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</PosterGrid>}
       {results.hasNextPage && (
@@ -197,7 +197,7 @@ function MobileSearchPage() {
         // Opening a result keeps the query among the recent ones.
         <div onClickCapture={() => { if (longEnough) addRecent(query); }}>
           {results.isLoading && <PosterGridSkeleton count={9} />}
-          {results.isError && <ErrorBanner message={t("search.errorGeneric", { source: source?.name ?? t("search.source") })} />}
+          {results.isError && <ErrorBanner message={t("search.errorGeneric", { source: source?.name ?? t("search.source") })} error={results.error} />}
           {results.isSuccess && items.length === 0 && <div className="py-16 text-center text-sm text-muted">{longEnough ? t("search.empty", { query }) : t("search.filteredEmpty")}</div>}
           {items.length > 0 && <PosterGrid>{items.map((item) => <AnimeCard key={`${item.sourceId}:${item.id}`} anime={item} />)}</PosterGrid>}
           {results.hasNextPage && (

@@ -387,6 +387,12 @@ export interface SyncDevice {
   connects: boolean;
 }
 
+/**
+ * Whose data stays when two devices pair: both, joined ("merge"); this device's, replacing the other
+ * one's entirely ("keep-here"); or the other one's, replacing this one's ("take-there").
+ */
+export type SyncPairMode = "merge" | "keep-here" | "take-there";
+
 /** A device found on the network that this one can pair with. */
 export interface SyncCandidate {
   deviceId: string;

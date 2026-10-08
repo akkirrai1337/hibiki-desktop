@@ -181,6 +181,57 @@ async function browserFetch(pageUrl: string, targetUrl: string, options?: { meth
   }
 }
 
+// --- a check passed by the person ---------------------------------------------------------------
+// The site shown in the app's browser layout (title, address, close) until its check is gone, then
+// Cloudflare's own cookies and the WebView's User-Agent go back to core for the app's requests. The
+// WebView's cookie store is shared, so the hidden pages and APK sources are let through as well.
+const SOLVED_SETTLE_MS = 1_000;
+const isCloudflareCookie = (name: string) => name === "cf_clearance" || name.startsWith("__cf") || name.startsWith("cf_");
+
+async function solveChallengeVisibly(url: string): Promise<ChallengeSession | null> {
+  const key = `check:${new URL(url).origin}`;
+  let closed = false;
+  const listener = await HibikiBrowser.addListener("closed", (event) => {
+    if (event.key === key) closed = true;
+  });
+  try {
+    await HibikiBrowser.open({ key, url });
+    await HibikiBrowser.show({ key });
+    let passedAt = 0;
+    for (;;) {
+      await sleep(POLL_MS);
+      if (closed) return null;
+      const state = await probe(key);
+      if (!state || state.challenged || !state.ready) {
+        passedAt = 0;
+        continue;
+      }
+      if (!passedAt) passedAt = Date.now();
+      if (Date.now() - passedAt >= SOLVED_SETTLE_MS) break;
+    }
+    const found = new Map<string, string>();
+    for (const candidate of cookieUrlsFor(url)) {
+      for (const [name, value] of parseCookies((await HibikiBrowser.cookies({ url: candidate })).value)) {
+        if (isCloudflareCookie(name) && !found.has(name)) found.set(name, value);
+      }
+    }
+    // Pages kept for browserFetch may still hold the check; they load again on next use.
+    for (const { key: pageKey, timer } of pages.values()) {
+      clearTimeout(timer);
+      void HibikiBrowser.close({ key: pageKey });
+    }
+    pages.clear();
+    return {
+      cookies: Object.fromEntries(found),
+      cookieHeader: [...found].map(([name, value]) => `${name}=${value}`).join("; "),
+      userAgent: (await HibikiBrowser.userAgent()).value,
+    };
+  } finally {
+    await listener.remove();
+    if (!closed) await HibikiBrowser.close({ key }).catch(() => {});
+  }
+}
+
 // --- web sign-in ------------------------------------------------------------------------------------
 // The site's real sign-in page, shown to the user; done once the session cookie appears, cancelled
 // by Back (desktop: closing the window). CookieManager only answers per URL, so the page's own
@@ -239,6 +290,7 @@ export const androidBrowser: BrowserPort = {
     return pending;
   },
   browserFetch,
+  solveChallenge: solveChallengeVisibly,
   resolve: performBrowserResolve,
   login,
   dispose() {

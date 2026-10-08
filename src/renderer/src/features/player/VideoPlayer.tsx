@@ -37,7 +37,7 @@ import { subtitleFormatFromUrl, toVtt } from "@/lib/subtitles";
 import { hibiki } from "@/lib/hibiki";
 import { cn } from "@/lib/cn";
 import { log } from "@/lib/log";
-import { PLAYBACK_SPEEDS, usePlayerPrefsStore } from "@/stores/playerPrefsStore";
+import { PLAYBACK_SPEEDS, usePlayerPrefsStore, type PlayerOrientation } from "@/stores/playerPrefsStore";
 import { StreakBadge } from "@/components/StreakBadge";
 import { isMobile, useBackHandler } from "@/lib/mobile";
 
@@ -427,8 +427,16 @@ function PlayerSettingsMenu({
   onAddSubtitleFile: () => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
-  const [page, setPage] = useState<"main" | "speed" | "dub" | "translation" | "player" | "quality" | "subtitles">("main");
+  const [page, setPage] = useState<"main" | "speed" | "dub" | "translation" | "player" | "quality" | "subtitles" | "orientation">("main");
   const selectedDub = dubOptions.find((d) => d.id === selectedDubId);
+  // The phone's screen while watching - chosen here, where it is felt, and applied at once (the root
+  // layout locks the screen from this same preference while the player is open).
+  const playerOrientation = usePlayerPrefsStore((s) => s.playerOrientation);
+  const setPlayerOrientation = usePlayerPrefsStore((s) => s.setPlayerOrientation);
+  const orientationLabels: Record<PlayerOrientation, string> = {
+    landscape: t("watch.settings.orientationLandscape"),
+    any: t("watch.settings.orientationAny"),
+  };
 
   if (page === "speed") {
     return <ListPage
@@ -459,6 +467,19 @@ function PlayerSettingsMenu({
   }
   if (page === "quality") {
     return <ListPage title={t("watch.settings.quality")} options={qualityOptions} selected={selectedQuality} onSelect={(v) => { onSelectQuality(v); setPage("main"); }} onBack={() => setPage("main")} />;
+  }
+  if (page === "orientation") {
+    return <ListPage
+      title={t("watch.settings.orientation")}
+      options={Object.values(orientationLabels)}
+      selected={orientationLabels[playerOrientation]}
+      onSelect={(label) => {
+        const picked = (Object.keys(orientationLabels) as PlayerOrientation[]).find((key) => orientationLabels[key] === label);
+        if (picked) setPlayerOrientation(picked);
+        setPage("main");
+      }}
+      onBack={() => setPage("main")}
+    />;
   }
   if (page === "subtitles") {
     return <SubtitleListPage
@@ -491,6 +512,7 @@ function PlayerSettingsMenu({
       value={subtitleOptions.find((o) => o.id === selectedSubtitleId)?.label ?? t("watch.subtitles.off")}
       onClick={() => setPage("subtitles")}
     />
+    {isMobile && <MenuRow label={t("watch.settings.orientation")} value={orientationLabels[playerOrientation]} onClick={() => setPage("orientation")} />}
     <div className="my-1 border-t border-white/[.08]" />
     <ToggleRow label={t("watch.settings.autoSkipSegments")} checked={autoSkipSegments} onChange={onToggleAutoSkip} />
     <ToggleRow label={t("watch.settings.autoPlayNextEpisode")} checked={autoPlayNextEpisode} onChange={onToggleAutoPlay} />
@@ -709,11 +731,18 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   // throttling), committed to the real store only once, on pointerup.
   const subtitleDragRef = useRef<{ pointerId: number; startX: number; startY: number; startOffset: number; startOffsetX: number } | null>(null);
   const [draggingSubtitle, setDraggingSubtitle] = useState<{ y: number; x: number } | null>(null);
+  // Where the box is drawn right now - above the controls bar while that is up (see subtitleBottom
+  // below) - which is where a drag has to start from, or the box would jump on the first move.
+  const subtitleBottomRef = useRef(subtitleOffset);
   const onSubtitleDragStart = (e: React.PointerEvent) => {
     e.stopPropagation();
+    // No text selection, no click-through to the picture underneath; the touch side of the same
+    // thing is the box's touch-none (a pan the browser claims ends the drag with pointercancel).
+    e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    subtitleDragRef.current = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, startOffset: subtitleOffset, startOffsetX: subtitleOffsetX };
-    setDraggingSubtitle({ y: subtitleOffset, x: subtitleOffsetX });
+    const startOffset = subtitleBottomRef.current;
+    subtitleDragRef.current = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, startOffset, startOffsetX: subtitleOffsetX };
+    setDraggingSubtitle({ y: startOffset, x: subtitleOffsetX });
   };
   const onSubtitleDragMove = (e: React.PointerEvent) => {
     const drag = subtitleDragRef.current;
@@ -842,6 +871,20 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   const [volume, setVolume] = useState(storedVolume);
   const [muted, setMuted] = useState(storedMuted);
   const [controlsVisible, setControlsVisible] = useState(true);
+  // The bottom controls cover the bottom of the picture, which is where subtitles sit by default; while
+  // they are up, the subtitles rise above them - readable, and within reach of a finger or the mouse
+  // instead of underneath the bar.
+  const bottomBarRef = useRef<HTMLDivElement>(null);
+  const [bottomBarHeight, setBottomBarHeight] = useState(0);
+  useLayoutEffect(() => {
+    const bar = bottomBarRef.current;
+    if (!bar) return;
+    const measure = () => setBottomBarHeight(bar.offsetHeight);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, [isMobile]);
   const [volumeHover, setVolumeHover] = useState(false);
   // Initialised from the document: moving to another episode remounts the whole player (see the
   // keyed WatchPage), and fullscreen outlives that, so a fresh instance can start out inside it.
@@ -2140,6 +2183,13 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   };
 
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+  // The phone's bars span the full width with a gradient behind them, so a tap on the empty part of
+  // one is a tap on the picture: it must reach the container (to hide the controls), while a tap on a
+  // button or the seek strip stays with that control.
+  const stopOnControl = (e: React.SyntheticEvent) => {
+    const target = e.target as Element;
+    if (target.closest("button, a, input") || seekBarRef.current?.contains(target)) e.stopPropagation();
+  };
 
   // A pick that turned out unplayable never swaps `link`, so nothing else ends the switch the menu
   // began (paused, frozen clock, spinner): hand the stream that was already playing back its state.
@@ -2250,7 +2300,8 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   // and the length (tap it for what is left). Volume is the phone's own keys.
   const busy = isSwitching || buffering || !link || !!playbackError || !!unplayable;
   const mobileControls = <>
-    <div className={cn("pointer-events-none absolute inset-0 z-[5] flex items-center justify-center gap-12 transition-opacity duration-300", controlsVisible ? "opacity-100" : "opacity-0")}>
+    {/* Gone while an error is up: the error's own message and retry take the middle of the screen. */}
+    <div className={cn("pointer-events-none absolute inset-0 z-[5] flex items-center justify-center gap-12 transition-opacity duration-300", controlsVisible ? "opacity-100" : "opacity-0", (playbackError || unplayable) && "hidden")}>
       <button
         onClick={(e) => { stop(e); onPrevEpisode?.(); }}
         disabled={!onPrevEpisode}
@@ -2276,9 +2327,10 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       </button>
     </div>
     <div
+      ref={bottomBarRef}
       className={cn("absolute inset-x-0 bottom-0 z-[6] bg-gradient-to-t from-black/80 to-transparent pt-10 transition-opacity duration-300", controlsVisible ? "opacity-100" : "pointer-events-none opacity-0")}
       style={{ paddingLeft: "max(1.25rem, var(--safe-left))", paddingRight: "max(1.25rem, var(--safe-right))", paddingBottom: "max(0.375rem, var(--safe-bottom))" }}
-      onClick={stop}
+      onClick={stopOnControl}
     >
       <div className="flex items-center gap-3">
         <span className="shrink-0 text-left text-[13px] font-medium tabular-nums text-zinc-100" style={{ minWidth: `${timeLabelChars}ch` }}>{formatTime(displayCurrentTime)}</span>
@@ -2323,6 +2375,12 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       )}
     </AnimatePresence>
   </>;
+
+  // The bar's own top padding is a fade over the picture, not controls: the subtitles may overlap it.
+  const SUBTITLE_BAR_FADE_PX = 28;
+  const subtitleBottom = draggingSubtitle?.y
+    ?? (controlsVisible && bottomBarHeight > 0 ? Math.max(subtitleOffset, bottomBarHeight - SUBTITLE_BAR_FADE_PX) : subtitleOffset);
+  subtitleBottomRef.current = subtitleBottom;
 
   return (
     <div
@@ -2373,7 +2431,13 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
           DOM. `bottom` and the horizontal shift are player preferences (see playerPrefsStore), dragged live via the pointer handlers on the
           box itself and only committed to the store on release. */}
       {activeSubtitleLines.length > 0 && (
-        <div data-subtitles className="pointer-events-none absolute inset-x-0 flex justify-center px-6" style={{ bottom: draggingSubtitle?.y ?? subtitleOffset }}>
+        <div
+          data-subtitles
+          // Above the bars (z-[6]) so the box can always be taken hold of; it stays clear of their
+          // buttons by rising over them (subtitleBottom) rather than by sitting underneath.
+          className={cn("pointer-events-none absolute inset-x-0 z-[7] flex justify-center px-6", !draggingSubtitle && "transition-[bottom] duration-300")}
+          style={{ bottom: subtitleBottom }}
+        >
           <div
             onPointerDown={onSubtitleDragStart}
             onPointerMove={onSubtitleDragMove}
@@ -2383,7 +2447,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
             title={t("watch.subtitles.dragHint")}
             style={{ transform: `translateX(${draggingSubtitle?.x ?? subtitleOffsetX}px)` }}
             className={cn(
-              "pointer-events-auto max-w-[85%] cursor-grab select-text whitespace-pre-line rounded-md bg-black/75 px-3 py-1.5 text-center text-lg font-medium leading-snug text-white shadow-lg active:cursor-grabbing",
+              "pointer-events-auto max-w-[85%] cursor-grab touch-none select-none whitespace-pre-line rounded-md bg-black/75 px-3 py-1.5 text-center text-lg font-medium leading-snug text-white shadow-lg active:cursor-grabbing",
               draggingSubtitle && "ring-1 ring-white/40",
             )}
           >
@@ -2591,7 +2655,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       <div
         className={cn("absolute inset-x-0 top-0 z-[6] flex items-center gap-4 bg-gradient-to-b from-black/80 to-transparent px-6 pb-10 pt-5 transition-opacity duration-300 mobile:pt-3", controlsVisible ? "opacity-100" : "pointer-events-none opacity-0")}
         style={isMobile ? { paddingLeft: "max(1.25rem, var(--safe-left))", paddingRight: "max(1.25rem, var(--safe-right))" } : undefined}
-        onClick={stop}
+        onClick={isMobile ? stopOnControl : stop}
       >
         <button onClick={(e) => { stop(e); onBack(); }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20">
           <ArrowLeft className="h-[18px] w-[18px]" strokeWidth={2} />
@@ -2604,7 +2668,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
       </div>
 
       {/* Bottom control cluster */}
-      {isMobile ? mobileControls : <div className={cn("absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-6 pb-4 pt-10 transition-opacity duration-300", controlsVisible ? "opacity-100" : "pointer-events-none opacity-0")} onClick={stop}>
+      {isMobile ? mobileControls : <div ref={bottomBarRef} className={cn("absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-6 pb-4 pt-10 transition-opacity duration-300", controlsVisible ? "opacity-100" : "pointer-events-none opacity-0")} onClick={stop}>
         {/* Seek bar: transparent track, white = buffered, red = played */}
         <div className="relative" onMouseMove={onSeekAreaMouseMove} onMouseLeave={onSeekAreaMouseLeave}>
           {hoverRatio !== null && duration > 0 && (

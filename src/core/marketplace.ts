@@ -107,6 +107,55 @@ function apkIndexEntries(indexUrl: string, entries: AniyomiIndexEntry[]): Market
   });
 }
 
+// Where an index usually sits in a GitHub repository: hibiki-sources' own layout, then an
+// Aniyomi/Mihon repository's (index.min.json, often on a "repo" branch), then a bare index.json.
+const INDEX_PATHS = ["repository/index.json", "index.min.json", "index.json"];
+const DEFAULT_BRANCHES = ["main", "master", "repo"];
+
+/**
+ * The raw index URLs a typed repository address may stand for, most likely first. A direct index
+ * URL is itself; a GitHub file page (github.com/o/r/blob/<ref>/path) is that file's raw copy; a
+ * GitHub repository page (github.com/o/r, or a branch or folder of it) is each usual index location
+ * on that branch, or on the usual branches. The scheme may be left out.
+ */
+export function repositoryIndexCandidates(input: string): string[] {
+  const text = /^[a-z][a-z\d+.-]*:\/\//i.test(input.trim()) ? input.trim() : `https://${input.trim()}`;
+  let url: URL;
+  try {
+    url = new URL(text);
+  } catch {
+    return [text];
+  }
+  if (url.hostname !== "github.com" && url.hostname !== "www.github.com") return [url.toString()];
+  const [owner, repository, kind, ref, ...rest] = url.pathname.split("/").filter(Boolean);
+  if (!owner || !repository) return [url.toString()];
+  const repo = repository.replace(/\.git$/, "");
+  const raw = (branch: string, path: string) => `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
+  if ((kind === "blob" || kind === "raw") && ref && rest.length > 0) return [raw(ref, rest.join("/"))];
+  const branches = kind === "tree" && ref ? [ref] : DEFAULT_BRANCHES;
+  const folder = kind === "tree" && rest.length > 0 ? `${rest.join("/")}/` : "";
+  return branches.flatMap((branch) => INDEX_PATHS.map((path) => raw(branch, folder + path)));
+}
+
+/** The first of a typed address's candidates (repositoryIndexCandidates) that really is an index. */
+export async function resolveRepositoryUrl(input: string): Promise<string> {
+  const candidates = repositoryIndexCandidates(input);
+  if (candidates.length === 1) {
+    if (!isHttpsRepositoryUrl(candidates[0])) throw new Error("Repository URL must use HTTPS");
+    await fetchRepositoryIndex(candidates[0]);
+    return candidates[0];
+  }
+  for (const candidate of candidates) {
+    try {
+      await fetchRepositoryIndex(candidate);
+      return candidate;
+    } catch {
+      // Not there (404) or not an index: the next usual place.
+    }
+  }
+  throw new Error(`No repository index found at ${input.trim()}`);
+}
+
 export async function fetchRepositoryResult(url: string): Promise<RepositoryFetchResult> {
   try {
     return { url, ok: true, extensions: await fetchRepositoryIndex(url) };

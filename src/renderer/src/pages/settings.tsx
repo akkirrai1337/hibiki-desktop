@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ListChecks, LogIn, LogOut, MemoryStick, ArrowDownToLine, ArrowUpDown, Ban, Check, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, DatabaseBackup, FileText, FolderOpen, Home, Info, Languages, MessageCircle, MonitorPlay, Moon, Palette, Radio, RefreshCw, RotateCcw, ScrollText, SlidersHorizontal, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
+import { ListChecks, LogIn, LogOut, MemoryStick, ArrowDownToLine, ArrowUpDown, Ban, Check, CheckCircle2, ChevronDown, ChevronRight, DatabaseBackup, FileText, FolderOpen, Home, Info, Languages, MessageCircle, MonitorPlay, Moon, Palette, Radio, RefreshCw, RotateCcw, ScrollText, SlidersHorizontal, Sparkles, Sun, Timer, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { isMobile, useBackHandler } from "@/lib/mobile";
 import { motion } from "motion/react";
@@ -78,107 +78,12 @@ function SettingsToggleRow({ icon, title, hint, checked, onChange, indent }: { i
 // doesn't get clobbered back to the last committed number on every keystroke, only committed
 // (blur/Enter/stepper click) once it parses to a number in range.
 function SecondsControl({ label, hint, value, onChange }: { label: string; hint: string; value: number; onChange: (seconds: number) => void }) {
-  const [draft, setDraft] = useState(String(value));
-  const commit = (next: number) => {
-    const clamped = Math.min(SKIP_TIMER_MAX_SECONDS, Math.max(SKIP_TIMER_MIN_SECONDS, next));
-    onChange(clamped);
-    setDraft(String(clamped));
-  };
-  const commitDraft = () => {
-    const parsed = Number.parseInt(draft, 10);
-    if (Number.isFinite(parsed)) commit(parsed);
-    else setDraft(String(value));
-  };
   const { t } = useTranslation();
-  if (isMobile) return <MobileSliderControl label={label} hint={hint} value={value} min={SKIP_TIMER_MIN_SECONDS} max={SKIP_TIMER_MAX_SECONDS} display={t("common.secondsShort", { count: value })} onChange={commit} />;
-  return <div>
-    <div className="flex items-center justify-between gap-3">
-      <p className="text-sm font-semibold text-text">{label}</p>
-      <div className="flex h-8 w-16 shrink-0 items-stretch overflow-hidden rounded-lg border border-border bg-text/[.04] focus-within:border-accent/70">
-        <input
-          type="number"
-          min={SKIP_TIMER_MIN_SECONDS}
-          max={SKIP_TIMER_MAX_SECONDS}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commitDraft}
-          onKeyDown={(e) => { if (e.key === "Enter") { commitDraft(); e.currentTarget.blur(); } }}
-          className="no-spinner min-w-0 flex-1 bg-transparent pl-2 text-center text-sm text-text outline-none"
-        />
-        <div className="flex w-4 shrink-0 flex-col border-l border-border">
-          <button type="button" onClick={() => commit(value + 1)} aria-label="+1" className="flex flex-1 items-center justify-center text-muted transition-colors hover:bg-text/[.06] hover:text-text">
-            <ChevronUp className="h-2.5 w-2.5" strokeWidth={3} />
-          </button>
-          <button type="button" onClick={() => commit(value - 1)} aria-label="-1" className="flex flex-1 items-center justify-center border-t border-border text-muted transition-colors hover:bg-text/[.06] hover:text-text">
-            <ChevronDown className="h-2.5 w-2.5" strokeWidth={3} />
-          </button>
-        </div>
-      </div>
-    </div>
-    <input
-      type="range"
-      min={SKIP_TIMER_MIN_SECONDS}
-      max={SKIP_TIMER_MAX_SECONDS}
-      value={value}
-      onChange={(e) => commit(Number(e.target.value))}
-      className="mt-2.5 w-full cursor-pointer accent-accent"
-    />
-    <p className="mt-1.5 text-xs leading-relaxed text-muted">{hint}</p>
-  </div>;
+  return <SliderControl label={label} hint={hint} value={value} min={SKIP_TIMER_MIN_SECONDS} max={SKIP_TIMER_MAX_SECONDS} display={t("common.secondsShort", { count: value })} onChange={onChange} />;
 }
 
-// Same shape as SecondsControl above, just a percent (with its own bounds/suffix) instead of a
-// plain integer of seconds - kept separate rather than parameterizing that one further, since the
-// "s" vs "%" suffix and each control's own min/max constants would've made the shared component
-// more generic than either caller actually needs.
 function PercentControl({ label, hint, value, onChange }: { label: string; hint: string; value: number; onChange: (percent: number) => void }) {
-  const [draft, setDraft] = useState(String(value));
-  const commit = (next: number) => {
-    const clamped = Math.min(WATCHED_THRESHOLD_MAX_PERCENT, Math.max(WATCHED_THRESHOLD_MIN_PERCENT, next));
-    onChange(clamped);
-    setDraft(String(clamped));
-  };
-  const commitDraft = () => {
-    const parsed = Number.parseInt(draft, 10);
-    if (Number.isFinite(parsed)) commit(parsed);
-    else setDraft(String(value));
-  };
-  if (isMobile) return <MobileSliderControl label={label} hint={hint} value={value} min={WATCHED_THRESHOLD_MIN_PERCENT} max={WATCHED_THRESHOLD_MAX_PERCENT} display={`${value}%`} onChange={commit} />;
-  return <div>
-    <div className="flex items-center justify-between gap-3">
-      <p className="text-sm font-semibold text-text">{label}</p>
-      <div className="flex h-8 w-[4.5rem] shrink-0 items-stretch overflow-hidden rounded-lg border border-border bg-text/[.04] focus-within:border-accent/70">
-        <input
-          type="number"
-          min={WATCHED_THRESHOLD_MIN_PERCENT}
-          max={WATCHED_THRESHOLD_MAX_PERCENT}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commitDraft}
-          onKeyDown={(e) => { if (e.key === "Enter") { commitDraft(); e.currentTarget.blur(); } }}
-          className="no-spinner min-w-0 flex-1 bg-transparent pl-2 text-right text-sm text-text outline-none"
-        />
-        <span className="flex shrink-0 items-center pr-1 text-sm text-muted">%</span>
-        <div className="flex w-4 shrink-0 flex-col border-l border-border">
-          <button type="button" onClick={() => commit(value + 1)} aria-label="+1" className="flex flex-1 items-center justify-center text-muted transition-colors hover:bg-text/[.06] hover:text-text">
-            <ChevronUp className="h-2.5 w-2.5" strokeWidth={3} />
-          </button>
-          <button type="button" onClick={() => commit(value - 1)} aria-label="-1" className="flex flex-1 items-center justify-center border-t border-border text-muted transition-colors hover:bg-text/[.06] hover:text-text">
-            <ChevronDown className="h-2.5 w-2.5" strokeWidth={3} />
-          </button>
-        </div>
-      </div>
-    </div>
-    <input
-      type="range"
-      min={WATCHED_THRESHOLD_MIN_PERCENT}
-      max={WATCHED_THRESHOLD_MAX_PERCENT}
-      value={value}
-      onChange={(e) => commit(Number(e.target.value))}
-      className="mt-2.5 w-full cursor-pointer accent-accent"
-    />
-    <p className="mt-1.5 text-xs leading-relaxed text-muted">{hint}</p>
-  </div>;
+  return <SliderControl label={label} hint={hint} value={value} min={WATCHED_THRESHOLD_MIN_PERCENT} max={WATCHED_THRESHOLD_MAX_PERCENT} display={`${value}%`} onChange={onChange} />;
 }
 
 function ThemeOption({ active, icon: Icon, label, onClick }: { active: boolean; icon: typeof Sun; label: string; onClick: () => void }) {
@@ -1190,10 +1095,10 @@ function MobileVersionRow() {
 }
 
 /**
- * Phone: a setting with a range - its value beside the label, and a slider styled to match the app
- * (a thick track filled up to the value and a round thumb) instead of a number box with arrows.
+ * A setting with a range: its value beside the label, and a slider styled to match the app (a thick
+ * track filled up to the value and a round thumb). The arrow keys step it one by one.
  */
-function MobileSliderControl({ label, hint, value, min, max, display, onChange }: {
+function SliderControl({ label, hint, value, min, max, display, onChange }: {
   label: string;
   hint: string;
   value: number;
@@ -1215,7 +1120,7 @@ function MobileSliderControl({ label, hint, value, min, max, display, onChange }
       value={value}
       onChange={(e) => onChange(Number(e.target.value))}
       aria-label={label}
-      className="mobile-range mt-3 w-full"
+      className="range-slider mt-3 w-full"
       style={{ "--fill": `${fill}%` } as React.CSSProperties}
     />
     <p className="mt-2 text-xs leading-relaxed text-muted">{hint}</p>

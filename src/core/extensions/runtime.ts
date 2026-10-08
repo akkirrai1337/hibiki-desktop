@@ -21,7 +21,9 @@ import type {
 import type { ExtensionMethod } from "./methods";
 import type { BridgeHandler } from "../../platform/types";
 import { getPlatform } from "../platform";
-import { performNetFetch, performNetFetchAll } from "./netFetch";
+import { performNetFetch, performNetFetchAll, type NetFetchResult } from "./netFetch";
+import { challengeUrlInError, isCloudflareChallenge } from "./cloudflare";
+import { cloudflareCheckError } from "@shared/cloudflare";
 import { logger } from "../logger";
 import { ExtensionStorage } from "./extensionStorage";
 import { withTitleFacts } from "./titleFacts";
@@ -149,6 +151,24 @@ function isRetiredPlayerLink(link: PlayerLink): boolean {
 }
 
 /** Ids of the platform's native sources (ApkSourcesPort) - never a JS source's. */
+function isChallengeAnswer(result: unknown): boolean {
+  const answer = result as Partial<NetFetchResult> | null;
+  return !!answer && typeof answer.status === "number" && isCloudflareChallenge(answer.status, answer.headers ?? {}, answer.body ?? "");
+}
+
+/** The pages a bridge answer stopped at a Cloudflare check on. */
+function challengedUrls(kind: Parameters<BridgeHandler>[0], payload: Record<string, unknown>, result: unknown): string[] {
+  if (kind === "netFetch") return isChallengeAnswer(result) ? [payload.url as string] : [];
+  if (kind === "browserFetch") return isChallengeAnswer(result) ? [payload.pageUrl as string] : [];
+  if (kind === "netFetchAll" && Array.isArray(result)) {
+    const requests = (payload.requests as Array<{ url: string }>) ?? [];
+    return result.flatMap((answer, index) => (isChallengeAnswer(answer) && requests[index] ? [requests[index].url] : []));
+  }
+  return [];
+}
+
+const isEmptyResult = (result: unknown) => result === null || result === undefined || (Array.isArray(result) && result.length === 0);
+
 export function isApkSource(sourceId: string): boolean {
   return sourceId.startsWith("apk:");
 }
@@ -324,6 +344,19 @@ export class ExtensionRuntime {
 
     const startedAt = Date.now();
 
+    // Every request this call makes is watched for Cloudflare's check. A call that then fails, or
+    // comes back with nothing, did so because of it - the source only ever saw the check's HTML - so
+    // it fails with an error that names the check (shared/cloudflare.ts), and the screen showing the
+    // error offers to pass it. A call that got what it needed despite one blocked request (one of
+    // several mirrors, say) is left alone.
+    const challenged: string[] = [];
+    const bridge: BridgeHandler = (kind, payload) =>
+      this.bridge(kind, payload).then((result) => {
+        challenged.push(...challengedUrls(kind, payload, result));
+        return result;
+      });
+    const challengeError = () => (challenged.length > 0 ? cloudflareCheckError(sourceId, challenged[0]) : null);
+
     // Registered before anything is awaited: a search the renderer supersedes a keystroke later
     // must be cancellable from the moment it exists. A cancel that lands before the worker is
     // started reaches the host as an already-aborted signal, which it refuses.
@@ -341,7 +374,7 @@ export class ExtensionRuntime {
     return this.storage
       .read(sourceId)
       .then((storage) =>
-        getPlatform().extensionHost.run({ extensionsDir, sourceId, method, args, storage }, this.bridge, { timeoutMs, signal: controller.signal }),
+        getPlatform().extensionHost.run({ extensionsDir, sourceId, method, args, storage }, bridge, { timeoutMs, signal: controller.signal }),
       )
       .then(
         async (message) => {
@@ -351,10 +384,12 @@ export class ExtensionRuntime {
           if (message.storageWrites) await this.storage.apply(sourceId, message.storageWrites);
           if (message.ok) {
             logger.debug("ext", `${sourceId}.${method}() ok in ${Date.now() - startedAt}ms`);
+            const blocked = isEmptyResult(message.result) ? challengeError() : null;
+            if (blocked) throw blocked;
             return message.result as T;
           }
           logger.warn("ext", `${sourceId}.${method}() failed in ${Date.now() - startedAt}ms: ${message.error}`);
-          throw new Error(message.error);
+          throw challengeError() ?? new Error(message.error);
         },
         (error: unknown) => {
           clearCancellation();
@@ -365,7 +400,7 @@ export class ExtensionRuntime {
             throw new Error(`Source "${sourceId}" timed out calling ${method}()`);
           }
           logger.error("ext", `${sourceId}.${method}() crashed in ${Date.now() - startedAt}ms: ${failure.message}`);
-          throw failure;
+          throw challengeError() ?? failure;
         },
       );
   }
@@ -387,7 +422,9 @@ export class ExtensionRuntime {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       logger.warn("ext", `${sourceId}.${method}() failed in ${Date.now() - startedAt}ms: ${message}`);
-      throw new Error(message);
+      // Aniyomi's interceptor tries the check in a hidden page first and gives up on one that needs a person.
+      const challengeUrl = challengeUrlInError(message);
+      throw challengeUrl ? cloudflareCheckError(sourceId, challengeUrl) : new Error(message);
     }
   }
 

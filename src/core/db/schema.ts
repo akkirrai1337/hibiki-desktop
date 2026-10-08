@@ -203,6 +203,9 @@ export const syncPeers = sqliteTable("sync_peers", {
   // This device reaches out to that one (it paired by entering that one's code), rather than waiting
   // to be reached. Only these are synced from here; the others sync with this one themselves.
   connects: integer("connects", { mode: "boolean" }).notNull().default(false),
+  // A replacement picked at pairing, until the first exchange carries it out: "send" - that device's
+  // data is replaced by this one's; "take" - this device's data is replaced by that one's.
+  pendingReplace: text("pending_replace"),
 });
 
 // Which entry on a tracker (AniList) a title of a source is. One row per title and tracker, also for

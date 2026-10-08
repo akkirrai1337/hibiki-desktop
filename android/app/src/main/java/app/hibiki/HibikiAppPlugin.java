@@ -51,6 +51,45 @@ import java.util.Set;
 @CapacitorPlugin(name = "HibikiApp")
 public class HibikiAppPlugin extends Plugin {
 
+    /**
+     * What the Kotlin hibiki left behind - the same package, so its private files are this app's now:
+     * the rows of its library database and its saved episode positions. Read only and as they are;
+     * core/legacyImport.ts decides what they mean here. Off the main thread: a long history is a big
+     * preferences file.
+     */
+    @PluginMethod
+    public void legacyData(PluginCall call) {
+        new Thread(() -> {
+            JSObject result = new JSObject();
+            com.getcapacitor.JSArray library = new com.getcapacitor.JSArray();
+            java.io.File database = getContext().getDatabasePath("hibiki_library.db");
+            if (database.exists()) {
+                try (android.database.sqlite.SQLiteDatabase sqlite = android.database.sqlite.SQLiteDatabase.openDatabase(
+                        database.getPath(), null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY);
+                     android.database.Cursor rows = sqlite.rawQuery("SELECT title_id, anime_json, categories, added_at FROM library_entries", null)) {
+                    while (rows.moveToNext()) {
+                        JSObject row = new JSObject();
+                        row.put("titleId", rows.getString(0));
+                        if (!rows.isNull(1)) row.put("animeJson", rows.getString(1));
+                        row.put("categories", rows.getString(2));
+                        if (!rows.isNull(3)) row.put("addedAt", rows.getLong(3));
+                        library.put(row);
+                    }
+                } catch (Exception error) {
+                    result.put("libraryError", String.valueOf(error));
+                }
+            }
+            JSObject progress = new JSObject();
+            for (java.util.Map.Entry<String, ?> entry : getContext().getSharedPreferences("hibiki_watch_state", Context.MODE_PRIVATE).getAll().entrySet()) {
+                if (entry.getKey().startsWith("progress_") && entry.getValue() instanceof String) progress.put(entry.getKey(), (String) entry.getValue());
+            }
+            result.put("found", database.exists() || progress.length() > 0);
+            result.put("library", library);
+            result.put("progress", progress);
+            call.resolve(result);
+        }).start();
+    }
+
     /** Back on the first screen: to the launcher, as other apps do, without destroying the activity. */
     @PluginMethod
     public void minimize(PluginCall call) {
@@ -106,7 +145,10 @@ public class HibikiAppPlugin extends Plugin {
         if (immersive) getActivity().getWindow().getDecorView().post(this::applyImmersive);
     }
 
-    /** "landscape" (either way up, following the sensor), "portrait", or "auto" for the user's own setting. */
+    /**
+     * "landscape" (either way up, following the sensor), "portrait", "sensor" (any way up, following
+     * the sensor even where the system's own rotation lock is on) or "auto" for the user's own setting.
+     */
     @PluginMethod
     public void setOrientation(PluginCall call) {
         String value = call.getString("value", "auto");
@@ -117,6 +159,9 @@ public class HibikiAppPlugin extends Plugin {
                 break;
             case "portrait":
                 orientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
+                break;
+            case "sensor":
+                orientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR;
                 break;
             default:
                 orientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;

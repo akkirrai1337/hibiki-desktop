@@ -1,5 +1,5 @@
 {
-  "appId": "app.hibiki",
+  "appId": "org.akkirrai.hibiki",
   "appName": "hibiki",
   "webDir": "dist-android",
   "android": { "webContentsDebuggingEnabled": true },

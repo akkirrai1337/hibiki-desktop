@@ -29,7 +29,12 @@ function clampWatchedThreshold(percent: number): number {
   return Math.round(Math.min(WATCHED_THRESHOLD_MAX_PERCENT, Math.max(WATCHED_THRESHOLD_MIN_PERCENT, percent)));
 }
 
+/** The phone's screen while watching: always landscape, or any way up (rotating with the phone). */
+export type PlayerOrientation = "landscape" | "any";
+
 interface PlayerPrefsState {
+  playerOrientation: PlayerOrientation;
+  setPlayerOrientation: (orientation: PlayerOrientation) => void;
   autoSkipSegments: boolean;
   autoPlayNextEpisode: boolean;
   playbackSpeed: PlaybackSpeed;
@@ -74,6 +79,8 @@ interface PlayerPrefsState {
 export const usePlayerPrefsStore = create<PlayerPrefsState>()(
   persist(
     (set) => ({
+      playerOrientation: "landscape",
+      setPlayerOrientation: (playerOrientation) => set({ playerOrientation }),
       autoSkipSegments: false,
       autoPlayNextEpisode: true,
       playbackSpeed: 1,

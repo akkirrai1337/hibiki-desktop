@@ -22,6 +22,7 @@
 // AbortSignal gives every request a real deadline.
 import { logger } from "../logger";
 import { getPlatform } from "../platform";
+import { forgetClearance, isCloudflareChallenge, withClearance } from "./cloudflare";
 
 export interface NetFetchOptions {
   method?: string;
@@ -170,7 +171,10 @@ async function fetchUncached(url: string, options: NetFetchOptions, headers: Rec
 }
 
 export async function performNetFetch(url: string, options: NetFetchOptions = {}): Promise<NetFetchResult> {
-  const headers = withDefaultHeaders(options.headers ?? {});
+  // A site whose Cloudflare check was passed in the app's window gets that clearance on every request.
+  const requested = withDefaultHeaders(options.headers ?? {});
+  const cleared = withClearance(url, requested);
+  const headers = cleared ?? requested;
   const method = (options.method ?? "GET").toUpperCase();
   const cacheable = method === "GET";
   const key = cacheKey(url, headers);
@@ -189,6 +193,7 @@ export async function performNetFetch(url: string, options: NetFetchOptions = {}
   }
 
   const request = fetchUncached(url, options, headers).then((result) => {
+    if (cleared && isCloudflareChallenge(result.status, result.headers, result.body)) forgetClearance(url);
     if (cacheable) writeCache(key, result);
     return result;
   });

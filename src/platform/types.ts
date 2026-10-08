@@ -181,6 +181,9 @@ export interface BrowserPort {
   browserFetch(pageUrl: string, targetUrl: string, options?: { method?: string; headers?: Record<string, string>; body?: string }): Promise<BrowserFetchResult>;
   /** Runs a BROWSER resolver's script inside the embed page and reports the streams it found. */
   resolve(link: PlayerLink, script: string, timeoutMs?: number, parentUrl?: string | null): Promise<ResolvedStream[]>;
+  /** Shows `url` to the person until its anti-bot check is passed, and resolves with the session it
+   * earned - or null when the window was closed first. */
+  solveChallenge(url: string): Promise<ChallengeSession | null>;
   /** Shows a sign-in page and resolves with its cookies once `successCookieName` appears. */
   login(sourceId: string, url: string, successCookieName: string): Promise<HarvestedCookie[]>;
   /** Releases every page held for reuse. */

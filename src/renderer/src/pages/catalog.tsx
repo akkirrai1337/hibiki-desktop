@@ -148,7 +148,7 @@ export function CatalogBrowsePage() {
               )}
             </>
           )}
-          {isError && <ErrorBanner message={(error as Error).message} className="mt-6" />}
+          {isError && <ErrorBanner message={(error as Error).message} error={error} className="mt-6" />}
         </>
       )}
     </div>

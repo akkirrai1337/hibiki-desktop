@@ -13,6 +13,8 @@ import { usePlayerPrefsStore } from "@/stores/playerPrefsStore";
 import { usePlayerSelectionStore } from "@/stores/playerSelectionStore";
 import { useUiStore } from "@/stores/uiStore";
 import { VideoPlayer } from "@/features/player/VideoPlayer";
+import { CloudflareCheckButton } from "@/components/CloudflareCheck";
+import { cloudflareCheckOf } from "@shared/cloudflare";
 import { animeTitle } from "@/components/AnimeCard";
 import { ACTIVITY_DAYS, buildActivitySeries, computeStreaks } from "@/components/StreakBadge";
 
@@ -792,8 +794,15 @@ function WatchPage() {
       {!link && linksQuery.isError && (
         <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
           <TriangleAlert className="h-8 w-8 text-rose-400" strokeWidth={2} />
-          <p className="text-sm text-rose-300">{t("watch.linkError", { message: (linksQuery.error as Error).message })}</p>
-          <button onClick={goBack} className="mt-2 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/20">{t("detail.back")}</button>
+          <p className="text-sm text-rose-300">
+            {cloudflareCheckOf(linksQuery.error)
+              ? t("common.cloudflareBlocked", { host: cloudflareCheckOf(linksQuery.error)!.host })
+              : t("watch.linkError", { message: (linksQuery.error as Error).message })}
+          </p>
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+            <CloudflareCheckButton error={linksQuery.error} className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-white/90" />
+            <button onClick={goBack} className="rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/20">{t("detail.back")}</button>
+          </div>
         </div>
       )}
       {/* The request itself succeeded, it just came back empty - nothing above (isError) or below

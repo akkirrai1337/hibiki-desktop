@@ -4,7 +4,7 @@
 import { IPC } from "@shared/ipc";
 import { logger } from "../logger";
 import { getPlatform } from "../platform";
-import { applyChanges, changeCount, collectChanges, describeChanges, deviceId } from "./changes";
+import { applyChanges, changeCount, collectChanges, describeChanges, deviceId, wipeSyncedData } from "./changes";
 import { checkProof, deriveSharedKey, keyProof, newPairingCode, newPairingKeys, open, seal, type Bytes } from "./crypto";
 import { getPeer, peerKey, savePeer, updatePeer } from "./peers";
 import { PROTOCOL_VERSION, type SyncAnswer, type SyncPayload, type SyncRequest, type SyncResponse } from "./protocol";
@@ -118,6 +118,11 @@ async function answer(request: SyncRequest, address: string, ownName: string): P
       throw error;
     }
     const startedAt = Date.now();
+    // The other device chose, when pairing, that its data replaces this one's.
+    if (payload.replace) {
+      logger.info("sync", `"${peer.name}" replaces this device's data with its own`);
+      await wipeSyncedData();
+    }
     const { changed } = await applyChanges(payload.changes);
     const outgoing = await collectChanges(payload.want);
     await updatePeer(peer.deviceId, { lastAddress: address, lastSyncAt: Date.now() });
@@ -128,7 +133,7 @@ async function answer(request: SyncRequest, address: string, ownName: string): P
       "sync",
       `sync from "${peer.name}" (${address}): got ${describeChanges(payload.changes)}, ${changed} changed here; sent ${describeChanges(outgoing)} in ${Date.now() - startedAt}ms`,
     );
-    if (changed > 0) notifySyncChanged("data");
+    if (changed > 0 || payload.replace) notifySyncChanged("data");
     notifySyncChanged("devices");
     return { ok: true, type: "sync", sealed: await seal(key, { changes: outgoing } satisfies SyncAnswer) };
   }

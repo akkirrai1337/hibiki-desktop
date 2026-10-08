@@ -1,6 +1,7 @@
 import type { HibikiApi } from "@shared/hibikiApi";
 import type { AnimeTitle, PlaybackGroup } from "@shared/types";
 import type { ExtensionRuntime } from "../extensions/runtime";
+import { solveChallenge } from "../extensions/cloudflare";
 import { logger } from "../logger";
 import { recommendationsForSource } from "../recommendations/forSource";
 import { cacheAnime, cachePlaybackGroups, getCachedAnime, getCachedAnimeMany, getCachedPlaybackGroups, getCachedPlaybackGroupsEntry } from "../offlineCache";
@@ -98,5 +99,6 @@ export function createSourcesApi(runtime: ExtensionRuntime): SourcesApi {
       return runtime.pingOnline(sourceId);
     },
     syncLibraryEntry: (sourceId, request) => runtime.syncLibraryEntry(sourceId, request),
+    solveChallenge: (url) => solveChallenge(url),
   };
 }

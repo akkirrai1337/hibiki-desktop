@@ -46,7 +46,10 @@
     "retry": "Retry",
     "save": "Save",
     "scrollLeft": "Scroll left",
-    "scrollRight": "Scroll right"
+    "scrollRight": "Scroll right",
+    "cloudflareBlocked": "{{host}} asks to pass a Cloudflare check.",
+    "cloudflareSolve": "Pass the check",
+    "cloudflareSolving": "Waiting for the check…"
   },
   "catalog": {
     "searchPlaceholder": "Search anime",
@@ -66,7 +69,8 @@
     "sourceUnavailableTitle": "{{source}} isn't responding",
     "sourceUnavailableText": "Check your connection or try again in a bit.",
     "continuations": "Continue the story",
-    "forYou": "For you on {{source}}"
+    "forYou": "For you on {{source}}",
+    "latestReleases": "New episodes"
   },
   "detail": {
     "back": "Back",
@@ -214,7 +218,10 @@
       "dub": "Dub",
       "player": "Player",
       "quality": "Quality",
-      "subtitles": "Subtitles"
+      "subtitles": "Subtitles",
+      "orientation": "Screen",
+      "orientationLandscape": "Landscape only",
+      "orientationAny": "Follow the phone"
     },
     "subtitles": {
       "off": "Off",
@@ -371,7 +378,7 @@
     "repositoryRetry": "Retry",
     "repositoryEmpty": "No extensions available right now",
     "repositoriesAdd": "Add repository",
-    "repositoriesAddHint": "Repository index URL",
+    "repositoriesAddHint": "Repository link or its index.json",
     "repositoriesInvalidUrl": "Enter a valid HTTPS repository index URL",
     "repositoriesRemove": "Remove",
     "repositoriesRemoveConfirmTitle": "Remove repository?",
@@ -425,7 +432,10 @@
       "title": "Source not installed",
       "body": "To open this anime, install the \"{{source}}\" source in Sources first.",
       "action": "Open Sources"
-    }
+    },
+    "repositoriesTrustTitle": "Do you trust this repository?",
+    "repositoriesTrustMessage": "Its sources run inside the app with the same rights as the app: they can see your data and your sign-ins to other sources. Only add repositories you trust.",
+    "repositoriesTrustConfirm": "I trust it, add"
   },
   "achievements": {
     "unlockedToast": "Achievement unlocked"
@@ -784,12 +794,12 @@
   },
   "deviceSync": {
     "hint": "Library, progress, ratings and achievements stay the same on your phone and computers while they are on the same network. Nothing goes through the internet.",
-    "connectPhone": "Connect a phone or computer",
+    "connectPhone": "Connect a device",
     "connectComputer": "Connect to a device",
     "connectAnother": "Connect another device",
     "enterOnPhone": "On the other device: Settings → Sync → Connect to a device, then pick this computer and enter the code:",
     "waiting": "Waiting for the other device… the code works for 5 minutes.",
-    "findHint": "On the device you are connecting to, open Settings → Sync and show its code (on a computer: “Connect a phone or computer”). Both need to be on the same network.",
+    "findHint": "On the device you are connecting to, open Settings → Sync and show its code (on a computer: “Connect a device”). Both need to be on the same network.",
     "searching": "Looking for devices…",
     "notFound": "Nothing found. Make sure hibiki is open on the other device, showing its code, and both are on the same Wi-Fi.",
     "searchAgain": "Search again",
@@ -820,6 +830,17 @@
     "hintPhone": "Library, progress, ratings and achievements stay the same on your devices while they are on the same Wi-Fi. Moving to a new phone works the same way. Nothing goes through the internet.",
     "showCodePhone": "Show a code for another device",
     "enterOnOtherPhone": "On the other device: Settings → Sync → Connect to a device, then pick this phone and enter the code. Keep hibiki open on this screen meanwhile:",
-    "codeTitle": "Connection code"
+    "codeTitle": "Connection code",
+    "pairReplace": "Connect and replace",
+    "mode": {
+      "title": "Whose data to keep",
+      "merge": "Merge",
+      "mergeHint": "Library, progress, ratings and achievements from both devices are joined. Nothing is lost.",
+      "keepHere": "Keep this device's data",
+      "keepHereHint": "Everything on “{{name}}” is replaced with what is on this device.",
+      "takeThere": "Take “{{name}}”'s data",
+      "takeThereHint": "Everything on this device is replaced with what is on “{{name}}”.",
+      "warning": "The replaced device's library, progress, ratings and achievements are deleted. This cannot be undone."
+    }
   }
 }

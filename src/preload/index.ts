@@ -23,6 +23,7 @@ import type {
   SearchFilterCatalog,
   SourceRecommendations,
   SyncCandidate,
+  SyncPairMode,
   SyncDevice,
   SearchRequest,
   SourceAccount,
@@ -124,6 +125,7 @@ const api: HibikiApi = {
       ipcRenderer.on(IPC.sourcesChanged, listener);
       return () => ipcRenderer.removeListener(IPC.sourcesChanged, listener);
     },
+    solveChallenge: (url: string): Promise<boolean> => ipcRenderer.invoke(IPC.sourceChallengeSolve, url),
   },
   sync: {
     devices: (): Promise<SyncDevice[]> => ipcRenderer.invoke(IPC.syncDevices),
@@ -131,7 +133,7 @@ const api: HibikiApi = {
     startPairing: (): Promise<{ code: string; expiresAt: number }> => ipcRenderer.invoke(IPC.syncStartPairing),
     stopPairing: (): Promise<void> => ipcRenderer.invoke(IPC.syncStopPairing),
     discover: (): Promise<SyncCandidate[]> => ipcRenderer.invoke(IPC.syncDiscover),
-    pair: (candidate: SyncCandidate, code: string): Promise<SyncDevice> => ipcRenderer.invoke(IPC.syncPair, candidate, code),
+    pair: (candidate: SyncCandidate, code: string, mode: SyncPairMode): Promise<SyncDevice> => ipcRenderer.invoke(IPC.syncPair, candidate, code, mode),
     syncNow: (): Promise<void> => ipcRenderer.invoke(IPC.syncNow),
     onChanged: (callback: (what: "devices" | "data") => void): (() => void) => {
       const listener = (_e: Electron.IpcRendererEvent, payload: { what: "devices" | "data" }) => callback(payload.what);
