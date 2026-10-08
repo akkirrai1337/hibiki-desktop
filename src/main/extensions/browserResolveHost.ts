@@ -145,12 +145,15 @@ interface Capture {
   url: string;
   kind: CaptureKind;
   quality: string | null;
+  /** The audio track it carries, when the resolver reported several (HibikiResolver.track). */
+  track?: string | null;
 }
 
 export interface ResolvedStream {
   url: string;
   type: string; // "HLS" | "MP4" | "DASH" - matches the Node-resolver contract (see execute.ts)
   quality: string | null;
+  audioTrack?: string | null;
   headers: Record<string, string>;
   segments: [];
   subtitles?: SubtitleTrack[];
@@ -315,12 +318,15 @@ const BRIDGE_SCRIPT = `
   window.__hibikiDone = false;
   window.__hibikiCaptures = window.__hibikiCaptures || [];
   window.__hibikiLastQuality = null;
+  window.__hibikiLastTrack = null;
   window.HibikiResolver = {
     quality: function (label) { window.__hibikiLastQuality = label == null ? null : String(label); },
-    master: function (url) { window.__hibikiCaptures.push({ kind: "master", url: String(url), quality: window.__hibikiLastQuality }); },
-    video: function (url) { window.__hibikiCaptures.push({ kind: "video", url: String(url), quality: window.__hibikiLastQuality }); },
-    audio: function (url) { window.__hibikiCaptures.push({ kind: "audio", url: String(url), quality: window.__hibikiLastQuality }); },
-    stream: function (url) { window.__hibikiCaptures.push({ kind: "stream", url: String(url), quality: window.__hibikiLastQuality }); },
+    // One of several streams of the same episode that differ only in sound (Alloha's audio tracks).
+    track: function (label) { window.__hibikiLastTrack = label == null ? null : String(label); },
+    master: function (url) { window.__hibikiCaptures.push({ kind: "master", url: String(url), quality: window.__hibikiLastQuality, track: window.__hibikiLastTrack }); },
+    video: function (url) { window.__hibikiCaptures.push({ kind: "video", url: String(url), quality: window.__hibikiLastQuality, track: window.__hibikiLastTrack }); },
+    audio: function (url) { window.__hibikiCaptures.push({ kind: "audio", url: String(url), quality: window.__hibikiLastQuality, track: window.__hibikiLastTrack }); },
+    stream: function (url) { window.__hibikiCaptures.push({ kind: "stream", url: String(url), quality: window.__hibikiLastQuality, track: window.__hibikiLastTrack }); },
     subtitle: function (url, label, language) {
       window.__hibikiSubtitles = window.__hibikiSubtitles || [];
       window.__hibikiSubtitles.push({ url: url == null ? null : String(url), label: label == null ? null : String(label), language: language == null ? null : String(language) });
@@ -821,6 +827,7 @@ async function buildResult(
       url: capture.url,
       type: streamTypeForUrl(capture.url),
       quality: capture.quality,
+      audioTrack: capture.track ?? null,
       headers,
       segments: [],
     };

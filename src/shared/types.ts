@@ -102,6 +102,9 @@ export interface PlayerLink {
   headers?: Record<string, string> | null;
   playerName?: string | null;
   translation?: string | null;
+  // Which sound this stream has, when a player serves one episode of one dub as several streams
+  // that differ only in audio (Alloha's audio tracks). Picked in the player's settings.
+  audioTrack?: string | null;
   segments?: VideoSegment[];
   videoId?: string | null;
   audioUrl?: string | null;

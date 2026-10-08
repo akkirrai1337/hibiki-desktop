@@ -218,6 +218,7 @@
       "dub": "Dub",
       "player": "Player",
       "quality": "Quality",
+      "audioTrack": "Audio track",
       "subtitles": "Subtitles",
       "orientation": "Screen",
       "orientationLandscape": "Landscape only",

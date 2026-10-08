@@ -220,6 +220,7 @@
       "dub": "Озвучка",
       "player": "Плеер",
       "quality": "Качество",
+      "audioTrack": "Звуковая дорожка",
       "subtitles": "Субтитры",
       "orientation": "Экран",
       "orientationLandscape": "Только горизонтально",

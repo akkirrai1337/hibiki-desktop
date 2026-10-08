@@ -29,7 +29,7 @@ import {
   VolumeX,
 } from "lucide-react";
 import type { Episode, PlayerLink, VideoSegment } from "@shared/types";
-import { pickLinkForDimension, pickLinkForQuality, playerOptions, qualityOptions, translationOptions } from "@/lib/playerLinks";
+import { audioTrackOptions, pickLinkForAudioTrack, pickLinkForDimension, pickLinkForQuality, playerOptions, qualityOptions, translationOptions } from "@/lib/playerLinks";
 import { playbackUrl } from "@/lib/playbackUrl";
 import { proxiedHlsLoader, streamRequestUrl, usesStreamProxy } from "@/lib/streamProxy";
 import { isGenericDubTitle } from "@/lib/dubTitle";
@@ -394,6 +394,7 @@ function PlayerSettingsMenu({
   translationOptions, selectedTranslation, onSelectTranslation,
   playerOptions, selectedPlayerName, onSelectPlayerName,
   qualityOptions, selectedQuality, onSelectQuality, qualityLocked,
+  audioTrackOptions, selectedAudioTrack, onSelectAudioTrack,
   subtitleOptions, selectedSubtitleId, onSelectSubtitle, onAddSubtitleFile,
   t,
 }: {
@@ -421,13 +422,17 @@ function PlayerSettingsMenu({
   // plain (non-clickable) label reading whatever quality it was downloaded in, instead of the
   // usual "> tap to pick from other resolutions" row, since there's nothing else to switch to.
   qualityLocked: boolean;
+  // Streams of this dub that differ only in sound (Alloha serves some episodes so).
+  audioTrackOptions: string[];
+  selectedAudioTrack: string | undefined;
+  onSelectAudioTrack: (audioTrack: string) => void;
   subtitleOptions: { id: string; label: string }[];
   selectedSubtitleId: string | null;
   onSelectSubtitle: (id: string | null) => void;
   onAddSubtitleFile: () => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
-  const [page, setPage] = useState<"main" | "speed" | "dub" | "translation" | "player" | "quality" | "subtitles" | "orientation">("main");
+  const [page, setPage] = useState<"main" | "speed" | "dub" | "translation" | "player" | "quality" | "audio" | "subtitles" | "orientation">("main");
   const selectedDub = dubOptions.find((d) => d.id === selectedDubId);
   // The phone's screen while watching - chosen here, where it is felt, and applied at once (the root
   // layout locks the screen from this same preference while the player is open).
@@ -468,6 +473,9 @@ function PlayerSettingsMenu({
   if (page === "quality") {
     return <ListPage title={t("watch.settings.quality")} options={qualityOptions} selected={selectedQuality} onSelect={(v) => { onSelectQuality(v); setPage("main"); }} onBack={() => setPage("main")} />;
   }
+  if (page === "audio") {
+    return <ListPage title={t("watch.settings.audioTrack")} options={audioTrackOptions} selected={selectedAudioTrack} onSelect={(v) => { onSelectAudioTrack(v); setPage("main"); }} onBack={() => setPage("main")} />;
+  }
   if (page === "orientation") {
     return <ListPage
       title={t("watch.settings.orientation")}
@@ -506,6 +514,7 @@ function PlayerSettingsMenu({
     {qualityLocked
       ? selectedQuality && <MenuRow label={t("watch.settings.quality")} value={selectedQuality} />
       : qualityOptions.length > 1 && <MenuRow label={t("watch.settings.quality")} value={selectedQuality ?? "—"} onClick={() => setPage("quality")} />}
+    {audioTrackOptions.length > 1 && <MenuRow label={t("watch.settings.audioTrack")} value={selectedAudioTrack ?? "—"} onClick={() => setPage("audio")} />}
     <MenuRow label={t("watch.settings.speed")} value={`${playbackSpeed}×`} onClick={() => setPage("speed")} />
     <MenuRow
       label={t("watch.settings.subtitles")}
@@ -966,13 +975,14 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   // has more than one option (some episodes only ever resolve to a single stream). A source can
   // vary any of the three independently per link (confirmed against yummy-anime.js: every link
   // carries its own `translation` - dub studio - *and* `playerName`, decoupled from each other).
-  const [pendingSelection, setPendingSelection] = useState<Partial<Pick<PlayerLink, "translation" | "playerName" | "quality">> | null>(null);
+  const [pendingSelection, setPendingSelection] = useState<Partial<Pick<PlayerLink, "translation" | "playerName" | "quality" | "audioTrack">> | null>(null);
   const links = availableLinks ?? (link ? [link] : []);
   // Which link each of these maps to lives in lib/playerLinks - see the note at the top of that
   // file. What stays here is only the UI's own concern: reflecting the pick immediately.
   const translationValues = translationOptions(links);
   const playerValues = playerOptions(links);
   const qualityValues = link ? qualityOptions(links, link) : [];
+  const audioTrackValues = link ? audioTrackOptions(links, link) : [];
   const beginSourceSwitch = useCallback((target?: PlayerLink): boolean => {
     if (target && link && target.type === link.type && target.url === link.url) return false;
 
@@ -1020,6 +1030,10 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     const candidate = link ? pickLinkForQuality(links, link, quality) : undefined;
     if (candidate && beginSourceSwitch(candidate)) { setPendingSelection({ quality }); onSelectLink?.(candidate); }
   };
+  const selectAudioTrack = (audioTrack: string) => {
+    const candidate = link ? pickLinkForAudioTrack(links, link, audioTrack) : undefined;
+    if (candidate && beginSourceSwitch(candidate)) { setPendingSelection({ audioTrack }); onSelectLink?.(candidate); }
+  };
   // What the settings menu should *say* is selected. An EMBED pick isn't a `link` swap: the parent
   // has to resolve it over the network first (see the watch route's selectLink), so reading these
   // straight off `link` left the menu showing the old player/quality for as long as that took,
@@ -1028,6 +1042,7 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
   const shownTranslation = pendingSelection?.translation ?? link?.translation ?? undefined;
   const shownPlayerName = pendingSelection?.playerName ?? link?.playerName ?? undefined;
   const shownQuality = pendingSelection?.quality ?? link?.quality ?? undefined;
+  const shownAudioTrack = pendingSelection?.audioTrack ?? link?.audioTrack ?? undefined;
 
   // Drop the optimistic pick once it can no longer differ from reality: either `link` itself
   // changed (a non-EMBED pick applies synchronously) or the parent finished resolving the EMBED
@@ -2260,6 +2275,9 @@ export function VideoPlayer({ link, availableLinks, offlinePlayback, dubOptions,
     selectedQuality={shownQuality}
     onSelectQuality={selectQuality}
     qualityLocked={!!offlinePlayback}
+    audioTrackOptions={offlinePlayback ? [] : audioTrackValues}
+    selectedAudioTrack={shownAudioTrack}
+    onSelectAudioTrack={selectAudioTrack}
     subtitleOptions={subtitleOptions}
     selectedSubtitleId={selectedSubtitleId}
     onSelectSubtitle={setSelectedSubtitleId}

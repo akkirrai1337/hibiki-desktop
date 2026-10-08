@@ -61,15 +61,33 @@ export function playerOptions(links: PlayerLink[]): string[] {
   return distinctValues(links, (link) => link.playerName);
 }
 
-/**
- * The links that belong to the stream currently playing - same provider, same dub. A quality is a
- * rendition of one provider's stream, so mixing every link of the episode into one list is what
- * made an Alloha 720p pick jump to Kodik.
- */
-export function linksForCurrentStream(links: PlayerLink[], current: PlayerLink): PlayerLink[] {
+/** Same provider, same dub: every audio track and quality of what is playing. */
+function linksForCurrentDub(links: PlayerLink[], current: PlayerLink): PlayerLink[] {
   return links.filter(
     (link) => link.playerName === current.playerName && link.translation === current.translation,
   );
+}
+
+const sameAudioTrack = (a: PlayerLink, b: PlayerLink) => (a.audioTrack ?? null) === (b.audioTrack ?? null);
+
+/**
+ * The links that belong to the stream currently playing - same provider, same dub, same audio
+ * track. A quality is a rendition of one provider's stream, so mixing every link of the episode
+ * into one list is what made an Alloha 720p pick jump to Kodik.
+ */
+export function linksForCurrentStream(links: PlayerLink[], current: PlayerLink): PlayerLink[] {
+  return linksForCurrentDub(links, current).filter((link) => sameAudioTrack(link, current));
+}
+
+/** Audio tracks of the current dub, in the order the resolver reported them (its default first). */
+export function audioTrackOptions(links: PlayerLink[], current: PlayerLink): string[] {
+  return distinctValues(linksForCurrentDub(links, current), (link) => link.audioTrack);
+}
+
+/** Another audio track of the same dub, in the quality playing now when it has it. */
+export function pickLinkForAudioTrack(links: PlayerLink[], current: PlayerLink, audioTrack: string): PlayerLink | undefined {
+  const candidates = linksForCurrentDub(links, current).filter((link) => link.audioTrack === audioTrack);
+  return candidates.find((link) => link.quality === current.quality) ?? candidates[0];
 }
 
 // -Infinity, so labels carrying no resolution at all ("auto", "source", ...) still sort last now
@@ -104,7 +122,8 @@ export function pickLinkForDimension(
       score:
         (link.translation === target.translation ? 1 : 0) +
         (link.playerName === target.playerName ? 1 : 0) +
-        (link.quality === target.quality ? 1 : 0),
+        (link.quality === target.quality ? 1 : 0) +
+        (sameAudioTrack(link, current) ? 1 : 0),
     }))
     .sort((a, b) => b.score - a.score)[0]?.link;
 }
@@ -124,10 +143,13 @@ export function pickLinkForQuality(
  * like it snapped back to whatever the source lists first.
  */
 export function pickResolvedLink(playable: PlayerLink[], requested: PlayerLink): PlayerLink | undefined {
+  // The audio track first: a quality that only exists in another track's sound is not the pick.
+  const sameTrack = requested.audioTrack ? playable.filter((link) => link.audioTrack === requested.audioTrack) : [];
+  const candidates = sameTrack.length > 0 ? sameTrack : playable;
   const sameQuality = requested.quality
-    ? playable.find((link) => link.quality === requested.quality)
+    ? candidates.find((link) => link.quality === requested.quality)
     : undefined;
-  return sameQuality ?? pickDefaultLink(playable);
+  return sameQuality ?? pickDefaultLink(candidates);
 }
 
 /**
@@ -163,7 +185,8 @@ export function pickPlaybackFallback(
         (provider && failedProvider && provider !== failedProvider ? 100 : 0) +
         (link.translation === failed.translation ? 20 : 0) +
         (link.playerName === failed.playerName ? 10 : 0) +
-        (link.type !== "EMBED" ? 5 : 0);
+        (link.type !== "EMBED" ? 5 : 0) +
+        (sameAudioTrack(link, failed) ? 2 : 0);
       return { link, index, score };
     })
     .sort((a, b) => b.score - a.score || a.index - b.index)[0]?.link;

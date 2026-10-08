@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { PlayerLink } from "@shared/types";
 import {
+  audioTrackOptions,
   pickDefaultLink,
+  pickLinkForAudioTrack,
   pickLinkForDimension,
   pickLinkForQuality,
   pickPlaybackFallback,
@@ -142,5 +144,33 @@ describe("pickResolvedLink", () => {
   it("falls back to the default when the resolved set has no such rendition", () => {
     const requested = link({ url: "embed", type: "EMBED", playerName: "Alloha", quality: "2160p" });
     expect(pickResolvedLink([alloha360, alloha1440], requested)).toBe(alloha360);
+  });
+});
+
+describe("audio tracks", () => {
+  // One dub served as two streams that differ only in sound (Alloha's audio tracks).
+  const first1080 = link({ url: "a/1080", playerName: "Alloha", translation: "AniLibria", quality: "1080p", audioTrack: "AniLibriaTV" });
+  const first720 = link({ url: "a/720", playerName: "Alloha", translation: "AniLibria", quality: "720p", audioTrack: "AniLibriaTV" });
+  const second1080 = link({ url: "b/1080", playerName: "Alloha", translation: "AniLibria", quality: "1080p", audioTrack: "AniLibriaTV 1" });
+  const second720 = link({ url: "b/720", playerName: "Alloha", translation: "AniLibria", quality: "720p", audioTrack: "AniLibriaTV 1" });
+  const tracks = [first1080, first720, second1080, second720, kodik720];
+
+  it("lists the tracks of the current dub in the order they came", () => {
+    expect(audioTrackOptions(tracks, first720)).toEqual(["AniLibriaTV", "AniLibriaTV 1"]);
+    expect(audioTrackOptions(tracks, kodik720)).toEqual([]);
+  });
+
+  it("switches track in the quality playing now", () => {
+    expect(pickLinkForAudioTrack(tracks, first720, "AniLibriaTV 1")).toBe(second720);
+  });
+
+  it("keeps the track when the quality changes", () => {
+    expect(pickLinkForQuality(tracks, second720, "1080p")).toBe(second1080);
+    expect(qualityOptions(tracks, second720)).toEqual(["1080p", "720p"]);
+  });
+
+  it("keeps the track through an embed resolving again", () => {
+    const requested = link({ url: "embed", type: "EMBED", playerName: "Alloha", quality: "720p", audioTrack: "AniLibriaTV 1" });
+    expect(pickResolvedLink([first1080, first720, second1080, second720], requested)).toBe(second720);
   });
 });

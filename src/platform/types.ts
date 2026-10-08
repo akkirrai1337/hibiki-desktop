@@ -153,6 +153,8 @@ export interface ResolvedStream {
   url: string;
   type: string;
   quality: string | null;
+  /** Which of several sound tracks this stream carries, when the resolver reported more than one. */
+  audioTrack?: string | null;
   headers: Record<string, string>;
   segments: [];
   /** Tracks the resolver reported on the embed page, with the headers to fetch them with. */
