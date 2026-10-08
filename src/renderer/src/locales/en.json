@@ -617,7 +617,7 @@
       "accentColor": "Accent color",
       "accentColorHint": "Color of buttons and active elements",
       "backgroundTheme": "App background",
-      "backgroundThemeHint": "A gradient behind the sidebar - like Discord",
+      "backgroundThemeHint": "A gradient behind the interface",
       "backgroundThemeNone": "Default",
       "backgroundThemeCustom": "Custom",
       "backgroundThemeCustomFrom": "Start color",
@@ -793,13 +793,13 @@
     "downloadingTitle_other": "Downloading {{count}} episodes"
   },
   "deviceSync": {
-    "hint": "Library, progress, ratings and achievements stay the same on your phone and computers while they are on the same network. Nothing goes through the internet.",
-    "connectPhone": "Connect a device",
+    "hint": "Library and progress on all your devices on the same network.",
+    "connectPhone": "Show a code",
     "connectComputer": "Connect to a device",
     "connectAnother": "Connect another device",
     "enterOnPhone": "On the other device: Settings → Sync → Connect to a device, then pick this computer and enter the code:",
     "waiting": "Waiting for the other device… the code works for 5 minutes.",
-    "findHint": "On the device you are connecting to, open Settings → Sync and show its code (on a computer: “Connect a device”). Both need to be on the same network.",
+    "findHint": "On the device you are connecting to, open Settings → Sync and show its code (on a computer: “Show a code”). Both need to be on the same network.",
     "searching": "Looking for devices…",
     "notFound": "Nothing found. Make sure hibiki is open on the other device, showing its code, and both are on the same Wi-Fi.",
     "searchAgain": "Search again",
@@ -827,7 +827,7 @@
       "generic": "Something went wrong. Try again."
     },
     "title": "Devices",
-    "hintPhone": "Library, progress, ratings and achievements stay the same on your devices while they are on the same Wi-Fi. Moving to a new phone works the same way. Nothing goes through the internet.",
+    "hintPhone": "Library and progress on all your devices on the same network.",
     "showCodePhone": "Show a code for another device",
     "enterOnOtherPhone": "On the other device: Settings → Sync → Connect to a device, then pick this phone and enter the code. Keep hibiki open on this screen meanwhile:",
     "codeTitle": "Connection code",
@@ -841,6 +841,18 @@
       "takeThere": "Take “{{name}}”'s data",
       "takeThereHint": "Everything on this device is replaced with what is on “{{name}}”.",
       "warning": "The replaced device's library, progress, ratings and achievements are deleted. This cannot be undone."
+    },
+    "missing": {
+      "title": "Install sources",
+      "hint": "The synced data uses sources this device doesn't have. Without them some titles won't open.",
+      "install": "Install",
+      "installAll": "Install all",
+      "notFound_one": "{{count}} more is in none of your repositories.",
+      "notFound_other": "{{count}} more are in none of your repositories.",
+      "later": "Later",
+      "noticeTitle": "Not everything came over",
+      "noticeText": "Some data shows incompletely: its sources aren't installed here. Install them to fix it.",
+      "show": "Install sources"
     }
   }
 }

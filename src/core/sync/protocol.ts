@@ -25,7 +25,9 @@ export interface DiscoveryAnswer {
 export type SyncRequest =
   | { v: number; type: "pair-hello"; from: string; name: string; pub: string }
   | { v: number; type: "pair-confirm"; from: string; proof: string }
-  | { v: number; type: "sync"; from: string; sealed: Sealed };
+  | { v: number; type: "sync"; from: string; sealed: Sealed }
+  /** "Forget me": sealed with the pair's key, so only the paired device can end the pairing. */
+  | { v: number; type: "unpair"; from: string; sealed: Sealed };
 
 export type SyncErrorCode = "not-pairing" | "too-many-attempts" | "bad-code" | "unknown-device" | "bad-message" | "version";
 
@@ -33,7 +35,8 @@ export type SyncResponse =
   | { ok: false; error: SyncErrorCode }
   | { ok: true; type: "pair-hello"; from: string; name: string; pub: string; proof: string }
   | { ok: true; type: "pair-confirm" }
-  | { ok: true; type: "sync"; sealed: Sealed };
+  | { ok: true; type: "sync"; sealed: Sealed }
+  | { ok: true; type: "unpair" };
 
 /** Inside a sealed sync request: the phone's changes, and from where it wants the computer's. */
 export interface SyncPayload {
@@ -43,6 +46,12 @@ export interface SyncPayload {
    * device clears its own synced data before taking these changes. Sealed, so only a paired device
    * can ask for it. */
   replace?: boolean;
+}
+
+/** Inside a sealed unpair request: when it was asked, so an old one cannot be replayed into a newer pairing. */
+export interface UnpairPayload {
+  unpair: true;
+  pairedAt: number;
 }
 
 /** Inside a sealed sync answer. */

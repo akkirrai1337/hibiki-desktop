@@ -247,6 +247,14 @@ export interface SourceSetting {
   webLoginSuccessCookie?: string;
 }
 
+/** Sources the data here (library, history, ratings) refers to but which are not installed. */
+export interface MissingSources {
+  /** Installable from a configured repository; one entry per APK package. */
+  available: Array<{ extension: MarketplaceExtension; repositoryUrl: string }>;
+  /** Ids no configured repository has. */
+  unavailable: string[];
+}
+
 /** Who is signed in to a source, as far as the source is concerned. */
 export interface SourceAccount {
   id: string;

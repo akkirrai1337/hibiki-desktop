@@ -29,6 +29,7 @@ import type {
   SourceAccount,
   SourceComment,
   SourceInfo,
+  MissingSources,
   SourceLibraryEntry,
   SourceReview,
   UpdateDownloadProgress,
@@ -126,6 +127,7 @@ const api: HibikiApi = {
       return () => ipcRenderer.removeListener(IPC.sourcesChanged, listener);
     },
     solveChallenge: (url: string): Promise<boolean> => ipcRenderer.invoke(IPC.sourceChallengeSolve, url),
+    missingSources: (): Promise<MissingSources> => ipcRenderer.invoke(IPC.sourcesMissing),
   },
   sync: {
     devices: (): Promise<SyncDevice[]> => ipcRenderer.invoke(IPC.syncDevices),

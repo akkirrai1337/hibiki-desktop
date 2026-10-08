@@ -9,6 +9,7 @@ import { TitleBar } from "@/components/TitleBar";
 import { MobileUpdateSheet } from "@/components/MobileUpdateSheet";
 import { BackgroundWorkNotice } from "@/components/BackgroundWorkNotice";
 import { SyncListener } from "@/components/DeviceSync";
+import { MissingSourcesPrompt } from "@/components/MissingSourcesPrompt";
 import { Sidebar } from "@/components/Sidebar";
 import { MobileStatusScrim, MobileTabBar } from "@/components/MobileTabBar";
 import { LibrarySegments } from "@/components/MobilePageHeader";
@@ -87,6 +88,7 @@ function RootLayout() {
   useEffect(() => hibiki.sources.onChanged(() => {
     void queryClient.invalidateQueries({ queryKey: ["sources"] });
     void queryClient.invalidateQueries({ queryKey: ["installedVersions"] });
+    void queryClient.invalidateQueries({ queryKey: ["missingSources"] });
   }), [queryClient]);
   return (
     <SignInPromptProvider>
@@ -390,6 +392,7 @@ function RootLayoutContent() {
     {isMobile && <MobileUpdateSheet suppressed={isWatching} />}
     {isMobile && <BackgroundWorkNotice />}
     <SyncListener />
+    <MissingSourcesPrompt />
     {isMobile && !isWatching && <><MobileStatusScrim />{!pathname.startsWith("/anime/") && <MobileTabBar />}</>}
   </div>;
 }

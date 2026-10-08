@@ -94,7 +94,10 @@ export function CatalogPage() {
   });
   // What was watched on this source, turned into what to watch next on it (core/recommendations).
   // Only asked once there is history; the backend reuses its answer until the history changes.
-  const { hasHistory } = useContinueWatching();
+  const { hasHistory, slots: continueSlots } = useContinueWatching();
+  // The row drops titles it could not resolve (no source here, no cached card); with none left its
+  // heading alone would sit over nothing.
+  const hasContinueCards = continueSlots.some((slot) => slot.anime !== null);
   const recommendations = useQuery({
     queryKey: ["recommendations", source?.id, sortMode ?? ""],
     enabled: !!source && settingsReady && hasHistory,
@@ -150,7 +153,7 @@ export function CatalogPage() {
         {/* Always the frame row: swapping to poster cards below a threshold meant the section
             changed shape as history filled up, and a single captured frame still reads as "here's
             where you left off" better than a poster does. */}
-        {!isNew && <Section title={t("catalog.continueWatching")} action={t("catalog.viewHistory")} to="/history">
+        {!isNew && hasContinueCards && <Section title={t("catalog.continueWatching")} action={t("catalog.viewHistory")} to="/history">
           <ContinueWatchingFrameRow sourceById={sourceById} />
         </Section>}
         {continuations.length > 0 && <Section title={t("catalog.continuations")}>

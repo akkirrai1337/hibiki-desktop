@@ -5,9 +5,9 @@
 import type { HibikiApi, PipAction } from "@shared/hibikiApi";
 import { IPC } from "@shared/ipc";
 import type { AppUpdate, DownloadProgress, TrackerImportProgress, UpdateDownloadProgress } from "@shared/types";
-import { createCoreApi, type CoreApi } from "../../core/api";
+import { createCoreApi } from "../../core/api";
+import { installMissingSources } from "../../core/api/sourceAutoInstall";
 import { importLegacyData } from "../../core/legacyImport";
-import { DEFAULT_APK_REPOSITORY_URL } from "../../core/marketplace";
 import { handleTrackingRedirect } from "../../core/api/tracking";
 import { ExtensionRuntime } from "../../core/extensions/runtime";
 import { log, recentEntries, renderLog } from "../../core/logger";
@@ -57,11 +57,9 @@ const LEGACY_IMPORTED = "legacy-app-imported";
 /**
  * The first start after this app replaced the Kotlin hibiki (the same package): its library and saved
  * positions come over (core/legacyImport.ts) before the first screen is drawn, and the sources they
- * belong to are installed from the repositories in the background, so the titles also open. An
- * Aniyomi source comes only from the preinstalled Aniyomi repository, not from whatever else is
- * configured: native code from a repository the person never picked is not installed on their behalf.
+ * belong to are installed in the background (core/api/sourceAutoInstall.ts), so the titles also open.
  */
-async function carryOverLegacyApp(platform: Platform, core: CoreApi, runtime: ExtensionRuntime): Promise<void> {
+async function carryOverLegacyApp(platform: Platform, runtime: ExtensionRuntime): Promise<void> {
   const marker = platform.files.join(platform.paths.userData, LEGACY_IMPORTED);
   if (await platform.files.exists(marker)) return;
   try {
@@ -70,38 +68,11 @@ async function carryOverLegacyApp(platform: Platform, core: CoreApi, runtime: Ex
     if (data.found) {
       const result = await importLegacyData(data);
       log("info", "migration", `carried over ${result.library} library titles and ${result.progress} saved positions from the previous app${result.skipped ? `, ${result.skipped} skipped` : ""}`);
-      void installSourcesOf(result.sourceIds, core, runtime).catch((error) => log("warn", "migration", `sources of the carried-over titles not installed: ${error}`));
+      void installMissingSources(runtime, result.sourceIds, "carried-over titles").catch((error) => log("warn", "migration", `sources of the carried-over titles not installed: ${error}`));
     }
     await platform.files.writeText(marker, "1");
   } catch (error) {
     log("warn", "migration", `previous app's data not carried over, will retry next start: ${error}`);
-  }
-}
-
-/** Installs, from the configured repositories, each source the carried-over titles need and lack. */
-async function installSourcesOf(sourceIds: string[], core: CoreApi, runtime: ExtensionRuntime): Promise<void> {
-  const installed = new Set(runtime.list().map((source) => source.id));
-  const missing = sourceIds.filter((id) => !installed.has(id));
-  if (missing.length === 0) return;
-  const results = await core.sources.marketplace(await core.sources.repositories.list());
-  const packagesDone = new Set<string>();
-  for (const id of missing) {
-    const found = results
-      .flatMap((result) => (result.ok ? result.extensions.filter((extension) => extension.id === id).map((extension) => ({ extension, url: result.url })) : []))
-      .find(({ extension, url }) => !extension.apkPackage || url === DEFAULT_APK_REPOSITORY_URL);
-    if (!found) {
-      log("warn", "migration", `source ${id} of carried-over titles is in no repository it may come from`);
-      continue;
-    }
-    // One APK package carries several sources; it is installed once.
-    if (found.extension.apkPackage && packagesDone.has(found.extension.apkPackage)) continue;
-    try {
-      await core.sources.install(found.extension, found.url);
-      if (found.extension.apkPackage) packagesDone.add(found.extension.apkPackage);
-      log("info", "migration", `installed ${id} for carried-over titles`);
-    } catch (error) {
-      log("warn", "migration", `could not install ${id} for carried-over titles: ${error}`);
-    }
   }
 }
 
@@ -121,7 +92,7 @@ export async function installAndroidHibiki(): Promise<void> {
   const runtime = new ExtensionRuntime(platform.paths.extensions);
   await runtime.reload();
   const core = createCoreApi(runtime);
-  await carryOverLegacyApp(platform, core, runtime);
+  await carryOverLegacyApp(platform, runtime);
   const nothing = () => () => {};
   const api: HibikiApi = {
     ...core,

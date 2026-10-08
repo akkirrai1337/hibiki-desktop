@@ -3,6 +3,7 @@ import { IPC } from "@shared/ipc";
 import type { MarketplaceExtension } from "@shared/types";
 import { createExtensionsApi } from "../../core/api/extensions";
 import { createRepositoriesApi } from "../../core/api/repositories";
+import { findMissingSources, sourcesInData } from "../../core/api/sourceAutoInstall";
 import type { ExtensionRuntime } from "../../core/extensions/runtime";
 
 export function registerMarketplaceHandlers(runtime: ExtensionRuntime): void {
@@ -16,4 +17,5 @@ export function registerMarketplaceHandlers(runtime: ExtensionRuntime): void {
   ipcMain.handle(IPC.sourcesInstall, (_e, extension: MarketplaceExtension, originUrl: string) => extensions.install(extension, originUrl));
   ipcMain.handle(IPC.sourcesInstalledVersions, () => extensions.installedVersions());
   ipcMain.handle(IPC.sourcesUninstall, (_e, id: string) => extensions.uninstall(id));
+  ipcMain.handle(IPC.sourcesMissing, async () => findMissingSources(runtime, await sourcesInData(), { apkFromDefaultOnly: false }));
 }

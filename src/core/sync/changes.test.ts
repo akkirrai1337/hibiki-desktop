@@ -7,15 +7,15 @@ import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/sqlite-proxy";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as schema from "../db/schema";
-import { dailyActivity, library, titleRatings, watchProgress, xpEvents } from "../db/schema";
+import { cachedAnime, dailyActivity, library, titleRatings, watchProgress, xpEvents } from "../db/schema";
 import { applyMigrations, type MigrationJournal } from "../db/migrate";
 import { installPlatform } from "../platform";
 import type { Platform } from "../../platform/types";
 import { applyChanges, collectChanges, currentSeq, deviceId, mergeProgress, type ProgressRow } from "./changes";
-import { discover, pair, syncNow } from "./client";
-import { listPeers } from "./peers";
+import { discover, forgetPeer, pair, syncNow } from "./client";
+import { listPeers, removePeer } from "./peers";
 import { handleSyncRequest, startPairing, stopPairing } from "./server";
 
 const migrationsDir = fileURLToPath(new URL("../db/migrations", import.meta.url));
@@ -117,6 +117,23 @@ describe("syncing two devices", () => {
     await push(phone, pc);
     on(pc);
     expect(await pc.select().from(xpEvents).all()).toHaveLength(1);
+  });
+
+  it("brings the cached card of each synced title along", async () => {
+    on(pc);
+    await pc.insert(cachedAnime).values({ sourceId: "yummy-anime", animeId: "4689", animeJson: JSON.stringify({ id: "4689", russianName: "Бочки" }), cachedAt: 50 }).run();
+    await pc.insert(watchProgress).values(progress({ sourceId: "yummy-anime", titleId: "4689" })).run();
+    await push(pc, phone);
+    on(phone);
+    expect(JSON.parse((await phone.select().from(cachedAnime).get())!.animeJson).russianName).toBe("Бочки");
+
+    // A fresher card here is not overwritten by an older one from there.
+    await phone.update(cachedAnime).set({ animeJson: "{\"russianName\":\"newer\"}", cachedAt: 90 }).run();
+    on(pc);
+    await pc.update(watchProgress).set({ positionMs: 2000, updatedAt: 2000 }).run();
+    await push(pc, phone, 0);
+    on(phone);
+    expect((await phone.select().from(cachedAnime).get())!.animeJson).toContain("newer");
   });
 
   it("keeps the later category change, whichever device made it", async () => {
@@ -330,6 +347,39 @@ describe("pairing and syncing over the protocol", () => {
     expect(await state(phone)).toEqual(expected);
     net.asComputer();
     expect(await state(pc)).toEqual(expected);
+  });
+
+  async function paired() {
+    const net = connect(pc, phone);
+    net.asComputer();
+    const { code } = startPairing();
+    net.asPhone();
+    const [found] = await discover();
+    await pair(found, code);
+    return { net, computerId: found.deviceId };
+  }
+
+  it("forgetting on the phone ends the pairing on the computer too", async () => {
+    const { net, computerId } = await paired();
+    await forgetPeer(computerId);
+    expect(await listPeers()).toEqual([]);
+    // The computer is told in the background.
+    await vi.waitFor(async () => {
+      net.asComputer();
+      const left = await listPeers();
+      net.asPhone();
+      expect(left).toEqual([]);
+    });
+  });
+
+  it("a device the other one forgot while it was away forgets it on its next sync", async () => {
+    const { net } = await paired();
+    net.asComputer();
+    const [phonePeer] = await listPeers();
+    await removePeer(phonePeer.deviceId);
+    net.asPhone();
+    await expect(syncNow()).resolves.toBeUndefined();
+    expect(await listPeers()).toEqual([]);
   });
 
   it("does not pair when no pairing window is open", async () => {

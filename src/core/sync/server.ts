@@ -6,8 +6,8 @@ import { logger } from "../logger";
 import { getPlatform } from "../platform";
 import { applyChanges, changeCount, collectChanges, describeChanges, deviceId, wipeSyncedData } from "./changes";
 import { checkProof, deriveSharedKey, keyProof, newPairingCode, newPairingKeys, open, seal, type Bytes } from "./crypto";
-import { getPeer, peerKey, savePeer, updatePeer } from "./peers";
-import { PROTOCOL_VERSION, type SyncAnswer, type SyncPayload, type SyncRequest, type SyncResponse } from "./protocol";
+import { getPeer, peerKey, removePeer, savePeer, updatePeer } from "./peers";
+import { PROTOCOL_VERSION, type SyncAnswer, type SyncPayload, type SyncRequest, type SyncResponse, type UnpairPayload } from "./protocol";
 
 const PAIRING_WINDOW_MS = 5 * 60 * 1000;
 /** Wrong codes allowed per pairing window before it closes. */
@@ -101,6 +101,19 @@ async function answer(request: SyncRequest, address: string, ownName: string): P
     logger.info("sync", `paired with "${pending.name}" (${address}, ${request.from.slice(0, 8)}); it starts the syncs`);
     notifySyncChanged("devices");
     return { ok: true, type: "pair-confirm" };
+  }
+
+  // The other device forgot this one: the pairing ends here too.
+  if (request.type === "unpair") {
+    const peer = await getPeer(request.from);
+    if (!peer) return { ok: true, type: "unpair" };
+    // Opening it proves the pair's key; the time keeps an unpair from an earlier pairing out of this one.
+    const payload = await open<UnpairPayload>(await peerKey(peer), request.sealed);
+    if (!payload.unpair || payload.pairedAt !== peer.pairedAt) return { ok: false, error: "bad-message" };
+    await removePeer(peer.deviceId);
+    logger.info("sync", `"${peer.name}" forgot this device; forgotten here too`);
+    notifySyncChanged("devices");
+    return { ok: true, type: "unpair" };
   }
 
   if (request.type === "sync") {

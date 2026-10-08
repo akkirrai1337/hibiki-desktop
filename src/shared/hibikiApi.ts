@@ -30,6 +30,7 @@ import type {
   SourceAccount,
   SourceComment,
   SourceInfo,
+  MissingSources,
   SourceLibraryEntry,
   SourceReview,
   TrackerAccount,
@@ -125,6 +126,9 @@ export interface HibikiApi {
      * source error, see shared/cloudflare.ts); true once passed, false if the window was closed
      * first. Later requests to the site carry the clearance. */
     solveChallenge(url: string): Promise<boolean>;
+    /** Sources the library, history and ratings here use that are not installed - offered after a
+     * sync brings in another device's titles - with where each can be installed from. */
+    missingSources(): Promise<MissingSources>;
   };
   ratings: {
     get(sourceId: string, animeId: string): Promise<number | null>;

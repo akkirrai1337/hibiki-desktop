@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Laptop, Loader2, RefreshCw, Smartphone, Trash2, Wifi } from "lucide-react";
 import type { SyncCandidate, SyncDevice, SyncPairMode } from "@shared/types";
+import { MissingSourcesNotice } from "@/components/MissingSourcesPrompt";
 import { BottomSheet } from "@/components/BottomSheet";
 import { Modal } from "@/components/Modal";
 import { cn } from "@/lib/cn";
@@ -13,7 +14,7 @@ import { isMobile } from "@/lib/mobile";
 
 const DEVICES_KEY = ["syncDevices"];
 // What a sync can bring in: everything that shows the library, progress, ratings or xp.
-const DATA_KEYS = ["library", "recent-progress", "progress-all", "progress", "dailyActivity", "rating", "xpEvents", "recommendations"];
+const DATA_KEYS = ["library", "recent-progress", "progress-all", "progress", "dailyActivity", "rating", "xpEvents", "recommendations", "missingSources"];
 
 /**
  * Keeps the screens current when a sync brings data in, on either device - mounted once at the root.
@@ -81,9 +82,11 @@ export function DeviceSyncSection() {
           <p className="text-sm font-semibold text-text">{t("deviceSync.title")}</p>
           <p className="mt-0.5 text-xs leading-relaxed text-muted">{t(isMobile ? "deviceSync.hintPhone" : "deviceSync.hint")}</p>
           {!isMobile && devicesAndActions}
+          {!isMobile && <MissingSourcesNotice />}
         </div>
       </div>
       {isMobile && devicesAndActions}
+      {isMobile && <MissingSourcesNotice />}
     </section>
   );
 }

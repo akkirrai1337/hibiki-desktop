@@ -6,8 +6,8 @@ import { logger } from "../logger";
 import { getPlatform } from "../platform";
 import { applyChanges, changeCount, collectChanges, currentSeq, describeChanges, deviceId, wipeSyncedData } from "./changes";
 import { checkProof, deriveSharedKey, keyProof, newPairingKeys, open, seal } from "./crypto";
-import { listPeers, peerKey, savePeer, toDevice, updatePeer, type PeerRow } from "./peers";
-import { PROTOCOL_VERSION, SYNC_PORT, type SyncAnswer, type SyncErrorCode, type SyncPayload, type SyncRequest, type SyncResponse } from "./protocol";
+import { getPeer, listPeers, peerKey, removePeer, savePeer, toDevice, updatePeer, type PeerRow } from "./peers";
+import { PROTOCOL_VERSION, SYNC_PORT, type SyncAnswer, type SyncErrorCode, type SyncPayload, type SyncRequest, type SyncResponse, type UnpairPayload } from "./protocol";
 import { notifySyncChanged } from "./server";
 
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -197,6 +197,29 @@ let again = false;
 /** Peers last found unreachable: the warning is written when that starts, not on every attempt. */
 const unreachable = new Set<string>();
 
+/**
+ * Ends a pairing on both devices. Gone here at once; the other device is told in the background, if
+ * it can be reached - a phone listens only while the app is on screen. One that is not reached learns
+ * it on its next sync, which this device refuses as from an unknown device (see syncNow).
+ */
+export async function forgetPeer(peerId: string): Promise<void> {
+  const peer = await getPeer(peerId);
+  if (!peer) return;
+  const key = await peerKey(peer);
+  await removePeer(peerId);
+  logger.info("sync", `forgot "${peer.name}" (${peerId.slice(0, 8)})`);
+  notifySyncChanged("devices");
+  // A device that connects here is reached where it last answered; one that connects to this one
+  // listens on the usual port of the address it last came from.
+  const address = peer.connects ? splitAddress(peer.lastAddress) : peer.lastAddress ? { host: peer.lastAddress.slice(0, peer.lastAddress.lastIndexOf(":")) || peer.lastAddress, port: SYNC_PORT } : null;
+  if (!address || !getPlatform().syncTransport) return;
+  void (async () => {
+    const sealed = await seal(key, { unpair: true, pairedAt: peer.pairedAt } satisfies UnpairPayload);
+    await request(address.host, address.port, { v: PROTOCOL_VERSION, type: "unpair", from: await deviceId(), sealed });
+    logger.info("sync", `"${peer.name}" was told and forgot this device too`);
+  })().catch((error) => logger.info("sync", `"${peer.name}" not told of the unpairing (${errorText(error)}); it learns on its next sync`));
+}
+
 /** Syncs with every paired computer. Concurrent calls share the run in progress (and one more after it). */
 export function syncNow(): Promise<void> {
   if (running) {
@@ -214,6 +237,13 @@ export function syncNow(): Promise<void> {
             await syncWith(peer);
             if (unreachable.delete(peer.deviceId)) logger.info("sync", `"${peer.name}" reachable again`);
           } catch (error) {
+            // The other device has forgotten this one: so does this one, instead of failing every sync.
+            if (error instanceof SyncError && error.code === "unknown-device") {
+              await removePeer(peer.deviceId);
+              logger.info("sync", `"${peer.name}" forgot this device; forgotten here too`);
+              notifySyncChanged("devices");
+              continue;
+            }
             const isUnreachable = error instanceof SyncError && error.code === "unreachable";
             if (!isUnreachable) {
               logger.warn("sync", `"${peer.name}": sync failed: ${errorText(error)}`);

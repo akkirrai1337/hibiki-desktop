@@ -13,7 +13,7 @@
 // - daily activity: each device's own row per day only grows, so the larger value is the right one;
 // - a deletion beats a change made before it, and loses to one made after.
 import { and, asc, eq, gt, sql } from "drizzle-orm";
-import { dailyActivity, library, syncState, syncTombstones, titleRatings, watchProgress, xpEvents } from "../db/schema";
+import { cachedAnime, dailyActivity, library, syncState, syncTombstones, titleRatings, watchProgress, xpEvents } from "../db/schema";
 import { getPlatform } from "../platform";
 
 const getDb = () => getPlatform().db.get();
@@ -43,7 +43,15 @@ export interface ChangeSet {
   xp: XpRow[];
   activity: ActivityRow[];
   tombstones: Tombstone[];
+  /**
+   * The cached card data (name, poster, ...) of the titles this batch's progress and ratings are
+   * about. Not a synced table - a cache rides along so the other device can draw those titles before,
+   * or without, asking a source it may not have. Absent from batches of builds that predate it.
+   */
+  titles?: TitleCacheRow[];
 }
+
+export type TitleCacheRow = typeof cachedAnime.$inferSelect;
 
 // Per table and batch. Progress rows can carry a frame thumbnail (tens of kilobytes), so fewer.
 const BATCH_ROWS = 400;
@@ -86,16 +94,34 @@ export async function collectChanges(since: number): Promise<ChangeSet> {
   const upTo = cuts.length > 0 ? Math.min(...cuts) : await currentSeq();
   const keep = <T extends { changeSeq: number }>(rows: T[]) => rows.filter((row) => row.changeSeq <= upTo);
   const strip = <T extends { changeSeq: number }>({ changeSeq: _seq, ...rest }: T) => rest;
+  const progress = keep(prog.list).map(strip);
+  const ratings = keep(rat.list).map(strip);
   return {
     upTo,
     more: cuts.length > 0,
     library: keep(lib.list).map(strip),
-    progress: keep(prog.list).map(strip),
-    ratings: keep(rat.list).map(strip),
+    progress,
+    ratings,
+    titles: await cachedTitlesFor([...progress.map((row) => ({ sourceId: row.sourceId, animeId: row.titleId })), ...ratings]),
     xp: keep(xp.list).map(({ id: _id, ...row }) => strip(row)),
     activity: keep(act.list).map(strip),
     tombstones: keep(tomb.list).map(({ tbl, key, deletedAt }) => ({ tbl: tbl as SyncedTable, key, deletedAt })),
   };
+}
+
+/** The cached cards of these titles, each once; titles never cached are left out. */
+async function cachedTitlesFor(titles: Array<{ sourceId: string; animeId: string }>): Promise<TitleCacheRow[]> {
+  const db = getDb();
+  const seen = new Set<string>();
+  const rows: TitleCacheRow[] = [];
+  for (const { sourceId, animeId } of titles) {
+    const key = `${sourceId}${SEP}${animeId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const row = await db.select().from(cachedAnime).where(and(eq(cachedAnime.sourceId, sourceId), eq(cachedAnime.animeId, animeId))).get();
+    if (row) rows.push(row);
+  }
+  return rows;
 }
 
 // --- Merge decisions (pure) -------------------------------------------------------------------------
@@ -175,6 +201,16 @@ export interface ApplyResult {
 export async function applyChanges(changes: ChangeSet): Promise<ApplyResult> {
   const db = getDb();
   let changed = 0;
+
+  // Cards first, so whatever the rows below make appear can already be drawn. The fresher copy wins.
+  for (const row of changes.titles ?? []) {
+    const local = await db.select({ cachedAt: cachedAnime.cachedAt }).from(cachedAnime).where(and(eq(cachedAnime.sourceId, row.sourceId), eq(cachedAnime.animeId, row.animeId))).get();
+    if (local && local.cachedAt >= row.cachedAt) continue;
+    await db.insert(cachedAnime).values(row).onConflictDoUpdate({
+      target: [cachedAnime.sourceId, cachedAnime.animeId],
+      set: { animeJson: row.animeJson, cachedAt: row.cachedAt },
+    }).run();
+  }
 
   for (const row of changes.library) {
     const local = await db.select().from(library).where(and(eq(library.sourceId, row.sourceId), eq(library.animeId, row.animeId))).get();
@@ -282,7 +318,9 @@ function stripSeq<T extends { changeSeq: number }>({ changeSeq: _seq, ...rest }:
 /** A tombstone written directly (not by a delete trigger) still needs a change number to travel on. */
 async function bumpTombstone(tbl: SyncedTable, key: string): Promise<void> {
   const db = getDb();
-  await db.run(sql`UPDATE ${syncState} SET ${syncState.value} = CAST(${syncState.value} AS INTEGER) + 1 WHERE ${syncState.key} = 'seq'`);
+  // Through the update builder: it names the column bare in SET. A raw `SET "sync_state"."value" =`
+  // is a syntax error to the older SQLite on Android (newer ones accept it, so tests did not notice).
+  await db.update(syncState).set({ value: sql`CAST("value" AS INTEGER) + 1` }).where(eq(syncState.key, "seq")).run();
   const seq = await currentSeq();
   await db.update(syncTombstones).set({ changeSeq: seq }).where(and(eq(syncTombstones.tbl, tbl), eq(syncTombstones.key, key))).run();
 }

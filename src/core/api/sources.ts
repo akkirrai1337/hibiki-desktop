@@ -7,7 +7,7 @@ import { recommendationsForSource } from "../recommendations/forSource";
 import { cacheAnime, cachePlaybackGroups, getCachedAnime, getCachedAnimeMany, getCachedPlaybackGroups, getCachedPlaybackGroupsEntry } from "../offlineCache";
 
 /** Everything `window.hibiki.sources` asks of an installed source: catalog, playback, account. */
-export type SourcesApi = Omit<HibikiApi["sources"], "repositories" | "marketplace" | "install" | "uninstall" | "installedVersions" | "onChanged">;
+export type SourcesApi = Omit<HibikiApi["sources"], "repositories" | "marketplace" | "install" | "uninstall" | "installedVersions" | "missingSources" | "onChanged">;
 
 export function createSourcesApi(runtime: ExtensionRuntime): SourcesApi {
   return {

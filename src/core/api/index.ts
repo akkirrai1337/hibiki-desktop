@@ -8,6 +8,7 @@ import { createExtensionsApi } from "./extensions";
 import { createLibraryApi } from "./library";
 import { createProfileApi } from "./profile";
 import { createRepositoriesApi } from "./repositories";
+import { findMissingSources, sourcesInData } from "./sourceAutoInstall";
 import { createSourcesApi } from "./sources";
 import { createTrackingApi, type TrackingApi } from "./tracking";
 import { createXpApi } from "./xp";
@@ -21,7 +22,14 @@ export interface CoreApi extends Pick<HibikiApi, "ratings" | "library" | "progre
 export function createCoreApi(runtime: ExtensionRuntime): CoreApi {
   const { repositories, marketplace } = createRepositoriesApi();
   return {
-    sources: { ...createSourcesApi(runtime), repositories, marketplace, ...createExtensionsApi(runtime) },
+    sources: {
+      ...createSourcesApi(runtime),
+      repositories,
+      marketplace,
+      ...createExtensionsApi(runtime),
+      // Offered, not installed: any configured repository may be the one, the person picks.
+      missingSources: async () => findMissingSources(runtime, await sourcesInData(), { apkFromDefaultOnly: false }),
+    },
     ...createLibraryApi(runtime),
     xp: createXpApi(),
     profile: createProfileApi(),

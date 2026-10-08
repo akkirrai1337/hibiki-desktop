@@ -46,6 +46,7 @@ export const IPC = {
   sourcesChanged: "sources:changed",
   // The window that lets a person pass a source's Cloudflare check.
   sourceChallengeSolve: "sources:challenge:solve",
+  sourcesMissing: "sources:missing",
 
   // The profile banner's bytes, written to disk (see main/ipc/profileBanner.ts) rather than kept
   // in the same localStorage-backed store as the rest of the profile - too big for that.

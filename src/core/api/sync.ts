@@ -2,21 +2,17 @@
 // (pairing window), a phone the reaching-out half (discover, pair, sync now); both list and forget
 // paired devices.
 import type { HibikiApi } from "@shared/hibikiApi";
-import { discover, pair, syncNow } from "../sync/client";
-import { listPeers, removePeer, toDevice } from "../sync/peers";
-import { logger } from "../logger";
-import { notifySyncChanged, startPairing, stopPairing } from "../sync/server";
+import { discover, forgetPeer, pair, syncNow } from "../sync/client";
+import { listPeers, toDevice } from "../sync/peers";
+import { startPairing, stopPairing } from "../sync/server";
 
 type SyncApi = Omit<HibikiApi["sync"], "onChanged">;
 
 function common(): Pick<SyncApi, "devices" | "remove"> {
   return {
     devices: async () => (await listPeers()).map(toDevice),
-    remove: async (deviceId) => {
-      await removePeer(deviceId);
-      logger.info("sync", `forgot device ${deviceId.slice(0, 8)}`);
-      notifySyncChanged("devices");
-    },
+    // Both sides: see forgetPeer.
+    remove: (deviceId) => forgetPeer(deviceId),
   };
 }
 
